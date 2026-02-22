@@ -1,0 +1,60 @@
+export const IPC = {
+  // Projects
+  PROJECT_LIST: 'project:list',
+  PROJECT_CREATE: 'project:create',
+  PROJECT_DELETE: 'project:delete',
+  PROJECT_OPEN: 'project:open',
+  PROJECT_GET_CURRENT: 'project:getCurrent',
+
+  // Tasks
+  TASK_LIST: 'task:list',
+  TASK_CREATE: 'task:create',
+  TASK_UPDATE: 'task:update',
+  TASK_DELETE: 'task:delete',
+  TASK_MOVE: 'task:move',
+
+  // Swimlanes
+  SWIMLANE_LIST: 'swimlane:list',
+  SWIMLANE_CREATE: 'swimlane:create',
+  SWIMLANE_UPDATE: 'swimlane:update',
+  SWIMLANE_DELETE: 'swimlane:delete',
+  SWIMLANE_REORDER: 'swimlane:reorder',
+
+  // Skills
+  SKILL_LIST: 'skill:list',
+  SKILL_CREATE: 'skill:create',
+  SKILL_UPDATE: 'skill:update',
+  SKILL_DELETE: 'skill:delete',
+
+  // Transitions
+  TRANSITION_LIST: 'transition:list',
+  TRANSITION_SET: 'transition:set',
+  TRANSITION_GET_FOR: 'transition:getFor',
+
+  // Sessions
+  SESSION_SPAWN: 'session:spawn',
+  SESSION_KILL: 'session:kill',
+  SESSION_WRITE: 'session:write',
+  SESSION_RESIZE: 'session:resize',
+  SESSION_LIST: 'session:list',
+  SESSION_DATA: 'session:data',
+  SESSION_EXIT: 'session:exit',
+
+  // Config
+  CONFIG_GET: 'config:get',
+  CONFIG_SET: 'config:set',
+  CONFIG_GET_PROJECT: 'config:getProject',
+  CONFIG_SET_PROJECT: 'config:setProject',
+
+  // Claude
+  CLAUDE_DETECT: 'claude:detect',
+
+  // Shell
+  SHELL_GET_AVAILABLE: 'shell:getAvailable',
+  SHELL_GET_DEFAULT: 'shell:getDefault',
+
+  // Window
+  WINDOW_MINIMIZE: 'window:minimize',
+  WINDOW_MAXIMIZE: 'window:maximize',
+  WINDOW_CLOSE: 'window:close',
+} as const;
