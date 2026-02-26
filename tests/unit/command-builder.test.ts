@@ -1,48 +1,188 @@
 /**
- * Unit-style tests for CommandBuilder logic.
- * These don't need the Electron app — they test the command construction.
- * We run them via Playwright's test runner for consistency.
+ * Unit tests for command-builder logic, slugify, shell adaptation,
+ * status-bridge script, merged settings, and shell detection.
+ *
+ * Migrated from tests/e2e/command-builder.spec.ts — pure logic, no Electron needed.
  */
-import { test, expect } from '@playwright/test';
-import path from 'node:path';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { execFileSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
-import { detectAvailableShells } from './helpers';
+import path from 'node:path';
+import os from 'node:os';
 
-// We can't import TS source directly, so we test via evaluating in the
-// Electron main process. For pure logic tests, we inline the logic.
+// ── Inline helpers (mirrors src/main/agent/command-builder.ts logic) ────────
 
-test.describe('Command Builder Logic', () => {
-  test('quoteArg skips quoting simple paths', () => {
-    // Simulate the quoteArg logic (backslashes are NOT considered simple
-    // because they're escape characters in Unix-like shells like Git Bash)
-    function quoteArg(arg: string): string {
-      if (/^[a-zA-Z0-9_.\/:-]+$/.test(arg)) {
-        return arg;
+function quoteArg(arg: string): string {
+  if (/^[a-zA-Z0-9_.\/:-]+$/.test(arg)) return arg;
+  if (process.platform === 'win32') return `"${arg.replace(/"/g, '\\"')}"`;
+  return `'${arg.replace(/'/g, "'\\''")}'`;
+}
+
+function buildClaudeCommand(options: {
+  claudePath: string;
+  prompt?: string;
+  sessionId?: string;
+  resume?: boolean;
+  permissionMode?: string;
+}): string {
+  const parts = [quoteArg(options.claudePath)];
+
+  if (options.permissionMode === 'plan-mode') {
+    parts.push('--permission-mode', 'plan');
+  }
+
+  if (options.sessionId) {
+    const flag = options.resume ? '--resume' : '--session-id';
+    parts.push(flag, quoteArg(options.sessionId));
+  }
+
+  if (options.prompt) {
+    parts.push(quoteArg(options.prompt));
+  }
+
+  return parts.join(' ');
+}
+
+function slugify(text: string, maxLen = 50): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, maxLen)
+    .replace(/-+$/, '');
+}
+
+function interpolateTemplate(template: string, vars: Record<string, string>): string {
+  let result = template;
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+  }
+  return result;
+}
+
+function isUnixLikeShell(shellName: string): boolean {
+  return !shellName.includes('cmd');
+}
+
+function convertWindowsExePath(cmd: string, isWsl: boolean): string {
+  const prefix = isWsl ? '/mnt/' : '/';
+
+  if (cmd.startsWith('"')) {
+    return cmd.replace(
+      /^"([A-Za-z]):((?:\\[^"]+)+)"/,
+      (_m, drive: string, rest: string) => {
+        const posix = `${prefix}${drive.toLowerCase()}${rest.replace(/\\/g, '/')}`;
+        return posix.includes(' ') ? `"${posix}"` : posix;
+      },
+    );
+  }
+
+  return cmd.replace(
+    /^([A-Za-z]):((?:\\[^\s]+)+)/,
+    (_m, drive: string, rest: string) => {
+      return `${prefix}${drive.toLowerCase()}${rest.replace(/\\/g, '/')}`;
+    },
+  );
+}
+
+function adaptCommandForShell(cmd: string, shellName: string): string {
+  if (shellName.includes('powershell') || shellName.includes('pwsh')) {
+    return '& ' + cmd;
+  }
+  if (isUnixLikeShell(shellName)) {
+    const isWsl = shellName.startsWith('wsl');
+    return convertWindowsExePath(cmd, isWsl);
+  }
+  return cmd;
+}
+
+// ── Shell detection (copied from tests/e2e/helpers.ts) ─────────────────────
+
+interface ShellInfo {
+  name: string;
+  path: string;
+}
+
+function detectAvailableShells(): ShellInfo[] {
+  const shells: ShellInfo[] = [];
+  const isWin = process.platform === 'win32';
+  const isMac = process.platform === 'darwin';
+
+  const candidates: Array<{ name: string; cmd: string }> = [];
+
+  if (isWin) {
+    candidates.push(
+      { name: 'PowerShell 7', cmd: 'pwsh' },
+      { name: 'PowerShell 5', cmd: 'powershell' },
+      { name: 'Git Bash', cmd: 'bash' },
+      { name: 'Command Prompt', cmd: 'cmd' },
+    );
+    try {
+      const wslOutput = execSync('wsl --list --quiet', { encoding: 'utf-8', timeout: 5000 });
+      const distros = wslOutput
+        .split('\n')
+        .map((l) => l.replace(/\0/g, '').trim())
+        .filter((d) => d && !d.toLowerCase().startsWith('docker-'));
+      for (const distro of distros) {
+        shells.push({ name: `WSL: ${distro}`, path: `wsl -d ${distro}` });
       }
-      if (process.platform === 'win32') {
-        return `"${arg.replace(/"/g, '\\"')}"`;
-      }
-      return `'${arg.replace(/'/g, "'\\''")}'`;
+    } catch {
+      // WSL not available
     }
+  } else if (isMac) {
+    candidates.push(
+      { name: 'zsh', cmd: 'zsh' },
+      { name: 'bash', cmd: 'bash' },
+      { name: 'fish', cmd: 'fish' },
+      { name: 'sh', cmd: 'sh' },
+      { name: 'nushell', cmd: 'nu' },
+    );
+  } else {
+    candidates.push(
+      { name: 'bash', cmd: 'bash' },
+      { name: 'zsh', cmd: 'zsh' },
+      { name: 'fish', cmd: 'fish' },
+      { name: 'sh', cmd: 'sh' },
+      { name: 'dash', cmd: 'dash' },
+      { name: 'nushell', cmd: 'nu' },
+      { name: 'ksh', cmd: 'ksh' },
+    );
+  }
 
-    // Simple command name — no quotes needed
+  for (const c of candidates) {
+    try {
+      const resolved = execSync(
+        isWin ? `where ${c.cmd}` : `which ${c.cmd}`,
+        { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'ignore'] },
+      ).trim().split('\n')[0].trim();
+      if (resolved) {
+        shells.push({ name: c.name, path: resolved });
+      }
+    } catch {
+      // Not found
+    }
+  }
+
+  return shells;
+}
+
+// ── Tests ───────────────────────────────────────────────────────────────────
+
+describe('Command Builder Logic', () => {
+  it('quoteArg skips quoting simple paths', () => {
     expect(quoteArg('claude')).toBe('claude');
-
-    // Forward-slash path without spaces — no quotes needed
     expect(quoteArg('C:/Users/dev/.local/bin/claude')).toBe('C:/Users/dev/.local/bin/claude');
 
-    // Backslash path — needs quoting (escape chars in Unix shells)
     const backslashPath = 'C:\\Users\\dev\\.local\\bin\\claude.EXE';
     const quotedBackslash = quoteArg(backslashPath);
-    expect(quotedBackslash).toContain('"'); // Should be quoted
+    expect(quotedBackslash).toContain('"');
 
-    // Path with spaces — needs quotes
     const pathWithSpaces = 'C:/Program Files/claude/claude.exe';
     const quoted = quoteArg(pathWithSpaces);
-    expect(quoted).toContain('"'); // Should be quoted
+    expect(quoted).toContain('"');
   });
 
-  test('PowerShell call operator prefix', () => {
+  it('PowerShell call operator prefix', () => {
     function prefixForShell(command: string, shellName: string): string {
       if (shellName.includes('powershell') || shellName.includes('pwsh')) {
         return '& ' + command;
@@ -52,26 +192,16 @@ test.describe('Command Builder Logic', () => {
 
     const cmd = '"C:\\Users\\dev\\.local\\bin\\claude.EXE" --dangerously-skip-permissions';
 
-    // PowerShell should get & prefix
     expect(prefixForShell(cmd, 'powershell')).toBe('& ' + cmd);
     expect(prefixForShell(cmd, 'pwsh')).toBe('& ' + cmd);
     expect(prefixForShell(cmd, 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')).toBe('& ' + cmd);
 
-    // Other shells should not
     expect(prefixForShell(cmd, 'bash')).toBe(cmd);
     expect(prefixForShell(cmd, 'cmd')).toBe(cmd);
     expect(prefixForShell(cmd, '/bin/zsh')).toBe(cmd);
   });
 
-  test('interpolateTemplate replaces variables', () => {
-    function interpolateTemplate(template: string, vars: Record<string, string>): string {
-      let result = template;
-      for (const [key, value] of Object.entries(vars)) {
-        result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
-      }
-      return result;
-    }
-
+  it('interpolateTemplate replaces variables', () => {
     const template = 'Task: {{title}}\n\n{{description}}';
     const vars = { title: 'My Task', description: 'Build the feature' };
     const result = interpolateTemplate(template, vars);
@@ -79,15 +209,7 @@ test.describe('Command Builder Logic', () => {
     expect(result).toBe('Task: My Task\n\nBuild the feature');
   });
 
-  test('interpolateTemplate handles missing variables', () => {
-    function interpolateTemplate(template: string, vars: Record<string, string>): string {
-      let result = template;
-      for (const [key, value] of Object.entries(vars)) {
-        result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
-      }
-      return result;
-    }
-
+  it('interpolateTemplate handles missing variables', () => {
     const template = '{{title}} in {{worktreePath}}';
     const vars = { title: 'Fix bug', worktreePath: '' };
     const result = interpolateTemplate(template, vars);
@@ -96,40 +218,8 @@ test.describe('Command Builder Logic', () => {
   });
 });
 
-test.describe('Prompt Delivery (Claude Agent)', () => {
-  function quoteArg(arg: string): string {
-    if (/^[a-zA-Z0-9_.\/:-]+$/.test(arg)) return arg;
-    if (process.platform === 'win32') return `"${arg.replace(/"/g, '\\"')}"`;
-    return `'${arg.replace(/'/g, "'\\''")}'`;
-  }
-
-  /** Simplified buildClaudeCommand matching the real implementation */
-  function buildClaudeCommand(options: {
-    claudePath: string;
-    prompt?: string;
-    sessionId?: string;
-    resume?: boolean;
-    permissionMode?: string;
-  }): string {
-    const parts = [quoteArg(options.claudePath)];
-
-    if (options.permissionMode === 'plan-mode') {
-      parts.push('--permission-mode', 'plan');
-    }
-
-    if (options.sessionId) {
-      const flag = options.resume ? '--resume' : '--session-id';
-      parts.push(flag, quoteArg(options.sessionId));
-    }
-
-    if (options.prompt) {
-      parts.push(quoteArg(options.prompt));
-    }
-
-    return parts.join(' ');
-  }
-
-  test('fresh session includes task title and description in prompt', () => {
+describe('Prompt Delivery (Claude Agent)', () => {
+  it('fresh session includes task title and description in prompt', () => {
     const cmd = buildClaudeCommand({
       claudePath: '/usr/bin/claude',
       prompt: 'Task: Fix login bug\n\nUsers cannot log in with OAuth',
@@ -139,7 +229,7 @@ test.describe('Prompt Delivery (Claude Agent)', () => {
     expect(cmd).toContain('Users cannot log in with OAuth');
   });
 
-  test('new session with session-id uses --session-id flag', () => {
+  it('new session with session-id uses --session-id flag', () => {
     const cmd = buildClaudeCommand({
       claudePath: '/usr/bin/claude',
       sessionId: 'abc-123-def',
@@ -151,7 +241,7 @@ test.describe('Prompt Delivery (Claude Agent)', () => {
     expect(cmd).toContain('abc-123-def');
   });
 
-  test('resumed session uses --resume flag and omits prompt', () => {
+  it('resumed session uses --resume flag and omits prompt', () => {
     const cmd = buildClaudeCommand({
       claudePath: '/usr/bin/claude',
       sessionId: 'abc-123-def',
@@ -161,13 +251,12 @@ test.describe('Prompt Delivery (Claude Agent)', () => {
     expect(cmd).toContain('--resume');
     expect(cmd).not.toContain('--session-id');
     expect(cmd).toContain('abc-123-def');
-    // No trailing positional argument — just the resume flag
     const parts = cmd.split(' ');
     const lastPart = parts[parts.length - 1];
     expect(lastPart).toContain('abc-123-def');
   });
 
-  test('fresh session to Planning includes plan mode flag and prompt', () => {
+  it('fresh session to Planning includes plan mode flag and prompt', () => {
     const cmd = buildClaudeCommand({
       claudePath: '/usr/bin/claude',
       prompt: 'Task: Design auth\n\nArchitect the system',
@@ -180,7 +269,7 @@ test.describe('Prompt Delivery (Claude Agent)', () => {
     expect(cmd).toContain('Architect the system');
   });
 
-  test('resumed session with --resume has no prompt text', () => {
+  it('resumed session with --resume has no prompt text', () => {
     const cmd = buildClaudeCommand({
       claudePath: '/usr/bin/claude',
       sessionId: 'session-xyz',
@@ -190,23 +279,13 @@ test.describe('Prompt Delivery (Claude Agent)', () => {
 
     expect(cmd).toContain('--resume');
     expect(cmd).not.toContain('--session-id');
-    // Should NOT contain any task text
     expect(cmd).not.toContain('Task:');
     expect(cmd).not.toContain('Continue working');
   });
 });
 
-test.describe('Slugify Logic', () => {
-  test('converts titles to filesystem-safe slugs', () => {
-    function slugify(text: string, maxLen = 50): string {
-      return text
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, maxLen)
-        .replace(/-+$/, '');
-    }
-
+describe('Slugify Logic', () => {
+  it('converts titles to filesystem-safe slugs', () => {
     expect(slugify('Fix login bug')).toBe('fix-login-bug');
     expect(slugify('Add feature (urgent!)')).toBe('add-feature-urgent');
     expect(slugify('---hello---')).toBe('hello');
@@ -214,21 +293,11 @@ test.describe('Slugify Logic', () => {
     expect(slugify('Special @#$% chars!')).toBe('special-chars');
     expect(slugify('')).toBe('');
 
-    // Long titles get truncated
     const longTitle = 'a'.repeat(100);
     expect(slugify(longTitle).length).toBeLessThanOrEqual(50);
   });
 
-  test('worktree folder includes task ID suffix', () => {
-    function slugify(text: string, maxLen = 50): string {
-      return text
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, maxLen)
-        .replace(/-+$/, '');
-    }
-
+  it('worktree folder includes task ID suffix', () => {
     const taskId = 'abc12345-6789-0000-1111-222233334444';
     const slug = slugify('Fix login bug') || 'task';
     const shortId = taskId.slice(0, 8);
@@ -238,109 +307,78 @@ test.describe('Slugify Logic', () => {
   });
 });
 
-test.describe('Windows Path Conversion for Shells', () => {
-  // Replicate the adaptCommandForShell + convertWindowsExePath logic
-  function isUnixLikeShell(shellName: string): boolean {
-    return !shellName.includes('cmd');
-  }
-
-  function convertWindowsExePath(cmd: string, isWsl: boolean): string {
-    const prefix = isWsl ? '/mnt/' : '/';
-
-    if (cmd.startsWith('"')) {
-      return cmd.replace(
-        /^"([A-Za-z]):((?:\\[^"]+)+)"/,
-        (_m, drive: string, rest: string) => {
-          const posix = `${prefix}${drive.toLowerCase()}${rest.replace(/\\/g, '/')}`;
-          return posix.includes(' ') ? `"${posix}"` : posix;
-        },
-      );
-    }
-
-    return cmd.replace(
-      /^([A-Za-z]):((?:\\[^\s]+)+)/,
-      (_m, drive: string, rest: string) => {
-        return `${prefix}${drive.toLowerCase()}${rest.replace(/\\/g, '/')}`;
-      },
-    );
-  }
-
-  function adaptCommandForShell(cmd: string, shellName: string): string {
-    // Simulate Windows platform check
-    if (shellName.includes('powershell') || shellName.includes('pwsh')) {
-      return '& ' + cmd;
-    }
-    if (isUnixLikeShell(shellName)) {
-      const isWsl = shellName.startsWith('wsl');
-      return convertWindowsExePath(cmd, isWsl);
-    }
-    return cmd;
-  }
-
-  test('converts Windows paths to Git Bash POSIX format', () => {
+describe('Windows Path Conversion for Shells', () => {
+  it('converts Windows paths to Git Bash POSIX format', () => {
     const cmd = 'C:\\Users\\dev\\.local\\bin\\claude.EXE --dangerously-skip-permissions "Task: test"';
     const result = adaptCommandForShell(cmd, 'c:\\program files\\git\\usr\\bin\\bash.exe');
     expect(result).toBe('/c/Users/dev/.local/bin/claude.EXE --dangerously-skip-permissions "Task: test"');
   });
 
-  test('converts Windows paths to WSL /mnt/ format', () => {
+  it('converts Windows paths to WSL /mnt/ format', () => {
     const cmd = 'C:\\Users\\dev\\.local\\bin\\claude.EXE --print "hello"';
     const result = adaptCommandForShell(cmd, 'wsl -d ubuntu');
     expect(result).toBe('/mnt/c/Users/dev/.local/bin/claude.EXE --print "hello"');
   });
 
-  test('handles quoted Windows paths with spaces', () => {
+  it('handles quoted Windows paths with spaces', () => {
     const cmd = '"C:\\Program Files\\claude\\claude.exe" --dangerously-skip-permissions "prompt"';
     const result = adaptCommandForShell(cmd, 'bash');
     expect(result).toBe('"/c/Program Files/claude/claude.exe" --dangerously-skip-permissions "prompt"');
   });
 
-  test('handles different drive letters', () => {
+  it('handles different drive letters', () => {
     const cmd = 'D:\\tools\\claude.exe --print "hello"';
     const result = adaptCommandForShell(cmd, 'bash');
     expect(result).toBe('/d/tools/claude.exe --print "hello"');
   });
 
-  test('no conversion for cmd.exe', () => {
+  it('no conversion for cmd.exe', () => {
     const cmd = 'C:\\Users\\dev\\.local\\bin\\claude.EXE --dangerously-skip-permissions "prompt"';
     const result = adaptCommandForShell(cmd, 'c:\\windows\\system32\\cmd.exe');
     expect(result).toBe(cmd);
   });
 
-  test('PowerShell gets & prefix, no path conversion', () => {
+  it('PowerShell gets & prefix, no path conversion', () => {
     const cmd = 'C:\\Users\\dev\\.local\\bin\\claude.EXE --print "test"';
     const result = adaptCommandForShell(cmd, 'pwsh');
     expect(result).toBe('& ' + cmd);
   });
 
-  test('does not corrupt prompt text with backslashes', () => {
+  it('does not corrupt prompt text with backslashes', () => {
     const cmd = 'C:\\Users\\dev\\bin\\claude.EXE --print "path is C:\\some\\path"';
     const result = adaptCommandForShell(cmd, 'bash');
-    // Only the executable path at the start should be converted
     expect(result.startsWith('/c/Users/dev/bin/claude.EXE')).toBe(true);
-    expect(result).toContain('C:\\some\\path'); // prompt preserved
+    expect(result).toContain('C:\\some\\path');
   });
 
-  test('no-op for Unix paths (macOS/Linux)', () => {
+  it('no-op for Unix paths (macOS/Linux)', () => {
     const cmd = '/usr/local/bin/claude --print "hello"';
     const result = convertWindowsExePath(cmd, false);
-    expect(result).toBe(cmd); // No Windows path to convert
+    expect(result).toBe(cmd);
   });
 
-  test('no-op for simple commands', () => {
+  it('no-op for simple commands', () => {
     const cmd = 'echo hello world';
     const result = convertWindowsExePath(cmd, false);
     expect(result).toBe(cmd);
   });
 });
 
-test.describe('Status Bridge Script', () => {
-  const { execSync } = require('node:child_process');
-  const bridgePath = path.join(__dirname, '..', '..', 'src', 'main', 'agent', 'status-bridge.js');
+describe('Status Bridge Script', () => {
+  const bridgePath = path.resolve(__dirname, '../../src/main/agent/status-bridge.js');
 
-  test('bridge writes JSON to output file', () => {
-    const tmpFile = path.join(__dirname, '..', '.tmp', `bridge-test-${Date.now()}.json`);
-    fs.mkdirSync(path.dirname(tmpFile), { recursive: true });
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'statusbridge-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('bridge writes JSON to output file', () => {
+    const tmpFile = path.join(tmpDir, 'bridge-test.json');
 
     const input = JSON.stringify({
       context_window: { used_percentage: 42, total_input_tokens: 1000, total_output_tokens: 500, context_window_size: 200000 },
@@ -348,67 +386,59 @@ test.describe('Status Bridge Script', () => {
       model: { id: 'claude-opus-4-6', display_name: 'Opus 4.6' },
     });
 
-    try {
-      execSync(`node "${bridgePath}" "${tmpFile}"`, {
-        input,
-        encoding: 'utf-8',
-        timeout: 5000,
-      });
+    execFileSync(process.execPath, [bridgePath, tmpFile], {
+      input,
+      encoding: 'utf-8',
+      timeout: 5000,
+    });
 
-      const written = JSON.parse(fs.readFileSync(tmpFile, 'utf-8'));
-      expect(written.context_window.used_percentage).toBe(42);
-      expect(written.cost.total_cost_usd).toBe(0.15);
-      expect(written.model.display_name).toBe('Opus 4.6');
-    } finally {
-      try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
-    }
+    const written = JSON.parse(fs.readFileSync(tmpFile, 'utf-8'));
+    expect(written.context_window.used_percentage).toBe(42);
+    expect(written.cost.total_cost_usd).toBe(0.15);
+    expect(written.model.display_name).toBe('Opus 4.6');
   });
 
-  test('bridge outputs empty string to stdout (no TUI status line)', () => {
+  it('bridge outputs empty string to stdout (no TUI status line)', () => {
     const input = JSON.stringify({
       context_window: { used_percentage: 67.5 },
       cost: { total_cost_usd: 1.234 },
       model: { display_name: 'Sonnet 4.6' },
     });
 
-    const stdout = execSync(`node "${bridgePath}"`, {
+    const stdout = execFileSync(process.execPath, [bridgePath], {
       input,
       encoding: 'utf-8',
       timeout: 5000,
     });
 
-    // Bridge should output nothing — Kangentic renders usage in its own UI
     expect(stdout).toBe('');
   });
 
-  test('bridge handles malformed JSON gracefully', () => {
-    const stdout = execSync(`node "${bridgePath}"`, {
+  it('bridge handles malformed JSON gracefully', () => {
+    const stdout = execFileSync(process.execPath, [bridgePath], {
       input: 'not-json{{{',
       encoding: 'utf-8',
       timeout: 5000,
     });
 
-    // Should not crash — outputs empty string
     expect(stdout).toBe('');
   });
 
-  test('bridge handles missing fields gracefully', () => {
+  it('bridge handles missing fields gracefully', () => {
     const input = JSON.stringify({});
 
-    const stdout = execSync(`node "${bridgePath}"`, {
+    const stdout = execFileSync(process.execPath, [bridgePath], {
       input,
       encoding: 'utf-8',
       timeout: 5000,
     });
 
-    // Should output nothing — no crash
     expect(stdout).toBe('');
   });
 });
 
-test.describe('Merged Settings (statusLine)', () => {
-  test('statusLine is an object with type and command fields', () => {
-    // Simulate what createMergedSettings produces
+describe('Merged Settings (statusLine)', () => {
+  it('statusLine is an object with type and command fields', () => {
     const existingSettings = { permissions: { allow: ['Read'] } };
     const bridgePath = '/path/to/status-bridge.js';
     const statusPath = '/project/.kangentic/status/session-123.json';
@@ -429,7 +459,7 @@ test.describe('Merged Settings (statusLine)', () => {
     expect(merged.statusLine.command).toContain('session-123.json');
   });
 
-  test('merged settings preserve existing project settings', () => {
+  it('merged settings preserve existing project settings', () => {
     const existingSettings = {
       permissions: { allow: ['Read', 'Edit'] },
       env: { CUSTOM_VAR: 'hello' },
@@ -443,14 +473,12 @@ test.describe('Merged Settings (statusLine)', () => {
       },
     };
 
-    // Original settings should be preserved
     expect(merged.permissions).toEqual({ allow: ['Read', 'Edit'] });
     expect(merged.env).toEqual({ CUSTOM_VAR: 'hello' });
-    // statusLine should be added
     expect(merged.statusLine.type).toBe('command');
   });
 
-  test('statusLine is not a plain string (regression check)', () => {
+  it('statusLine is not a plain string (regression check)', () => {
     const merged = {
       statusLine: {
         type: 'command',
@@ -458,27 +486,23 @@ test.describe('Merged Settings (statusLine)', () => {
       },
     };
 
-    // The critical check: statusLine MUST be an object, never a string.
-    // Claude Code rejects string values with "Expected object, but received string"
     expect(typeof merged.statusLine).toBe('object');
     expect(typeof merged.statusLine).not.toBe('string');
   });
 });
 
-test.describe('Shell Detection', () => {
-  test('at least one shell is available', () => {
+describe('Shell Detection', () => {
+  it('at least one shell is available', () => {
     const shells = detectAvailableShells();
     expect(shells.length).toBeGreaterThan(0);
-    console.log('Available shells:', shells.map((s) => s.name).join(', '));
   });
 
-  test('all detected shells have valid paths or commands', () => {
+  it('all detected shells have valid paths or commands', () => {
     const shells = detectAvailableShells();
 
     for (const shell of shells) {
       expect(shell.name).toBeTruthy();
       expect(shell.path).toBeTruthy();
-      // WSL shells are commands ("wsl -d Ubuntu"), not file paths
       if (shell.name.startsWith('WSL:')) {
         expect(shell.path).toMatch(/^wsl /);
       } else {

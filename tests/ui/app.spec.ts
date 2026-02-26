@@ -162,6 +162,36 @@ test.describe('Task CRUD', () => {
     const backlog = page.locator('[data-swimlane-name="Backlog"]');
     await expect(backlog.locator('text=Test Task Beta')).not.toBeVisible({ timeout: 3000 });
   });
+
+  test('can delete a task', async () => {
+    // "Test Task Beta" was archived above — it now lives in Done's Completed section
+    const doneColumn = page.locator('[data-swimlane-name="Done"]');
+
+    // Expand the Completed section if not already visible
+    const archivedCard = doneColumn.locator('text=Test Task Beta');
+    if (!(await archivedCard.isVisible().catch(() => false))) {
+      await doneColumn.locator('button:has-text("Completed")').click();
+      await page.waitForTimeout(300);
+    }
+
+    // Click the archived task card to open its detail dialog
+    await archivedCard.click();
+    await page.waitForTimeout(300);
+
+    // Open kebab menu and click Delete (shown for archived tasks)
+    await page.locator('button[title="Actions"]').click();
+    await page.waitForTimeout(200);
+    await page.locator('button:has-text("Delete")').click();
+    await page.waitForTimeout(200);
+
+    // Confirm deletion in the ConfirmDialog (replaces the detail dialog)
+    await page.locator('text=This action cannot be undone.').waitFor({ state: 'visible', timeout: 3000 });
+    await page.locator('button:has-text("Delete")').click();
+    await page.waitForTimeout(500);
+
+    // Verify the task is gone from the Completed section
+    await expect(doneColumn.locator('text=Test Task Beta')).not.toBeVisible({ timeout: 3000 });
+  });
 });
 
 test.describe('Column Management', () => {
@@ -188,5 +218,54 @@ test.describe('Column Management', () => {
         await expect(page.locator('[data-swimlane-name="Custom Stage"]')).toBeVisible();
       }
     }
+  });
+});
+
+test.describe('Session & Column Details', () => {
+  test.beforeEach(async () => {
+    await ensureBoardVisible();
+  });
+
+  test('task detail dialog shows no session state', async () => {
+    await taskCard('Updated Task Alpha').click();
+    await page.waitForTimeout(300);
+
+    // With no session spawned, either "No active session" or the task description is visible
+    const emptyMsg = page.locator('text=No active session');
+    const hasEmpty = await emptyMsg.isVisible().catch(() => false);
+    expect(hasEmpty || (await page.locator('text=Description for alpha task').isVisible())).toBeTruthy();
+
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+  });
+
+  test('session count starts at 0', async () => {
+    await expect(page.locator('[data-testid="session-count"]')).toContainText('0 agents');
+  });
+
+  test('system columns cannot be deleted via UI', async () => {
+    const planning = page.locator('[data-swimlane-name="Planning"]');
+    await planning.locator('text=Planning').click();
+    await page.waitForTimeout(300);
+
+    const lockIndicator = page.locator('text=System column');
+    const hasLock = await lockIndicator.isVisible().catch(() => false);
+    if (hasLock) {
+      const deleteBtn = page.locator('button:has-text("Delete column")');
+      await expect(deleteBtn).not.toBeVisible();
+    }
+
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+  });
+
+  test('tasks in Backlog have no branch info', async () => {
+    await taskCard('Updated Task Alpha').click();
+    await page.waitForTimeout(300);
+
+    await expect(page.locator('text=Branch:')).not.toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
   });
 });
