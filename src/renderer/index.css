@@ -103,6 +103,17 @@
   animation: grow-in 250ms ease-out forwards;
 }
 
+/* Radiating pulse for idle task cards — shadow expands outward and fades */
+@keyframes pulse-subtle {
+  0% { box-shadow: 0 0 0 0px rgba(161, 161, 170, 0.2); }
+  40% { box-shadow: 0 0 0 5px rgba(161, 161, 170, 0); }
+  100% { box-shadow: 0 0 0 5px rgba(161, 161, 170, 0); }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 4s ease-out infinite;
+}
+
 /* Dialog transitions */
 @keyframes dialog-backdrop-in  { from { opacity: 0 } }
 @keyframes dialog-backdrop-out { to   { opacity: 0 } }

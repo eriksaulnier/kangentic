@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Loader2, Trash2, CirclePause, Plug } from 'lucide-react';
+import { Loader2, Trash2, CirclePause, Plug, Mail } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { TaskDetailDialog } from '../dialogs/TaskDetailDialog';
 import { useSessionStore } from '../../stores/session-store';
@@ -27,6 +27,7 @@ export function TaskCard({ task, isDragOverlay, compact, onDelete }: TaskCardPro
   const usage = task.session_id ? sessionUsage[task.session_id] : undefined;
   const activity = task.session_id ? sessionActivity[task.session_id] : undefined;
   const isThinking = session?.status === 'running' && activity !== 'idle';
+  const isIdle = session?.status === 'running' && activity === 'idle';
 
   // For toggle: find session by taskId (includes suspended sessions)
   const taskSession = sessions.find((s) => s.taskId === task.id);
@@ -130,11 +131,20 @@ export function TaskCard({ task, isDragOverlay, compact, onDelete }: TaskCardPro
         {...attributes}
         {...listeners}
         onClick={handleClick}
-        className={`bg-zinc-800 border border-zinc-700 rounded-md p-2.5 cursor-grab active:cursor-grabbing hover:border-zinc-600 transition-colors ${
-          isDragOverlay ? 'shadow-xl' : ''
-        } ${isHighlighted ? 'ring-2 ring-blue-500/60' : ''}`}
+        className={`border rounded-md p-2.5 cursor-grab active:cursor-grabbing transition-colors bg-zinc-800 ${
+          isHighlighted ? 'border-[2px] border-zinc-500/60' : isIdle ? 'border-zinc-700/40' : 'border-zinc-700 hover:border-zinc-600'
+        } ${isIdle ? 'animate-pulse-subtle' : ''
+        } ${isDragOverlay ? 'shadow-xl' : ''}`}
       >
-        <div className="text-sm text-zinc-100 font-medium truncate">{task.title}</div>
+        <div className="flex items-center gap-1.5">
+          {isIdle && (
+            <Mail size={14} className="text-zinc-400 shrink-0" />
+          )}
+          {isThinking && (
+            <Loader2 size={14} className="text-emerald-400 animate-spin shrink-0" />
+          )}
+          <div className="text-sm text-zinc-100 font-medium truncate">{task.title}</div>
+        </div>
 
         {task.pr_url && (
           <div className="flex items-center gap-2 mt-1.5">
@@ -154,10 +164,7 @@ export function TaskCard({ task, isDragOverlay, compact, onDelete }: TaskCardPro
           return (
             <div className="mt-2 pt-2 border-t border-zinc-700" data-testid="usage-bar">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs text-zinc-500 flex items-center gap-1">
-                  {isThinking && (
-                    <Loader2 size={12} className="text-zinc-500 animate-spin" />
-                  )}
+                <span className="text-xs text-zinc-500">
                   {usage.model.displayName || 'Claude'}
                 </span>
                 <span className="text-xs text-zinc-500">{pct}%</span>
