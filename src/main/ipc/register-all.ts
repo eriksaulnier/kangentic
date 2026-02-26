@@ -87,17 +87,23 @@ async function cleanupTaskSession(
     tasks.update({ id: task.id, session_id: null });
   }
 
-  // Remove session directories from disk + DB records
-  if (currentProjectId && currentProjectPath) {
+  // Remove session DB records + directories from disk
+  if (currentProjectId) {
     const db = getProjectDb(currentProjectId);
     const sessionRepo = new SessionRepository(db);
-    const records = db.prepare(
-      'SELECT claude_session_id FROM sessions WHERE task_id = ? AND claude_session_id IS NOT NULL'
-    ).all(task.id) as Array<{ claude_session_id: string }>;
-    for (const { claude_session_id } of records) {
-      const sessionDir = path.join(currentProjectPath, '.kangentic', 'sessions', claude_session_id);
-      try { fs.rmSync(sessionDir, { recursive: true, force: true }); } catch { /* may not exist */ }
+
+    // Best-effort disk cleanup (non-fatal — DB records are the source of truth)
+    if (currentProjectPath) {
+      const records = db.prepare(
+        'SELECT claude_session_id FROM sessions WHERE task_id = ? AND claude_session_id IS NOT NULL'
+      ).all(task.id) as Array<{ claude_session_id: string }>;
+      for (const { claude_session_id } of records) {
+        const sessionDir = path.join(currentProjectPath, '.kangentic', 'sessions', claude_session_id);
+        try { fs.rmSync(sessionDir, { recursive: true, force: true }); } catch { /* may not exist */ }
+      }
     }
+
+    // Always delete DB records — this must succeed for task DELETE to pass FK check
     sessionRepo.deleteByTaskId(task.id);
   }
 }

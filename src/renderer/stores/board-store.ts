@@ -83,6 +83,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   },
 
   deleteTask: async (id) => {
+    // IPC first — only update UI on success
     await window.electronAPI.tasks.delete(id);
     set((s) => ({
       tasks: s.tasks.filter((t) => t.id !== id),
@@ -198,15 +199,26 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   },
 
   deleteArchivedTask: async (id) => {
+    // Snapshot for rollback
+    const prevArchived = get().archivedTasks;
     // Optimistic: remove from archivedTasks
     set((s) => ({
       archivedTasks: s.archivedTasks.filter((t) => t.id !== id),
     }));
-    await window.electronAPI.tasks.delete(id);
-    // Also clean up sessions in session store
-    useSessionStore.setState((s) => ({
-      sessions: s.sessions.filter((sess) => sess.taskId !== id),
-    }));
+    try {
+      await window.electronAPI.tasks.delete(id);
+      // Also clean up sessions in session store
+      useSessionStore.setState((s) => ({
+        sessions: s.sessions.filter((sess) => sess.taskId !== id),
+      }));
+    } catch (err) {
+      // Revert optimistic removal so stale tasks don't reappear on next load
+      set({ archivedTasks: prevArchived });
+      useToastStore.getState().addToast({
+        message: `Failed to delete task: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        variant: 'error',
+      });
+    }
   },
 
   setCompletingTask: (task) => {

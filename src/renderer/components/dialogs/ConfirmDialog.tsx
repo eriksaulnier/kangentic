@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { BaseDialog } from './BaseDialog';
 
@@ -23,6 +23,18 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        onConfirm();
+      }
+    };
+    // Capture phase so dnd-kit's bubble-phase KeyboardSensor never sees the event
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, [onConfirm]);
   const confirmStyles = {
     danger: 'bg-red-600 hover:bg-red-500 text-white',
     warning: 'bg-yellow-600 hover:bg-yellow-500 text-white',
