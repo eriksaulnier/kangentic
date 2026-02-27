@@ -16,12 +16,12 @@ Report the branch name, source branch, and working tree status before proceeding
 
 If there are uncommitted changes (non-empty `git status --porcelain` output):
 
-1. Show the user `git status` and `git diff --stat` for a summary of changes.
-2. Ask the user what they'd like to do:
-   - Provide a commit message
-   - Let you generate a commit message from the diff
-   - Skip (leave changes uncommitted — warn this will prevent rebase)
-3. If committing: `git add -A` then `git commit -m "<message>"`
+1. **Ask the user first** (before showing diffs) how they want to handle the commit message:
+   - **Auto-generate** — you will read the diff and write the message
+   - **Manual** — the user will provide the message
+2. Show the user `git status` and `git diff --stat` for a summary of changes.
+3. If **auto-generate**: read the full diff (`git diff`), draft a concise commit message summarizing the changes, show it to the user for confirmation, then `git add -A` and `git commit -m "<message>"`.
+4. If **manual**: ask the user for their commit message, then `git add -A` and `git commit -m "<message>"`.
 
 If the working tree is clean, skip to Step 2.
 
