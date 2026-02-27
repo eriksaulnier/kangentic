@@ -35,7 +35,7 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
   const activity = task.session_id ? sessionActivity[task.session_id] : undefined;
   // For toggle: find session by taskId (includes suspended sessions)
   const taskSession = sessions.find((s) => s.taskId === task.id);
-  const isInitializing = !!taskSession && !usage && taskSession.status !== 'suspended';
+  const isInitializing = !!taskSession && !usage && taskSession.status !== 'suspended' && taskSession.status !== 'exited';
   const isThinking = session?.status === 'running' && (activity !== 'idle' || isInitializing);
   const isIdle = session?.status === 'running' && activity === 'idle' && !isInitializing;
   const canToggle = taskSession && (taskSession.status === 'running' || taskSession.status === 'queued' || taskSession.status === 'suspended');
@@ -186,7 +186,7 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
               </div>
             </div>
           );
-        })() : taskSession && (
+        })() : taskSession && taskSession.status !== 'exited' && (
           <div className="mt-2 pt-2 border-t border-zinc-700" data-testid="initializing-bar">
             <span className="text-xs text-zinc-500 flex items-center gap-1">
               {taskSession?.status === 'suspended' ? (

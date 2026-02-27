@@ -105,7 +105,7 @@ async function cleanupTaskSession(
 ): Promise<void> {
   // Kill active PTY session
   if (task.session_id) {
-    try { sessionManager.kill(task.session_id); } catch { /* may already be dead */ }
+    try { sessionManager.remove(task.session_id); } catch { /* may already be dead */ }
     tasks.update({ id: task.id, session_id: null });
   }
 

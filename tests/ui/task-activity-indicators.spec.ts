@@ -39,7 +39,7 @@ const SESSION_ID = 'sess-activity-test';
 const SWIMLANE_ID = 'lane-backlog';
 
 /** Base pre-configure that creates a project with a task linked to a running session */
-function makePreConfig(opts: { sessionStatus: string; activity: string; withUsage: boolean }): string {
+function makePreConfig(opts: { sessionStatus: string; activity: string; withUsage: boolean; nullSessionId?: boolean }): string {
   return `
     window.__mockPreConfigure(function (state) {
       var ts = new Date().toISOString();
@@ -88,7 +88,7 @@ function makePreConfig(opts: { sessionStatus: string; activity: string; withUsag
         swimlane_id: '${SWIMLANE_ID}',
         position: 0,
         agent: null,
-        session_id: ${opts.sessionStatus === 'suspended' ? 'null' : `'${SESSION_ID}'`},
+        session_id: ${opts.sessionStatus === 'suspended' || opts.nullSessionId ? 'null' : `'${SESSION_ID}'`},
         worktree_path: null,
         branch_name: null,
         pr_number: null,
@@ -221,6 +221,48 @@ test.describe('Task Activity Indicators', () => {
       // Verify content
       await expect(tokens).toContainText('↑');
       await expect(cost).toContainText('$');
+    } finally {
+      await browser.close();
+    }
+  });
+
+  test('exited session does not show initializing bar', async () => {
+    const { browser, page } = await launchWithState(
+      makePreConfig({ sessionStatus: 'exited', activity: 'idle', withUsage: false })
+    );
+
+    try {
+      await page.locator('[data-swimlane-name="Backlog"]').waitFor({ state: 'visible', timeout: 15000 });
+      const card = page.locator('text=Test Initializing Task').first();
+      await expect(card).toBeVisible();
+
+      // Exited session should not trigger the initializing spinner
+      const titleRow = card.locator('..');
+      await expect(titleRow.locator('.lucide-loader-circle')).not.toBeVisible();
+      await expect(page.locator('[data-testid="initializing-bar"]')).not.toBeVisible();
+    } finally {
+      await browser.close();
+    }
+  });
+
+  test('stale exited session with null session_id does not show initializing bar', async () => {
+    // Reproduces the exact bug: task moved back to Backlog clears session_id
+    // but the session object remains in the list (matched by taskId).
+    const { browser, page } = await launchWithState(
+      makePreConfig({ sessionStatus: 'exited', activity: 'idle', withUsage: false, nullSessionId: true })
+    );
+
+    try {
+      await page.locator('[data-swimlane-name="Backlog"]').waitFor({ state: 'visible', timeout: 15000 });
+      const card = page.locator('text=Test Initializing Task').first();
+      await expect(card).toBeVisible();
+
+      // Task has session_id=null, but a stale exited session still in list by taskId.
+      // Should not show any spinner or initializing bar.
+      const titleRow = card.locator('..');
+      await expect(titleRow.locator('.lucide-loader-circle')).not.toBeVisible();
+      await expect(titleRow.locator('.lucide-mail')).not.toBeVisible();
+      await expect(page.locator('[data-testid="initializing-bar"]')).not.toBeVisible();
     } finally {
       await browser.close();
     }
