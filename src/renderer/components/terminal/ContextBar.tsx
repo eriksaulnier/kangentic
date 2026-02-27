@@ -3,6 +3,7 @@ import { useSessionStore } from '../../stores/session-store';
 import { useConfigStore } from '../../stores/config-store';
 import { getProgressColor } from '../../utils/color-lerp';
 import { formatTokenCount } from '../../utils/format-tokens';
+import { useValuePulse } from '../../hooks/useValuePulse';
 
 interface ContextBarProps {
   sessionId: string;
@@ -19,6 +20,14 @@ const pill = 'px-2 py-0.5 rounded bg-zinc-800 whitespace-nowrap';
 export function ContextBar({ sessionId, compact = false }: ContextBarProps) {
   const usage = useSessionStore((s) => s.sessionUsage[sessionId]);
   const claudeVersionNumber = useConfigStore((s) => s.claudeVersionNumber);
+
+  // Pulse hooks — always called unconditionally (hooks rules)
+  const costRef = useValuePulse(usage?.cost.totalCostUsd);
+  const inputTokens = usage?.contextWindow.totalInputTokens;
+  const outputTokens = usage?.contextWindow.totalOutputTokens;
+  const tokenKey = `${inputTokens}-${outputTokens}`;
+  const tokenRef = useValuePulse(tokenKey);
+  const pctRef = useValuePulse(usage ? Math.round(usage.contextWindow.usedPercentage) : 0);
 
   if (!usage) return null;
 
@@ -41,14 +50,15 @@ export function ContextBar({ sessionId, compact = false }: ContextBarProps) {
         </span>
       )}
       <span className={`${pill} text-zinc-400`}>{modelName}</span>
-      <span className={`${pill} text-zinc-400 tabular-nums`}>${usage.cost.totalCostUsd.toFixed(2)}</span>
+      <span ref={costRef} className={`${pill} text-zinc-400 tabular-nums`} title="Session API cost">${usage.cost.totalCostUsd.toFixed(2)}</span>
+
+      <div className="w-px h-3.5 bg-zinc-700 flex-shrink-0" />
+
       {!compact && (
-        <span className={`${pill} text-zinc-400 tabular-nums`}>
+        <span ref={tokenRef} className={`${pill} text-zinc-400 tabular-nums`} title="Input tokens ↑ / output tokens ↓">
           {formatTokenCount(usage.contextWindow.totalInputTokens)} ↑ / {formatTokenCount(usage.contextWindow.totalOutputTokens)} ↓
         </span>
       )}
-
-      <div className="w-px h-3.5 bg-zinc-700 flex-shrink-0" />
 
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <div className="flex-1 h-1.5 bg-zinc-700 rounded-full overflow-hidden">
@@ -57,7 +67,7 @@ export function ContextBar({ sessionId, compact = false }: ContextBarProps) {
             style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: progressColor }}
           />
         </div>
-        <span className="tabular-nums text-zinc-500 whitespace-nowrap transition-colors duration-300">{pct}% context</span>
+        <span ref={pctRef} className="tabular-nums text-zinc-500 whitespace-nowrap transition-colors duration-300" title="Context window usage — how much of the model's context is filled">{pct}% context</span>
       </div>
     </div>
   );

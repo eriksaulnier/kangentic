@@ -5,6 +5,7 @@ import { useConfigStore } from '../../stores/config-store';
 import { useBoardStore } from '../../stores/board-store';
 import { useProjectStore } from '../../stores/project-store';
 import { formatTokenCount } from '../../utils/format-tokens';
+import { useValuePulse } from '../../hooks/useValuePulse';
 
 export function StatusBar() {
   const sessions = useSessionStore((s) => s.sessions);
@@ -33,6 +34,11 @@ export function StatusBar() {
   const totalOutput = usageValues.reduce((sum, u) => sum + u.contextWindow.totalOutputTokens, 0);
   const totalCost = usageValues.reduce((sum, u) => sum + u.cost.totalCostUsd, 0);
 
+  // Pulse hooks — always called unconditionally (hooks rules)
+  const tokenKey = `${totalInput}-${totalOutput}`;
+  const tokenPulseRef = useValuePulse(tokenKey);
+  const costPulseRef = useValuePulse(totalCost);
+
   return (
     <div className="h-9 bg-zinc-900 border-t border-zinc-700 flex items-center px-3 text-xs text-zinc-500 select-none flex-shrink-0">
       {currentProject && (
@@ -51,8 +57,12 @@ export function StatusBar() {
           {hasUsage && (
             <>
               <div className="w-px h-3.5 bg-zinc-700 flex-shrink-0" />
-              <span className="tabular-nums" data-testid="aggregate-usage">
-                {formatTokenCount(totalInput)} ↑ / {formatTokenCount(totalOutput)} ↓&nbsp;&nbsp;${totalCost.toFixed(2)}
+              <span ref={tokenPulseRef} className="tabular-nums" data-testid="aggregate-tokens" title="Total input tokens ↑ / output tokens ↓ across all sessions">
+                {formatTokenCount(totalInput)} ↑ / {formatTokenCount(totalOutput)} ↓
+              </span>
+              <div className="w-px h-3.5 bg-zinc-700 flex-shrink-0" />
+              <span ref={costPulseRef} className="tabular-nums" data-testid="aggregate-cost" title="Total API cost across all sessions">
+                ${totalCost.toFixed(2)}
               </span>
             </>
           )}

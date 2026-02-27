@@ -166,6 +166,66 @@ test.describe('Task Activity Indicators', () => {
     }
   });
 
+  test('context bar places separator between cost and token counts', async () => {
+    const { browser, page } = await launchWithState(
+      makePreConfig({ sessionStatus: 'running', activity: 'idle', withUsage: true })
+    );
+
+    try {
+      await page.locator('[data-swimlane-name="Backlog"]').waitFor({ state: 'visible', timeout: 15000 });
+      // Open task detail dialog
+      await page.locator('text=Test Initializing Task').first().click();
+      await page.waitForTimeout(300);
+
+      // Target the ContextBar (h-8 flex row), not the card's inline usage bar
+      const usageBar = page.locator('[data-testid="usage-bar"].h-8');
+      await expect(usageBar).toBeVisible();
+
+      // Verify ordering: cost pill text → separator div → tokens pill text
+      // Get all direct children of the usage bar and check their text/role
+      const children = usageBar.locator('> *');
+      const texts = await children.evaluateAll((els) =>
+        els.map((el) => ({
+          text: el.textContent?.trim() || '',
+          isSeparator: el.classList.contains('bg-zinc-700') && el.classList.contains('w-px'),
+        }))
+      );
+
+      // Find cost pill (contains "$"), separator, and tokens pill (contains "↑")
+      const costIdx = texts.findIndex((t) => t.text.includes('$'));
+      const separatorIdx = texts.findIndex((t, i) => i > costIdx && t.isSeparator);
+      const tokensIdx = texts.findIndex((t) => t.text.includes('↑'));
+
+      expect(costIdx).toBeGreaterThanOrEqual(0);
+      expect(separatorIdx).toBeGreaterThan(costIdx);
+      expect(tokensIdx).toBeGreaterThan(separatorIdx);
+    } finally {
+      await browser.close();
+    }
+  });
+
+  test('status bar shows separate token and cost spans when usage exists', async () => {
+    const { browser, page } = await launchWithState(
+      makePreConfig({ sessionStatus: 'running', activity: 'idle', withUsage: true })
+    );
+
+    try {
+      await page.locator('[data-swimlane-name="Backlog"]').waitFor({ state: 'visible', timeout: 15000 });
+
+      // Both spans should be visible in the status bar
+      const tokens = page.locator('[data-testid="aggregate-tokens"]');
+      const cost = page.locator('[data-testid="aggregate-cost"]');
+      await expect(tokens).toBeVisible();
+      await expect(cost).toBeVisible();
+
+      // Verify content
+      await expect(tokens).toContainText('↑');
+      await expect(cost).toContainText('$');
+    } finally {
+      await browser.close();
+    }
+  });
+
   test('suspended task during initialization shows neither activity icon', async () => {
     const { browser, page } = await launchWithState(
       makePreConfig({ sessionStatus: 'suspended', activity: 'idle', withUsage: false })

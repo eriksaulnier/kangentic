@@ -114,6 +114,17 @@
   animation: pulse-subtle 4s ease-out infinite;
 }
 
+/* Brief brightness + scale pulse for live-updating values */
+@keyframes value-update {
+  0%   { filter: brightness(1); transform: scale(1); }
+  30%  { filter: brightness(1.6); transform: scale(1.04); }
+  100% { filter: brightness(1); transform: scale(1); }
+}
+
+.animate-value-update {
+  animation: value-update 350ms ease-out;
+}
+
 /* Dialog transitions */
 @keyframes dialog-backdrop-in  { from { opacity: 0 } }
 @keyframes dialog-backdrop-out { to   { opacity: 0 } }
