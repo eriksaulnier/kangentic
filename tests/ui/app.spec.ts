@@ -49,7 +49,7 @@ test.describe('App Launch', () => {
   });
 
   test('status bar exists', async () => {
-    await expect(page.locator('.h-9.bg-zinc-900.border-t')).toBeVisible();
+    await expect(page.locator('.h-9.bg-surface.border-t')).toBeVisible();
   });
 
   test('window control buttons are visible', async () => {

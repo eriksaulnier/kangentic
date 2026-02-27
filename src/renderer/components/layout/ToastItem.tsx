@@ -47,7 +47,7 @@ export function ToastItem({ toast, onDismiss }: ToastItemProps) {
       data-testid="toast"
       onTransitionEnd={handleTransitionEnd}
       className={`pointer-events-auto flex items-stretch overflow-hidden rounded-md border
-        bg-zinc-900 shadow-xl shadow-black/40 text-sm
+        bg-surface shadow-xl shadow-black/40 text-sm
         transition-all duration-300 ease-out
         ${variantStyles[toast.variant].border}
         ${visible && !exiting ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'}
@@ -55,7 +55,7 @@ export function ToastItem({ toast, onDismiss }: ToastItemProps) {
     >
       <div className={`w-1 flex-shrink-0 ${variantStyles[toast.variant].accent}`} />
       <div className="flex items-center gap-2 px-3 py-2">
-        <span className="text-zinc-200">{toast.message}</span>
+        <span className="text-fg-secondary">{toast.message}</span>
 
         {toast.action && (
           <button
@@ -68,7 +68,7 @@ export function ToastItem({ toast, onDismiss }: ToastItemProps) {
 
         <button
           onClick={handleDismissClick}
-          className="ml-1 p-0.5 text-zinc-500 hover:text-zinc-300 transition-colors flex-shrink-0"
+          className="ml-1 p-0.5 text-fg-faint hover:text-fg-tertiary transition-colors flex-shrink-0"
         >
           <X size={14} />
         </button>

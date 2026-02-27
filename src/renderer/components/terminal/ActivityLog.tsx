@@ -67,7 +67,7 @@ export function ActivityLog({ active, sessionIds, taskLabelMap }: ActivityLogPro
 
   if (displayEvents.length === 0) {
     return (
-      <div className="h-full w-full bg-zinc-900 flex items-center justify-center text-zinc-600 text-sm font-mono">
+      <div className="h-full w-full bg-surface flex items-center justify-center text-fg-disabled text-sm font-mono">
         Waiting for agent activity...
       </div>
     );
@@ -77,7 +77,7 @@ export function ActivityLog({ active, sessionIds, taskLabelMap }: ActivityLogPro
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="h-full w-full bg-zinc-900 overflow-y-auto font-mono text-xs leading-5 p-2"
+      className="h-full w-full bg-surface overflow-y-auto font-mono text-xs leading-5 p-2"
     >
       {displayEvents.map((item, i) => (
         <EventLine
@@ -112,11 +112,11 @@ function EventLine({ event, label, colorClass, showLabel }: EventLineProps) {
         <div className="flex items-baseline gap-1.5 min-w-0">
           <span className="text-zinc-600 shrink-0">{formatTime(event.ts)}</span>
           {showLabel && <span className={`${colorClass} font-semibold shrink-0`}>[{label}]</span>}
-          <span className="bg-zinc-800 text-zinc-200 px-1.5 py-0.5 rounded text-[11px] font-medium shrink-0">
+          <span className="bg-surface-raised text-fg-secondary px-1.5 py-0.5 rounded text-[11px] font-medium shrink-0">
             {event.tool || 'Tool'}
           </span>
           {event.detail && (
-            <span className="text-zinc-500 truncate min-w-0">{event.detail}</span>
+            <span className="text-fg-faint truncate min-w-0">{event.detail}</span>
           )}
         </div>
       );
@@ -131,7 +131,7 @@ function EventLine({ event, label, colorClass, showLabel }: EventLineProps) {
         <div className="flex items-baseline gap-1.5">
           <span className="text-zinc-600 shrink-0">{formatTime(event.ts)}</span>
           {showLabel && <span className={`${colorClass} font-semibold shrink-0`}>[{label}]</span>}
-          <span className="text-zinc-500 italic">Idle — waiting for input</span>
+          <span className="text-fg-faint italic">Idle — waiting for input</span>
         </div>
       );
 
@@ -140,7 +140,7 @@ function EventLine({ event, label, colorClass, showLabel }: EventLineProps) {
         <div className="flex items-baseline gap-1.5">
           <span className="text-zinc-600 shrink-0">{formatTime(event.ts)}</span>
           {showLabel && <span className={`${colorClass} font-semibold shrink-0`}>[{label}]</span>}
-          <span className="text-zinc-400">Thinking...</span>
+          <span className="text-fg-muted">Thinking...</span>
         </div>
       );
 

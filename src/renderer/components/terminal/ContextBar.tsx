@@ -10,7 +10,7 @@ interface ContextBarProps {
   compact?: boolean; // hide version label — used in the bottom panel
 }
 
-const pill = 'px-2 py-0.5 rounded bg-zinc-800 whitespace-nowrap';
+const pill = 'px-2 py-0.5 rounded bg-surface-raised whitespace-nowrap';
 
 /**
  * Visual context window usage bar displayed below terminal areas.
@@ -38,36 +38,36 @@ export function ContextBar({ sessionId, compact = false }: ContextBarProps) {
 
   return (
     <div
-      className="h-8 bg-zinc-900/80 border-t border-zinc-700 flex items-center px-3 gap-2 text-xs flex-shrink-0"
+      className="h-8 bg-surface/80 border-t border-edge flex items-center px-3 gap-2 text-xs flex-shrink-0"
       data-testid="usage-bar"
     >
       {!compact && (
-        <span className={`${pill} text-zinc-400`}>
+        <span className={`${pill} text-fg-muted`}>
           Claude Code
           {claudeVersionNumber && (
-            <span className="text-zinc-500 ml-1.5">v{claudeVersionNumber}</span>
+            <span className="text-fg-faint ml-1.5">v{claudeVersionNumber}</span>
           )}
         </span>
       )}
-      <span className={`${pill} text-zinc-400`}>{modelName}</span>
-      <span ref={costRef} className={`${pill} text-zinc-400 tabular-nums`} title="Session API cost">${usage.cost.totalCostUsd.toFixed(2)}</span>
+      <span className={`${pill} text-fg-muted`}>{modelName}</span>
+      <span ref={costRef} className={`${pill} text-fg-muted tabular-nums`} title="Session API cost">${usage.cost.totalCostUsd.toFixed(2)}</span>
 
-      <div className="w-px h-3.5 bg-zinc-700 flex-shrink-0" />
+      <div className="w-px h-3.5 bg-surface-hover flex-shrink-0" />
 
       {!compact && (
-        <span ref={tokenRef} className={`${pill} text-zinc-400 tabular-nums`} title="Input tokens ↑ / output tokens ↓">
+        <span ref={tokenRef} className={`${pill} text-fg-muted tabular-nums`} title="Input tokens ↑ / output tokens ↓">
           {formatTokenCount(usage.contextWindow.totalInputTokens)} ↑ / {formatTokenCount(usage.contextWindow.totalOutputTokens)} ↓
         </span>
       )}
 
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        <div className="flex-1 h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+        <div className="flex-1 h-1.5 bg-surface-hover rounded-full overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-300"
             style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: progressColor }}
           />
         </div>
-        <span ref={pctRef} className="tabular-nums text-zinc-500 whitespace-nowrap transition-colors duration-300" title="Context window usage — how much of the model's context is filled">{pct}% context</span>
+        <span ref={pctRef} className="tabular-nums text-fg-faint whitespace-nowrap transition-colors duration-300" title="Context window usage — how much of the model's context is filled">{pct}% context</span>
       </div>
     </div>
   );

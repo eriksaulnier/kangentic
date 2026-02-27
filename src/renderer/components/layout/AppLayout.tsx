@@ -20,12 +20,12 @@ export function AppLayout() {
   const terminal = useTerminalResize(config);
 
   return (
-    <div className="h-screen flex flex-col bg-zinc-900">
+    <div className="h-screen flex flex-col bg-surface">
       <TitleBar sidebarOpen={sidebar.open} onToggleSidebar={sidebar.toggle} />
 
       <div className="flex flex-1 min-h-0">
         <div
-          className={`flex-shrink-0 overflow-hidden border-r border-zinc-700 ${
+          className={`flex-shrink-0 overflow-hidden border-r border-edge ${
             !sidebar.open && !sidebar.isResizing ? 'w-0 border-r-0' : ''
           } ${sidebar.ready && !sidebar.isResizing ? 'transition-[width] duration-200 ease-in-out' : ''}`}
           style={sidebar.open || sidebar.isResizing ? { width: sidebar.width } : undefined}
@@ -37,8 +37,8 @@ export function AppLayout() {
         <div
           className={`flex-shrink-0 cursor-col-resize transition-colors ${
             sidebar.open
-              ? 'w-1 bg-zinc-700 hover:bg-zinc-500'
-              : 'w-1.5 bg-zinc-700/50 hover:bg-zinc-500'
+              ? 'w-1 bg-edge hover:bg-fg-faint'
+              : 'w-1.5 bg-edge/50 hover:bg-fg-faint'
           }`}
           onMouseDown={sidebar.onResizeStart}
         />
@@ -53,7 +53,7 @@ export function AppLayout() {
               {/* Resize handle — hidden when collapsed */}
               {!terminal.collapsed && (
                 <div
-                  className="resize-handle h-1 bg-zinc-700 flex-shrink-0 cursor-row-resize hover:bg-zinc-500 transition-colors"
+                  className="resize-handle h-1 bg-edge flex-shrink-0 cursor-row-resize hover:bg-fg-faint transition-colors"
                   onMouseDown={terminal.onResizeStart}
                 />
               )}
@@ -73,7 +73,7 @@ export function AppLayout() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-zinc-500">
+            <div className="flex-1 flex items-center justify-center text-fg-faint">
               <div className="text-center">
                 <div className="text-4xl mb-4">&#9776;</div>
                 <div className="text-lg">Select or create a project to get started</div>

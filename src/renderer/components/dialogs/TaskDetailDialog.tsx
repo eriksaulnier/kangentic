@@ -326,7 +326,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
       {savedAttachments.map((att) => (
         <div
           key={att.id}
-          className="relative flex-shrink-0 w-24 h-24 rounded-md border border-zinc-600 overflow-hidden group cursor-pointer"
+          className="relative flex-shrink-0 w-24 h-24 rounded-md border border-edge-input overflow-hidden group cursor-pointer"
           onClick={() => handlePreview(att)}
         >
           {att.previewUrl && (
@@ -344,7 +344,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
               <X size={14} />
             </button>
           )}
-          <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[9px] text-zinc-300 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[9px] text-fg-tertiary truncate opacity-0 group-hover:opacity-100 transition-opacity">
             {att.filename}
           </div>
         </div>
@@ -357,14 +357,14 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
       {/* Pause / Resume toggle */}
       {canToggle && (
         toggling ? (
-          <Loader2 size={18} className="text-zinc-400 animate-spin flex-shrink-0" />
+          <Loader2 size={18} className="text-fg-muted animate-spin flex-shrink-0" />
         ) : (
           <button
             onClick={handleToggle}
             className={`p-1 rounded-full transition-colors flex-shrink-0 ${
               isSessionActive
                 ? 'text-green-400 hover:bg-green-400/10'
-                : 'text-zinc-500 hover:bg-zinc-700 hover:text-zinc-300'
+                : 'text-fg-faint hover:bg-surface-hover hover:text-fg-tertiary'
             }`}
             title={isSessionActive ? 'Pause session' : 'Resume session'}
           >
@@ -385,11 +385,11 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="bg-zinc-900 border border-zinc-600 rounded px-2 py-1 text-sm text-zinc-100 focus:outline-none focus:border-blue-500 flex-1 min-w-0"
+          className="bg-surface border border-edge-input rounded px-2 py-1 text-sm text-fg focus:outline-none focus:border-blue-500 flex-1 min-w-0"
           autoFocus
         />
       ) : (
-        <h2 className="text-base font-semibold text-zinc-100 truncate flex-1 min-w-0">{task.title}</h2>
+        <h2 className="text-base font-semibold text-fg truncate flex-1 min-w-0">{task.title}</h2>
       )}
 
       {/* Actions */}
@@ -397,7 +397,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
         <>
           <button
             onClick={() => { setTitle(task.title); setDescription(task.description); setIsEditing(false); }}
-            className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-600 hover:border-zinc-500 rounded transition-colors flex-shrink-0"
+            className="px-3 py-1.5 text-xs text-fg-muted hover:text-fg-secondary border border-edge-input hover:border-fg-faint rounded transition-colors flex-shrink-0"
           >
             Cancel
           </button>
@@ -412,21 +412,21 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
         <div className="relative flex-shrink-0" ref={kebabMenuRef}>
           <button
             onClick={() => { setShowKebabMenu(!showKebabMenu); setShowMoveSubmenu(false); }}
-            className="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 rounded transition-colors"
+            className="p-1.5 text-fg-faint hover:text-fg-tertiary hover:bg-surface-hover rounded transition-colors"
             title="Actions"
           >
             <MoreHorizontal size={16} />
           </button>
           {showKebabMenu && (
-            <div className="absolute top-full right-0 mt-1 min-w-[170px] bg-zinc-800 border border-zinc-600 rounded-md shadow-xl z-50 py-1">
+            <div className="absolute top-full right-0 mt-1 min-w-[170px] bg-surface-raised border border-edge-input rounded-md shadow-xl z-50 py-1">
               {/* Edit */}
               <button
                 onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); setIsEditing(true); }}
                 disabled={isThinking}
                 className={`w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 ${
                   isThinking
-                    ? 'text-zinc-600 cursor-not-allowed'
-                    : 'text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100'
+                    ? 'text-fg-disabled cursor-not-allowed'
+                    : 'text-fg-tertiary hover:bg-surface-hover hover:text-fg'
                 }`}
                 title={isThinking ? 'Cannot edit while agent is thinking' : undefined}
               >
@@ -443,19 +443,19 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
                 >
                   <button
                     onClick={() => setShowMoveSubmenu(!showMoveSubmenu)}
-                    className={`w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors flex items-center gap-2 ${showMoveSubmenu ? 'bg-zinc-700 text-zinc-100' : ''}`}
+                    className={`w-full text-left px-3 py-1.5 text-xs text-fg-tertiary hover:bg-surface-hover hover:text-fg transition-colors flex items-center gap-2 ${showMoveSubmenu ? 'bg-surface-hover text-fg' : ''}`}
                   >
                     <ArrowRightLeft size={14} />
                     <span className="flex-1">Move to</span>
                     <ChevronRight size={14} />
                   </button>
                   {showMoveSubmenu && (
-                    <div className="absolute left-full top-0 -ml-px min-w-[150px] bg-zinc-800 border border-zinc-600 rounded-md shadow-xl z-50 py-1">
+                    <div className="absolute left-full top-0 -ml-px min-w-[150px] bg-surface-raised border border-edge-input rounded-md shadow-xl z-50 py-1">
                       {moveTargets.map((s) => (
                         <button
                           key={s.id}
                           onClick={() => handleMoveTo(s.id)}
-                          className="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors flex items-center gap-2"
+                          className="w-full text-left px-3 py-1.5 text-xs text-fg-tertiary hover:bg-surface-hover hover:text-fg transition-colors flex items-center gap-2"
                         >
                           <span className="flex-shrink-0" style={{ color: s.color }}>
                             {(() => {
@@ -480,7 +480,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
                 <button
                   onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); handleToggle(new MouseEvent('click') as any); }}
                   disabled={toggling}
-                  className="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors flex items-center gap-2 disabled:opacity-50"
+                  className="w-full text-left px-3 py-1.5 text-xs text-fg-tertiary hover:bg-surface-hover hover:text-fg transition-colors flex items-center gap-2 disabled:opacity-50"
                 >
                   {isSessionActive ? (
                     <>
@@ -497,7 +497,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
               )}
 
               {/* Divider */}
-              <div className="my-2 mx-2 border-t border-zinc-600" />
+              <div className="my-2 mx-2 border-t border-edge-input" />
 
               {isArchived ? (
                 /* Delete — only for archived tasks */
@@ -512,7 +512,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
                 /* Archive — moves to Done, no confirmation */
                 <button
                   onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); handleArchive(); }}
-                  className="w-full text-left px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors flex items-center gap-2"
+                  className="w-full text-left px-3 py-2 text-xs text-fg-tertiary hover:bg-surface-hover hover:text-fg transition-colors flex items-center gap-2"
                 >
                   <Archive size={14} />
                   Archive
@@ -524,10 +524,10 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
       )}
 
       {/* Divider + Close */}
-      <div className="w-px h-5 bg-zinc-700 flex-shrink-0" />
+      <div className="w-px h-5 bg-surface-hover flex-shrink-0" />
       <button
         onClick={onClose}
-        className="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 rounded transition-colors flex-shrink-0"
+        className="p-1.5 text-fg-faint hover:text-fg-tertiary hover:bg-surface-hover rounded transition-colors flex-shrink-0"
       >
         <X size={16} />
       </button>
@@ -550,9 +550,9 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
               type="checkbox"
               checked={dontAskAgain}
               onChange={(e) => setDontAskAgain(e.target.checked)}
-              className="rounded border-zinc-600 bg-zinc-900 accent-blue-500"
+              className="rounded border-edge-input bg-surface accent-blue-500"
             />
-            <span className="text-xs text-zinc-400">Don't ask again</span>
+            <span className="text-xs text-fg-muted">Don't ask again</span>
           </label>
         }
         onConfirm={handleDelete}
@@ -573,7 +573,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
         {/* Description edit mode with drag/drop support */}
         {isEditing && (
           <div
-            className="px-4 py-3 border-b border-zinc-700 flex-shrink-0 relative space-y-2"
+            className="px-4 py-3 border-b border-edge flex-shrink-0 relative space-y-2"
             onDragOver={handleAttachmentDragOver}
             onDragLeave={handleAttachmentDragLeave}
             onDrop={handleAttachmentDrop}
@@ -584,15 +584,15 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
                 onChange={(e) => setDescription(e.target.value)}
                 onPaste={handleAttachmentPaste}
                 rows={3}
-                className="w-full bg-zinc-900 border border-zinc-600 rounded px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-blue-500 resize-y min-h-[80px] max-h-[300px]"
+                className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg focus:outline-none focus:border-blue-500 resize-y min-h-[80px] max-h-[300px]"
               />
               {!description && (
                 <div className="absolute inset-0 flex flex-col pointer-events-none px-3 py-2">
-                  <span className="text-sm text-zinc-500">Description</span>
+                  <span className="text-sm text-fg-faint">Description</span>
                   <div className="flex-1 flex items-center justify-center">
-                    <div className="flex flex-col items-center gap-1.5 border border-dashed border-zinc-700 rounded-lg px-5 py-3">
-                      <Image size={18} className="text-zinc-600" />
-                      <span className="text-xs text-zinc-600">Paste or drop images here</span>
+                    <div className="flex flex-col items-center gap-1.5 border border-dashed border-edge rounded-lg px-5 py-3">
+                      <Image size={18} className="text-fg-disabled" />
+                      <span className="text-xs text-fg-disabled">Paste or drop images here</span>
                     </div>
                   </div>
                 </div>
@@ -609,9 +609,9 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
 
         {/* Description view mode with attachment thumbnails */}
         {!isEditing && (task.description || savedAttachments.length > 0) && !hasSessionContext && (
-          <div className="px-4 py-3 border-b border-zinc-700 flex-shrink-0 space-y-2">
+          <div className="px-4 py-3 border-b border-edge flex-shrink-0 space-y-2">
             {task.description && (
-              <p className="text-sm text-zinc-400 whitespace-pre-wrap">{task.description}</p>
+              <p className="text-sm text-fg-muted whitespace-pre-wrap">{task.description}</p>
             )}
             {thumbnailStrip}
           </div>
@@ -619,26 +619,26 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
 
         {/* Worktree / PR info */}
         {!isEditing && (task.worktree_path || task.pr_url) && (
-          <div className="px-4 py-2 border-b border-zinc-700 flex-shrink-0 flex items-center gap-4 text-xs">
+          <div className="px-4 py-2 border-b border-edge flex-shrink-0 flex items-center gap-4 text-xs">
             {task.branch_name && (
-              <span className="text-zinc-400 flex items-center gap-1.5">
+              <span className="text-fg-muted flex items-center gap-1.5">
                 Branch:
                 {task.worktree_path ? (
                   <button
                     onClick={() => window.electronAPI.shell.openPath(task.worktree_path!)}
-                    className="inline-flex items-center gap-1.5 text-zinc-200 hover:text-blue-400 transition-colors"
+                    className="inline-flex items-center gap-1.5 text-fg-secondary hover:text-blue-400 transition-colors"
                     title="Open worktree directory"
                   >
                     {task.branch_name}
                     <ExternalLink size={12} />
                   </button>
                 ) : (
-                  <span className="text-zinc-200">{task.branch_name}</span>
+                  <span className="text-fg-secondary">{task.branch_name}</span>
                 )}
               </span>
             )}
             {task.pr_url && (
-              <span className="text-zinc-400">PR: <span className="text-blue-400">#{task.pr_number}</span></span>
+              <span className="text-fg-muted">PR: <span className="text-blue-400">#{task.pr_number}</span></span>
             )}
           </div>
         )}
@@ -658,7 +658,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
             <ContextBar sessionId={session.id} />
           </>
         ) : isSuspended || toggling ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-zinc-900/50">
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-surface/50">
             <button
               onClick={handleToggle}
               disabled={toggling}
@@ -674,7 +674,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
           </div>
         ) : (
           !isEditing && !task.description && savedAttachments.length === 0 && (
-            <div className="flex-1 flex items-center justify-center text-zinc-600 text-sm p-8">
+            <div className="flex-1 flex items-center justify-center text-fg-disabled text-sm p-8">
               No active session. Drag this task to a column with a transition to start one.
             </div>
           )
@@ -688,7 +688,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
           onClick={() => setPreviewAttachment(null)}
         >
           <button
-            className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-zinc-200 transition-colors"
+            className="absolute top-4 right-4 p-2 text-fg-muted hover:text-fg-secondary transition-colors"
             onClick={() => setPreviewAttachment(null)}
           >
             <X size={24} />
@@ -699,7 +699,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
             className="max-w-[90vw] max-h-[85vh] object-contain"
             onClick={(e) => e.stopPropagation()}
           />
-          <p className="mt-2 text-sm text-zinc-400">{previewAttachment.filename}</p>
+          <p className="mt-2 text-sm text-fg-muted">{previewAttachment.filename}</p>
         </div>
       )}
     </>

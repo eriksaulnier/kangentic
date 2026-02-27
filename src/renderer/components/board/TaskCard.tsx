@@ -104,21 +104,21 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
           {...listeners}
           onClick={handleClick}
           data-task-id={task.id}
-          className={`bg-zinc-800/60 border border-zinc-700/50 rounded-md px-2.5 py-1.5 cursor-grab active:cursor-grabbing hover:border-zinc-600 transition-colors group/card ${
+          className={`bg-surface-raised/60 border border-edge/50 rounded-md px-2.5 py-1.5 cursor-grab active:cursor-grabbing hover:border-edge-input transition-colors group/card ${
             isDragOverlay ? 'shadow-xl' : ''
           }`}
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm text-zinc-300 truncate flex-1">{task.title}</span>
+            <span className="text-sm text-fg-tertiary truncate flex-1">{task.title}</span>
             <div className="flex items-center gap-1.5 flex-shrink-0">
-              <span className="text-xs text-zinc-600">
+              <span className="text-xs text-fg-disabled">
                 {task.archived_at ? formatDistanceToNow(new Date(task.archived_at), { addSuffix: true }) : ''}
               </span>
               {onDelete && (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
-                  className="ml-1.5 p-2 rounded-full text-zinc-600 hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover/card:opacity-100 transition-all"
+                  className="ml-1.5 p-2 rounded-full text-fg-disabled hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover/card:opacity-100 transition-all"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -143,19 +143,19 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
         {...listeners}
         onClick={handleClick}
         data-task-id={task.id}
-        className={`border rounded-md p-2.5 cursor-grab active:cursor-grabbing transition-colors bg-zinc-800 ${
-          isHighlighted ? 'border-[2px] border-zinc-500/60' : isIdle ? 'border-zinc-700/40' : 'border-zinc-700 hover:border-zinc-600'
+        className={`border rounded-md p-2.5 cursor-grab active:cursor-grabbing transition-colors bg-surface-raised ${
+          isHighlighted ? 'border-[2px] border-fg-faint/60' : isIdle ? 'border-edge/40' : 'border-edge hover:border-edge-input'
         } ${isIdle ? 'animate-pulse-subtle' : ''
         } ${isDragOverlay ? 'shadow-xl' : ''}`}
       >
         <div className="flex items-center gap-1.5">
           {isIdle && (
-            <Mail size={14} className="text-zinc-400 shrink-0" />
+            <Mail size={14} className="text-fg-muted shrink-0" />
           )}
           {isThinking && (
             <Loader2 size={14} className="text-emerald-400 animate-spin shrink-0" />
           )}
-          <div className="text-sm text-zinc-100 font-medium truncate">{task.title}</div>
+          <div className="text-sm text-fg font-medium truncate">{task.title}</div>
         </div>
 
         {task.pr_url && (
@@ -167,21 +167,21 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
         )}
 
         {task.description && (
-          <div className="text-xs text-zinc-500 mt-1 line-clamp-3">{task.description}</div>
+          <div className="text-xs text-fg-faint mt-1 line-clamp-3">{task.description}</div>
         )}
 
         {usage ? (() => {
           const pct = Math.round(usage.contextWindow.usedPercentage);
           const progressColor = getProgressColor(pct);
           return (
-            <div className="mt-2 pt-2 border-t border-zinc-700" data-testid="usage-bar">
+            <div className="mt-2 pt-2 border-t border-edge" data-testid="usage-bar">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs text-zinc-500">
+                <span className="text-xs text-fg-faint">
                   {usage.model.displayName || 'Claude'}
                 </span>
-                <span className="text-xs text-zinc-500">{pct}%</span>
+                <span className="text-xs text-fg-faint">{pct}%</span>
               </div>
-              <div className="w-full h-1 bg-zinc-700 rounded-full overflow-hidden">
+              <div className="w-full h-1 bg-surface-hover rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-300"
                   style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: progressColor }}
@@ -190,8 +190,8 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
             </div>
           );
         })() : taskSession && taskSession.status !== 'exited' && (taskSession.status === 'suspended' || taskSession.status === 'queued' || isInitializing) && (
-          <div className="mt-2 pt-2 border-t border-zinc-700" data-testid="initializing-bar">
-            <span className="text-xs text-zinc-500 flex items-center gap-1">
+          <div className="mt-2 pt-2 border-t border-edge" data-testid="initializing-bar">
+            <span className="text-xs text-fg-faint flex items-center gap-1">
               {taskSession?.status === 'suspended' ? (
                 <>
                   <CirclePause size={12} />

@@ -191,7 +191,7 @@ test.describe('Task Activity Indicators', () => {
       const texts = await children.evaluateAll((els) =>
         els.map((el) => ({
           text: el.textContent?.trim() || '',
-          isSeparator: el.classList.contains('bg-zinc-700') && el.classList.contains('w-px'),
+          isSeparator: el.classList.contains('bg-surface-hover') && el.classList.contains('w-px'),
         }))
       );
 

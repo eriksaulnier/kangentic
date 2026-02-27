@@ -34,7 +34,7 @@ export function Swimlane({ swimlane, tasks, dragHandleProps }: SwimlaneProps) {
       data-testid="swimlane"
       data-swimlane-name={swimlane.name}
       className={`flex-shrink-0 w-72 h-full flex flex-col rounded-lg ${
-        isSystemColumn ? 'bg-zinc-800/70 ring-1 ring-zinc-700/50' : 'bg-zinc-800/50'
+        isSystemColumn ? 'bg-surface-raised/70 ring-1 ring-edge/50' : 'bg-surface-raised/50'
       }`}
     >
       {/* Accent bar for system columns */}
@@ -47,7 +47,7 @@ export function Swimlane({ swimlane, tasks, dragHandleProps }: SwimlaneProps) {
 
       {/* Column header */}
       <div
-        className={`px-3 py-2 flex items-center gap-2 border-b border-zinc-700/50 w-full text-left hover:bg-zinc-700/30 transition-colors group ${
+        className={`px-3 py-2 flex items-center gap-2 border-b border-edge/50 w-full text-left hover:bg-surface-hover/30 transition-colors group ${
           isSystemColumn ? '' : 'rounded-t-lg'
         }`}
       >
@@ -55,7 +55,7 @@ export function Swimlane({ swimlane, tasks, dragHandleProps }: SwimlaneProps) {
         {isDraggable && (
           <div
             {...dragHandleProps}
-            className="text-zinc-600 hover:text-zinc-400 cursor-grab active:cursor-grabbing transition-colors -ml-1"
+            className="text-fg-disabled hover:text-fg-muted cursor-grab active:cursor-grabbing transition-colors -ml-1"
           >
             <GripVertical size={14} />
           </div>
@@ -81,13 +81,13 @@ export function Swimlane({ swimlane, tasks, dragHandleProps }: SwimlaneProps) {
           className="flex items-center gap-2 flex-1 min-w-0"
         >
           <span className={`text-sm font-medium truncate ${
-            isSystemColumn ? 'text-zinc-100' : 'text-zinc-200'
+            isSystemColumn ? 'text-fg' : 'text-fg-secondary'
           }`}>
             {swimlane.name}
           </span>
         </button>
 
-        <span className="text-xs text-zinc-500 tabular-nums">{tasks.length}</span>
+        <span className="text-xs text-fg-faint tabular-nums">{tasks.length}</span>
 
         {role === 'backlog' ? (
           <Lock size={12} className="flex-shrink-0 opacity-40" />
@@ -97,7 +97,7 @@ export function Swimlane({ swimlane, tasks, dragHandleProps }: SwimlaneProps) {
             onClick={() => setShowEditColumn(true)}
             className="flex-shrink-0"
           >
-            <Pencil size={12} className="text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+            <Pencil size={12} className="text-fg-disabled group-hover:text-fg-muted transition-colors" />
           </button>
         )}
       </div>
@@ -106,7 +106,7 @@ export function Swimlane({ swimlane, tasks, dragHandleProps }: SwimlaneProps) {
       <div
         ref={setNodeRef}
         className={`flex-1 overflow-y-auto p-2 space-y-2 min-h-[100px] transition-colors ${
-          isOver ? 'bg-zinc-700/30' : ''
+          isOver ? 'bg-surface-hover/30' : ''
         }`}
       >
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
@@ -117,10 +117,10 @@ export function Swimlane({ swimlane, tasks, dragHandleProps }: SwimlaneProps) {
       </div>
 
       {/* Add task button */}
-      <div className="p-2 border-t border-zinc-700/50">
+      <div className="p-2 border-t border-edge/50">
         <button
           onClick={() => setShowNewTask(true)}
-          className="w-full text-sm text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50 rounded px-2 py-1 transition-colors text-left"
+          className="w-full text-sm text-fg-faint hover:text-fg-tertiary hover:bg-surface-hover/50 rounded px-2 py-1 transition-colors text-left"
         >
           + Add task
         </button>

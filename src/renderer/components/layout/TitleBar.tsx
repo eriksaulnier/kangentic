@@ -20,13 +20,13 @@ export function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps) {
     : false;
 
   return (
-    <div className="h-10 bg-zinc-900 border-b border-zinc-700 flex items-center px-3 select-none flex-shrink-0"
+    <div className="h-10 bg-surface border-b border-edge flex items-center px-3 select-none flex-shrink-0"
          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
       {!sidebarOpen && (
         <div className="flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <button
             onClick={onToggleSidebar}
-            className="p-1.5 hover:bg-zinc-700 rounded text-zinc-400 hover:text-zinc-100 transition-colors"
+            className="p-1.5 hover:bg-surface-hover rounded text-fg-muted hover:text-fg transition-colors"
             title="Show sidebar"
           >
             <Menu size={20} />
@@ -34,10 +34,10 @@ export function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps) {
         </div>
       )}
 
-      <div className="flex-1 text-center text-sm text-zinc-400">
-        <span className="font-semibold text-zinc-200">Kangentic</span>
+      <div className="flex-1 text-center text-sm text-fg-muted">
+        <span className="font-semibold text-fg-secondary">Kangentic</span>
         {currentProject && (
-          <span className="ml-2 text-zinc-500">
+          <span className="ml-2 text-fg-faint">
             &mdash; {currentProject.name}
             {isWorktree && (
               <span className="ml-1.5 text-xs text-amber-500/70">(worktree)</span>
@@ -49,8 +49,8 @@ export function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps) {
       <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         <button
           onClick={() => setSettingsOpen(!settingsOpen)}
-          className={`p-1.5 hover:bg-zinc-700 rounded transition-colors ${
-            settingsOpen ? 'text-zinc-100 bg-zinc-700' : 'text-zinc-400 hover:text-zinc-100'
+          className={`p-1.5 hover:bg-surface-hover rounded transition-colors ${
+            settingsOpen ? 'text-fg bg-surface-hover' : 'text-fg-muted hover:text-fg'
           }`}
           title="Settings"
         >
@@ -58,24 +58,24 @@ export function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps) {
         </button>
         {!isMac && (
           <>
-            <div className="w-px h-4 bg-zinc-700 mx-1" />
+            <div className="w-px h-4 bg-edge mx-1" />
             <button
               onClick={() => window.electronAPI.window.minimize()}
-              className="p-1.5 hover:bg-zinc-700 rounded text-zinc-400 hover:text-zinc-100 transition-colors"
+              className="p-1.5 hover:bg-surface-hover rounded text-fg-muted hover:text-fg transition-colors"
               title="Minimize"
             >
               <Minus size={16} />
             </button>
             <button
               onClick={() => window.electronAPI.window.maximize()}
-              className="p-1.5 hover:bg-zinc-700 rounded text-zinc-400 hover:text-zinc-100 transition-colors"
+              className="p-1.5 hover:bg-surface-hover rounded text-fg-muted hover:text-fg transition-colors"
               title="Maximize"
             >
               <Square size={14} />
             </button>
             <button
               onClick={() => window.electronAPI.window.close()}
-              className="p-1.5 hover:bg-red-600 rounded text-zinc-400 hover:text-white transition-colors"
+              className="p-1.5 hover:bg-red-600 rounded text-fg-muted hover:text-white transition-colors"
               title="Close"
             >
               <X size={16} />

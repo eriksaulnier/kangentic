@@ -73,7 +73,7 @@ export function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
     <div
       data-testid="swimlane"
       data-swimlane-name={swimlane.name}
-      className="flex-shrink-0 w-72 h-full flex flex-col rounded-lg bg-zinc-800/70 ring-1 ring-zinc-700/50"
+      className="flex-shrink-0 w-72 h-full flex flex-col rounded-lg bg-surface-raised/70 ring-1 ring-edge/50"
     >
       {/* Accent bar */}
       <div
@@ -82,7 +82,7 @@ export function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
       />
 
       {/* Column header */}
-      <div className="px-3 py-2 flex items-center gap-2 border-b border-zinc-700/50 w-full text-left hover:bg-zinc-700/30 transition-colors group">
+      <div className="px-3 py-2 flex items-center gap-2 border-b border-edge/50 w-full text-left hover:bg-surface-hover/30 transition-colors group">
         {(() => {
           const Icon = getSwimlaneIcon(swimlane);
           return Icon ? (
@@ -100,7 +100,7 @@ export function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
           onClick={() => setShowEditColumn(true)}
           className="flex items-center gap-2 flex-1 min-w-0"
         >
-          <span className="text-sm font-medium truncate text-zinc-100">
+          <span className="text-sm font-medium truncate text-fg">
             {swimlane.name}
           </span>
         </button>
@@ -110,7 +110,7 @@ export function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
           onClick={() => setShowEditColumn(true)}
           className="flex-shrink-0"
         >
-          <Pencil size={12} className="text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+          <Pencil size={12} className="text-fg-disabled group-hover:text-fg-muted transition-colors" />
         </button>
       </div>
 
@@ -122,7 +122,7 @@ export function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
           className={`rounded-lg p-4 text-center min-h-[180px] flex items-center justify-center ${
             isOver
               ? 'drop-zone-active'
-              : 'border-2 border-dashed border-zinc-700/50 text-zinc-600'
+              : 'border-2 border-dashed border-edge/50 text-fg-disabled'
           }`}
           style={isOver ? { '--drop-color': swimlane.color, color: swimlane.color } as React.CSSProperties : undefined}
         >
@@ -146,11 +146,11 @@ export function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
       </div>
 
       {/* Collapsible archive section — always visible */}
-      <div className="flex-1 min-h-0 flex flex-col px-2 pb-2 border-t border-zinc-700/50 pt-3">
+      <div className="flex-1 min-h-0 flex flex-col px-2 pb-2 border-t border-edge/50 pt-3">
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-1.5 text-sm font-medium text-zinc-400 hover:text-zinc-200 bg-zinc-700/20 hover:bg-zinc-700/40 rounded-md transition-colors w-full px-2 py-2 flex-shrink-0"
+          className="flex items-center gap-1.5 text-sm font-medium text-fg-muted hover:text-fg-secondary bg-surface-hover/20 hover:bg-surface-hover/40 rounded-md transition-colors w-full px-2 py-2 flex-shrink-0"
         >
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           <span>Completed ({archivedTasks.length})</span>
@@ -161,13 +161,13 @@ export function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
             {archivedTasks.length > 0 && (
               /* Search */
               <div className="relative flex-shrink-0">
-                <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-600" />
+                <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-fg-disabled" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search..."
-                  className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded text-xs text-zinc-300 placeholder-zinc-600 pl-7 pr-2 py-1.5 outline-none focus:border-zinc-600"
+                  className="w-full bg-surface/50 border border-edge/50 rounded text-xs text-fg-tertiary placeholder-fg-disabled pl-7 pr-2 py-1.5 outline-none focus:border-edge-input"
                 />
               </div>
             )}
@@ -194,10 +194,10 @@ export function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
                 );
               })}
               {filteredArchived.length === 0 && search && (
-                <div className="text-xs text-zinc-600 text-center py-2">No matches</div>
+                <div className="text-xs text-fg-disabled text-center py-2">No matches</div>
               )}
               {filteredArchived.length === 0 && !search && (
-                <div className="text-xs text-zinc-600 text-center py-2">No completed tasks yet</div>
+                <div className="text-xs text-fg-disabled text-center py-2">No completed tasks yet</div>
               )}
             </div>
           </div>
@@ -219,9 +219,9 @@ export function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
                 type="checkbox"
                 checked={dontAskAgain}
                 onChange={(e) => setDontAskAgain(e.target.checked)}
-                className="rounded border-zinc-600 bg-zinc-900 accent-blue-500"
+                className="rounded border-edge-input bg-surface accent-blue-500"
               />
-              <span className="text-xs text-zinc-400">Don't ask again</span>
+              <span className="text-xs text-fg-muted">Don't ask again</span>
             </label>
           }
           onConfirm={handleConfirmDelete}

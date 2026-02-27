@@ -71,20 +71,20 @@ export function ProjectSidebar({ onToggleSidebar }: ProjectSidebarProps) {
   };
 
   return (
-    <div className="w-full h-full bg-zinc-800 flex flex-col flex-shrink-0">
-      <div className="px-3 pt-3 pb-2 border-b border-zinc-700">
+    <div className="w-full h-full bg-surface-raised flex flex-col flex-shrink-0">
+      <div className="px-3 pt-3 pb-2 border-b border-edge">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {onToggleSidebar && (
               <button
                 onClick={onToggleSidebar}
-                className="p-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-zinc-100 transition-colors"
+                className="p-1 hover:bg-surface-hover rounded text-fg-muted hover:text-fg transition-colors"
                 title="Hide sidebar"
               >
                 <Menu size={16} />
               </button>
             )}
-            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Projects</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-fg-faint">Projects</span>
           </div>
           <button
             onClick={handleNewProject}
@@ -109,17 +109,17 @@ export function ProjectSidebar({ onToggleSidebar }: ProjectSidebarProps) {
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') openProject(project.id); }}
               className={`group w-full text-left px-3 py-2 text-sm transition-colors border-l-2 cursor-pointer ${
                 isActive
-                  ? 'border-blue-500 bg-zinc-700 text-zinc-100'
-                  : 'border-transparent text-zinc-400 hover:bg-zinc-750 hover:text-zinc-200'
+                  ? 'border-blue-500 bg-surface-hover text-fg'
+                  : 'border-transparent text-fg-muted hover:bg-surface-hover/50 hover:text-fg-secondary'
               }`}
             >
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <Folder size={14} className={`flex-shrink-0 ${isActive ? 'text-blue-400' : 'text-zinc-500'}`} />
+                  <Folder size={14} className={`flex-shrink-0 ${isActive ? 'text-blue-400' : 'text-fg-faint'}`} />
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">{project.name}</div>
                     <div
-                      className="truncate text-xs text-zinc-500 mt-0.5"
+                      className="truncate text-xs text-fg-faint mt-0.5"
                       title={project.path}
                     >
                       {shortenPath(project.path)}
@@ -129,14 +129,14 @@ export function ProjectSidebar({ onToggleSidebar }: ProjectSidebarProps) {
                 <div className="flex items-center gap-0.5 flex-shrink-0">
                   <button
                     onClick={(e) => handleOpenInExplorer(e, project)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full text-zinc-600 hover:text-zinc-300 hover:bg-zinc-600/50 transition-all"
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full text-fg-disabled hover:text-fg-tertiary hover:bg-edge-input/50 transition-all"
                     title="Open in file explorer"
                   >
                     <FolderOpen size={14} />
                   </button>
                   <button
                     onClick={(e) => handleDeleteClick(e, project)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full text-zinc-600 hover:text-red-400 hover:bg-red-400/10 transition-all"
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full text-fg-disabled hover:text-red-400 hover:bg-red-400/10 transition-all"
                     title="Delete project"
                   >
                     <Trash2 size={14} />
@@ -148,14 +148,14 @@ export function ProjectSidebar({ onToggleSidebar }: ProjectSidebarProps) {
         })}
         {projects.length === 0 && (
           <div className="p-6 text-center">
-            <Folder size={32} className="mx-auto text-zinc-600 mb-2" />
-            <div className="text-sm text-zinc-500">No projects yet</div>
-            <div className="text-xs text-zinc-600 mt-1">Click "+ New" to open a folder</div>
+            <Folder size={32} className="mx-auto text-fg-disabled mb-2" />
+            <div className="text-sm text-fg-faint">No projects yet</div>
+            <div className="text-xs text-fg-disabled mt-1">Click "+ New" to open a folder</div>
           </div>
         )}
       </div>
 
-      <div className="px-3 py-2 border-t border-zinc-700 text-xs text-zinc-600">
+      <div className="px-3 py-2 border-t border-edge text-xs text-fg-disabled">
         {projects.length} project{projects.length !== 1 ? 's' : ''}
       </div>
 

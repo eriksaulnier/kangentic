@@ -91,17 +91,17 @@ export function BaseDialog({
       <div
         onMouseDown={(e) => e.stopPropagation()}
         style={{ animation: contentAnimation }}
-        className={`bg-zinc-800 border border-zinc-700 rounded-lg shadow-2xl flex flex-col overflow-visible ${className}`}
+        className={`bg-surface-raised border border-edge rounded-lg shadow-2xl flex flex-col overflow-visible ${className}`}
       >
         {/* Standard header */}
         {title && !header && (
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-700 flex-shrink-0">
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-edge flex-shrink-0">
             {icon && <div className="flex-shrink-0">{icon}</div>}
-            <h3 className="text-sm font-semibold text-zinc-100 flex-1">{title}</h3>
+            <h3 className="text-sm font-semibold text-fg flex-1">{title}</h3>
             {headerRight}
             <button
               onClick={requestClose}
-              className="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 rounded transition-colors flex-shrink-0"
+              className="p-1.5 text-fg-faint hover:text-fg-tertiary hover:bg-surface-hover rounded transition-colors flex-shrink-0"
             >
               <X size={16} />
             </button>
@@ -110,7 +110,7 @@ export function BaseDialog({
 
         {/* Custom header */}
         {header && (
-          <div className="border-b border-zinc-700 flex-shrink-0">
+          <div className="border-b border-edge flex-shrink-0">
             {header}
           </div>
         )}
@@ -124,7 +124,7 @@ export function BaseDialog({
 
         {/* Footer */}
         {footer && (
-          <div className="px-4 py-3 border-t border-zinc-700">
+          <div className="px-4 py-3 border-t border-edge">
             {footer}
           </div>
         )}

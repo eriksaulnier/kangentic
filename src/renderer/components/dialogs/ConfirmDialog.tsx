@@ -59,7 +59,7 @@ export function ConfirmDialog({
           <div className="flex justify-end gap-3 ml-auto">
             <button
               onClick={onCancel}
-              className="px-4 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-600 hover:border-zinc-500 rounded transition-colors"
+              className="px-4 py-1.5 text-xs text-fg-muted hover:text-fg-secondary border border-edge-input hover:border-fg-faint rounded transition-colors"
             >
               {cancelLabel}
             </button>
@@ -73,7 +73,7 @@ export function ConfirmDialog({
         </div>
       }
     >
-      <div className="text-sm text-zinc-400 space-y-2">
+      <div className="text-sm text-fg-muted space-y-2">
         {typeof message === 'string'
           ? <p>{message}</p>
           : message

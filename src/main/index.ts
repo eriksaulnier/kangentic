@@ -1,10 +1,11 @@
-import { app, BrowserWindow, Menu, session } from 'electron';
+import { app, BrowserWindow, Menu, nativeTheme, session } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { registerAllIpc, getSessionManager, getCurrentProjectId, openProjectByPath, cleanupProject, deleteProjectFromIndex, pruneStaleWorktreeProjects } from './ipc/register-all';
 import { closeAll, getProjectDb } from './db/database';
 import { SessionRepository } from './db/repositories/session-repository';
+import { ConfigManager } from './config/config-manager';
 import { IPC } from '../shared/ipc-channels';
 
 // Global error handlers — keep the app running through transient IPC/PTY errors
@@ -52,6 +53,18 @@ function getCwdArg(): string | null {
   return null;
 }
 
+function resolveBackgroundColor(): string {
+  try {
+    const cm = new ConfigManager();
+    const config = cm.load();
+    const theme = config.theme;
+    const isDark = theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors);
+    return isDark ? '#18181b' : '#ffffff';
+  } catch {
+    return '#18181b';
+  }
+}
+
 const createWindow = () => {
   const isTest = process.env.NODE_ENV === 'test';
 
@@ -60,7 +73,7 @@ const createWindow = () => {
     height: 900,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#18181b',
+    backgroundColor: resolveBackgroundColor(),
     show: false,
     frame: false,
     titleBarStyle: 'hidden',

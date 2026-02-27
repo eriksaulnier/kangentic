@@ -40,11 +40,11 @@ export function StatusBar() {
   const costPulseRef = useValuePulse(totalCost);
 
   return (
-    <div className="h-9 bg-zinc-900 border-t border-zinc-700 flex items-center px-3 text-xs text-zinc-500 select-none flex-shrink-0">
+    <div className="h-9 bg-surface border-t border-edge flex items-center px-3 text-xs text-fg-faint select-none flex-shrink-0">
       {currentProject && (
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5" data-testid="session-count">
-            <SquareTerminal size={14} className={activeSessions > 0 ? 'text-green-400' : 'text-zinc-500'} />
+            <SquareTerminal size={14} className={activeSessions > 0 ? 'text-green-400' : 'text-fg-faint'} />
             <span className={activeSessions > 0 ? 'text-green-400' : ''}>
               {activeSessions} agents
             </span>
@@ -56,11 +56,11 @@ export function StatusBar() {
           </span>
           {hasUsage && (
             <>
-              <div className="w-px h-3.5 bg-zinc-700 flex-shrink-0" />
+              <div className="w-px h-3.5 bg-edge flex-shrink-0" />
               <span ref={tokenPulseRef} className="tabular-nums" data-testid="aggregate-tokens" title="Total input tokens ↑ / output tokens ↓ across all sessions">
                 {formatTokenCount(totalInput)} ↑ / {formatTokenCount(totalOutput)} ↓
               </span>
-              <div className="w-px h-3.5 bg-zinc-700 flex-shrink-0" />
+              <div className="w-px h-3.5 bg-edge flex-shrink-0" />
               <span ref={costPulseRef} className="tabular-nums" data-testid="aggregate-cost" title="Total API cost across all sessions">
                 ${totalCost.toFixed(2)}
               </span>
@@ -74,7 +74,7 @@ export function StatusBar() {
       <div className="flex items-center gap-4">
         {claudeInfo && (
           claudeInfo.found ? (
-            <span className="px-2 py-1 rounded bg-zinc-800 text-zinc-500">{claudeVersionLabel}</span>
+            <span className="px-2 py-1 rounded bg-surface-raised text-fg-faint">{claudeVersionLabel}</span>
           ) : (
             <span className="text-red-400">claude not found</span>
           )

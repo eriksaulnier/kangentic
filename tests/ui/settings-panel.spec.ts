@@ -113,7 +113,7 @@ test.describe('Settings Panel', () => {
     // Open and verify active styling
     await gearButton.click();
     await page.waitForTimeout(300);
-    await expect(gearButton).toHaveClass(/bg-zinc-700/);
+    await expect(gearButton).toHaveClass(/bg-surface-hover/);
 
     await closeSettings();
   });

@@ -35,17 +35,17 @@ export function IconPickerDialog({
     <BaseDialog
       onClose={onClose}
       title="Choose Icon"
-      icon={<Smile size={14} className="text-zinc-400" />}
+      icon={<Smile size={14} className="text-fg-muted" />}
       className="w-[480px] h-[40vh]"
       rawBody
       zIndex="z-[60]"
     >
       {/* Sticky search bar */}
-      <div className="sticky top-0 z-10 bg-zinc-800 px-4 pt-3 pb-2 border-b border-zinc-700">
+      <div className="sticky top-0 z-10 bg-surface-raised px-4 pt-3 pb-2 border-b border-edge">
         <div className="relative">
           <SearchIcon
             size={12}
-            className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-600"
+            className="absolute left-2 top-1/2 -translate-y-1/2 text-fg-disabled"
           />
           <input
             type="text"
@@ -53,7 +53,7 @@ export function IconPickerDialog({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search icons..."
             autoFocus
-            className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded text-xs text-zinc-300 placeholder-zinc-600 pl-7 pr-2 py-1.5 outline-none focus:border-zinc-600"
+            className="w-full bg-surface/50 border border-edge/50 rounded text-xs text-fg-tertiary placeholder-fg-disabled pl-7 pr-2 py-1.5 outline-none focus:border-edge-input"
           />
         </div>
       </div>
@@ -67,8 +67,8 @@ export function IconPickerDialog({
             onClick={() => onSelect(null)}
             className={`w-8 h-8 rounded flex items-center justify-center border transition-all ${
               selectedIcon === null
-                ? 'border-white bg-zinc-700'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                ? 'border-white bg-surface-hover'
+                : 'border-transparent text-fg-muted hover:text-fg-secondary hover:bg-surface-raised'
             }`}
             title="None"
           >
@@ -92,8 +92,8 @@ export function IconPickerDialog({
                   isUsed
                     ? 'opacity-30 cursor-not-allowed border-transparent'
                     : isSelected
-                      ? 'border-white bg-zinc-700'
-                      : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                      ? 'border-white bg-surface-hover'
+                      : 'border-transparent text-fg-muted hover:text-fg-secondary hover:bg-surface-raised'
                 }`}
                 title={entry.label}
               >
@@ -108,7 +108,7 @@ export function IconPickerDialog({
         </div>
 
         {filtered.length === 0 && query && (
-          <div className="text-xs text-zinc-600 text-center py-6">
+          <div className="text-xs text-fg-disabled text-center py-6">
             No icons match "{query}"
           </div>
         )}

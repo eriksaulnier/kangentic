@@ -546,6 +546,11 @@
       },
     },
 
+    theme: {
+      getSystem: async function () { return 'dark'; },
+      onSystemChange: function () { return noop; },
+    },
+
     window: {
       minimize: noop,
       maximize: noop,

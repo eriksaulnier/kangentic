@@ -67,7 +67,7 @@ export function TerminalPanel({ collapsed = false, showContent = true, onToggleC
 
   if (activeSessions.length === 0) {
     return (
-      <div className="h-full bg-zinc-900 flex items-center justify-center text-zinc-600 text-sm">
+      <div className="h-full bg-surface flex items-center justify-center text-fg-disabled text-sm">
         No active sessions. Drag a task to a column with a spawn_agent action to start one.
       </div>
     );
@@ -76,18 +76,18 @@ export function TerminalPanel({ collapsed = false, showContent = true, onToggleC
   const isActivityActive = effectiveActiveId === ACTIVITY_TAB;
 
   return (
-    <div className="h-full flex flex-col bg-zinc-900">
+    <div className="h-full flex flex-col bg-surface">
       {/* Tab bar */}
-      <div className="flex items-center border-b border-zinc-700 flex-shrink-0">
+      <div className="flex items-center border-b border-edge flex-shrink-0">
         <div className="flex items-center overflow-x-auto flex-1 min-w-0">
           {/* Activity tab — visible when 1+ sessions */}
           {showActivityTab && (
             <button
               onClick={() => setActiveSession(ACTIVITY_TAB)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-zinc-700 transition-colors whitespace-nowrap ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-edge transition-colors whitespace-nowrap ${
                 isActivityActive
-                  ? 'bg-zinc-800 text-zinc-100'
-                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+                  ? 'bg-surface-raised text-fg'
+                  : 'text-fg-faint hover:text-fg-tertiary hover:bg-surface-raised/50'
               }`}
             >
               <Activity size={12} />
@@ -100,10 +100,10 @@ export function TerminalPanel({ collapsed = false, showContent = true, onToggleC
               key={session.id}
               onClick={() => setActiveSession(session.id)}
               onDoubleClick={() => setOpenTaskId(session.taskId)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-zinc-700 transition-colors whitespace-nowrap ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-edge transition-colors whitespace-nowrap ${
                 effectiveActiveId === session.id
-                  ? 'bg-zinc-800 text-zinc-100'
-                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+                  ? 'bg-surface-raised text-fg'
+                  : 'text-fg-faint hover:text-fg-tertiary hover:bg-surface-raised/50'
               }`}
             >
               {session.status === 'running' && sessionActivity[session.id] !== 'idle' ? (
@@ -112,7 +112,7 @@ export function TerminalPanel({ collapsed = false, showContent = true, onToggleC
                 <div className={`w-1.5 h-1.5 rounded-full ${
                   session.status === 'running' ? 'bg-green-400' :
                   session.status === 'queued' ? 'bg-yellow-400' :
-                  'bg-zinc-500'
+                  'bg-fg-faint'
                 }`} />
               )}
               {taskLabelMap.get(session.id) || session.taskId.slice(0, 8)}
@@ -124,7 +124,7 @@ export function TerminalPanel({ collapsed = false, showContent = true, onToggleC
         {onToggleCollapse && (
           <button
             onClick={onToggleCollapse}
-            className="flex items-center justify-center px-2 py-1.5 text-zinc-500 hover:text-zinc-300 transition-colors flex-shrink-0"
+            className="flex items-center justify-center px-2 py-1.5 text-fg-faint hover:text-fg-tertiary transition-colors flex-shrink-0"
             title={collapsed ? 'Expand terminal panel' : 'Collapse terminal panel'}
           >
             {collapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}

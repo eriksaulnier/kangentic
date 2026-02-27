@@ -1,5 +1,67 @@
 @import "tailwindcss";
 
+/* ── Semantic Color Tokens ── */
+
+:root {
+  /* Surface (backgrounds) */
+  --kng-surface: #18181b;          /* zinc-900 */
+  --kng-surface-raised: #27272a;   /* zinc-800 */
+  --kng-surface-hover: #3f3f46;    /* zinc-700 */
+  --kng-surface-inset: #18181b;    /* zinc-900 */
+
+  /* Foreground (text) */
+  --kng-fg: #f4f4f5;               /* zinc-100 */
+  --kng-fg-secondary: #e4e4e7;     /* zinc-200 */
+  --kng-fg-tertiary: #d4d4d8;      /* zinc-300 */
+  --kng-fg-muted: #a1a1aa;         /* zinc-400 */
+  --kng-fg-faint: #71717a;         /* zinc-500 */
+  --kng-fg-disabled: #52525b;      /* zinc-600 */
+
+  /* Edges (borders, dividers) */
+  --kng-edge: #3f3f46;             /* zinc-700 */
+  --kng-edge-subtle: rgba(63, 63, 70, 0.5); /* zinc-700/50 */
+  --kng-edge-input: #52525b;       /* zinc-600 */
+}
+
+.theme-light {
+  /* Surface (backgrounds) */
+  --kng-surface: #ffffff;
+  --kng-surface-raised: #f4f4f5;   /* zinc-100 */
+  --kng-surface-hover: #e4e4e7;    /* zinc-200 */
+  --kng-surface-inset: #ffffff;
+
+  /* Foreground (text) */
+  --kng-fg: #18181b;               /* zinc-900 */
+  --kng-fg-secondary: #27272a;     /* zinc-800 */
+  --kng-fg-tertiary: #3f3f46;      /* zinc-700 */
+  --kng-fg-muted: #52525b;         /* zinc-600 */
+  --kng-fg-faint: #71717a;         /* zinc-500 */
+  --kng-fg-disabled: #a1a1aa;      /* zinc-400 */
+
+  /* Edges (borders, dividers) */
+  --kng-edge: #d4d4d8;             /* zinc-300 */
+  --kng-edge-subtle: rgba(212, 212, 216, 0.5); /* zinc-300/50 */
+  --kng-edge-input: #a1a1aa;       /* zinc-400 */
+}
+
+@theme inline {
+  --color-surface: var(--kng-surface);
+  --color-surface-raised: var(--kng-surface-raised);
+  --color-surface-hover: var(--kng-surface-hover);
+  --color-surface-inset: var(--kng-surface-inset);
+
+  --color-fg: var(--kng-fg);
+  --color-fg-secondary: var(--kng-fg-secondary);
+  --color-fg-tertiary: var(--kng-fg-tertiary);
+  --color-fg-muted: var(--kng-fg-muted);
+  --color-fg-faint: var(--kng-fg-faint);
+  --color-fg-disabled: var(--kng-fg-disabled);
+
+  --color-edge: var(--kng-edge);
+  --color-edge-subtle: var(--kng-edge-subtle);
+  --color-edge-input: var(--kng-edge-input);
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -11,12 +73,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3f3f46;
+  background: var(--kng-edge);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
+  background: var(--kng-edge-input);
 }
 
 /* Drag overlay styling */
@@ -59,7 +121,7 @@
   position: absolute;
   inset: 2px;
   border-radius: calc(0.5rem - 2px);
-  background: color-mix(in srgb, var(--drop-color, #22c55e) 10%, #18181b);
+  background: color-mix(in srgb, var(--drop-color, #22c55e) 10%, var(--kng-surface));
   z-index: 0;
 }
 
@@ -73,7 +135,7 @@
 /* Match the viewport background to the terminal theme so leftover pixels
    below the last rendered row blend in (xterm.css defaults to #000). */
 .xterm .xterm-viewport {
-  background-color: #18181b !important;
+  background-color: var(--kng-surface) !important;
 }
 
 /* Terminal panel resize handle */

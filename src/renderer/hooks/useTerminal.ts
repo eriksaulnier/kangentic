@@ -10,10 +10,57 @@ import '@xterm/xterm/css/xterm.css';
  *  (Claude Code) only redraws once and scrollback isn't churned. */
 const PTY_RESIZE_DEBOUNCE_MS = 200;
 
+const DARK_THEME = {
+  background: '#18181b',
+  foreground: '#e4e4e7',
+  cursor: '#e4e4e7',
+  selectionBackground: 'rgba(58, 130, 246, 0.35)',
+  black: '#18181b',
+  red: '#ef4444',
+  green: '#22c55e',
+  yellow: '#eab308',
+  blue: '#3b82f6',
+  magenta: '#a855f7',
+  cyan: '#06b6d4',
+  white: '#e4e4e7',
+  brightBlack: '#52525b',
+  brightRed: '#f87171',
+  brightGreen: '#4ade80',
+  brightYellow: '#facc15',
+  brightBlue: '#60a5fa',
+  brightMagenta: '#c084fc',
+  brightCyan: '#22d3ee',
+  brightWhite: '#fafafa',
+} as const;
+
+const LIGHT_THEME = {
+  background: '#ffffff',
+  foreground: '#27272a',
+  cursor: '#27272a',
+  selectionBackground: 'rgba(58, 130, 246, 0.25)',
+  black: '#27272a',
+  red: '#dc2626',
+  green: '#16a34a',
+  yellow: '#ca8a04',
+  blue: '#2563eb',
+  magenta: '#9333ea',
+  cyan: '#0891b2',
+  white: '#f4f4f5',
+  brightBlack: '#71717a',
+  brightRed: '#ef4444',
+  brightGreen: '#22c55e',
+  brightYellow: '#eab308',
+  brightBlue: '#3b82f6',
+  brightMagenta: '#a855f7',
+  brightCyan: '#06b6d4',
+  brightWhite: '#fafafa',
+} as const;
+
 interface UseTerminalOptions {
   sessionId: string | null;
   fontFamily?: string;
   fontSize?: number;
+  resolvedTheme?: 'dark' | 'light';
 }
 
 export function useTerminal(options: UseTerminalOptions) {
@@ -27,31 +74,12 @@ export function useTerminal(options: UseTerminalOptions) {
   const initTerminal = useCallback(() => {
     if (!terminalRef.current || xtermRef.current) return;
 
+    const xtermTheme = options.resolvedTheme === 'light' ? LIGHT_THEME : DARK_THEME;
+
     const terminal = new Terminal({
       fontFamily: options.fontFamily || 'Consolas, "Courier New", monospace',
       fontSize: options.fontSize || 14,
-      theme: {
-        background: '#18181b',
-        foreground: '#e4e4e7',
-        cursor: '#e4e4e7',
-        selectionBackground: 'rgba(58, 130, 246, 0.35)',
-        black: '#18181b',
-        red: '#ef4444',
-        green: '#22c55e',
-        yellow: '#eab308',
-        blue: '#3b82f6',
-        magenta: '#a855f7',
-        cyan: '#06b6d4',
-        white: '#e4e4e7',
-        brightBlack: '#52525b',
-        brightRed: '#f87171',
-        brightGreen: '#4ade80',
-        brightYellow: '#facc15',
-        brightBlue: '#60a5fa',
-        brightMagenta: '#c084fc',
-        brightCyan: '#22d3ee',
-        brightWhite: '#fafafa',
-      },
+      theme: xtermTheme,
       scrollback: 5000,
       cursorBlink: true,
       allowProposedApi: true,
@@ -121,7 +149,7 @@ export function useTerminal(options: UseTerminalOptions) {
       // No session — just fit immediately
       fitAddon.fit();
     }
-  }, [options.sessionId, options.fontFamily, options.fontSize]);
+  }, [options.sessionId, options.fontFamily, options.fontSize, options.resolvedTheme]);
 
   // Set up data listener
   useEffect(() => {

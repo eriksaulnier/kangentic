@@ -430,6 +430,12 @@ export interface ElectronAPI {
     selectFolder: () => Promise<string | null>;
   };
 
+  // Theme
+  theme: {
+    getSystem: () => Promise<'dark' | 'light'>;
+    onSystemChange: (callback: (theme: 'dark' | 'light') => void) => () => void;
+  };
+
   // Window controls
   window: {
     minimize: () => void;

@@ -180,14 +180,14 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
           onClose={onClose}
           preventBackdropClose={isDirty}
           title="New Task"
-          icon={<Plus size={14} className="text-zinc-400" />}
+          icon={<Plus size={14} className="text-fg-muted" />}
           className="w-[640px]"
           footer={
             <div className="flex items-center justify-end gap-3">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-600 hover:border-zinc-500 rounded transition-colors"
+                className="px-4 py-1.5 text-xs text-fg-muted hover:text-fg-secondary border border-edge-input hover:border-fg-faint rounded transition-colors"
               >
                 Cancel
               </button>
@@ -212,7 +212,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
               placeholder="Task title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-600 rounded px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+              className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-blue-500"
             />
             <div className="relative">
               <textarea
@@ -223,16 +223,16 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
                 onPaste={handlePaste}
                 onFocus={() => setTextareaFocused(true)}
                 onBlur={() => setTextareaFocused(false)}
-                className="w-full bg-zinc-900 border border-zinc-600 rounded px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-blue-500 min-h-[200px] max-h-[800px] resize-y overflow-y-auto"
+                className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg focus:outline-none focus:border-blue-500 min-h-[200px] max-h-[800px] resize-y overflow-y-auto"
               />
               {/* Custom visual placeholder — vanishes when user types */}
               {!description && (
                 <div className={`absolute inset-0 flex flex-col pointer-events-none px-3 py-2 transition-opacity duration-200 ${textareaFocused ? 'opacity-100' : 'opacity-40'}`}>
-                  <span className="text-sm text-zinc-500">Describe the task for the agent...</span>
+                  <span className="text-sm text-fg-faint">Describe the task for the agent...</span>
                   <div className="flex-1 flex items-center justify-center">
-                    <div className="flex flex-col items-center gap-1.5 border border-dashed border-zinc-700 rounded-lg px-6 py-4">
-                      <Image size={20} className="text-zinc-600" />
-                      <span className="text-xs text-zinc-600">Paste or drop images here</span>
+                    <div className="flex flex-col items-center gap-1.5 border border-dashed border-edge rounded-lg px-6 py-4">
+                      <Image size={20} className="text-fg-disabled" />
+                      <span className="text-xs text-fg-disabled">Paste or drop images here</span>
                     </div>
                   </div>
                 </div>
@@ -243,13 +243,13 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
             {attachments.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] text-zinc-500">{attachments.length} image{attachments.length !== 1 ? 's' : ''}</span>
+                  <span className="text-[10px] text-fg-faint">{attachments.length} image{attachments.length !== 1 ? 's' : ''}</span>
                 </div>
                 <div className="flex gap-2.5 overflow-x-auto pb-1" data-testid="attachment-thumbnails">
                 {attachments.map((att) => (
                   <div
                     key={att.id}
-                    className="relative flex-shrink-0 w-24 h-24 rounded-md border border-zinc-600 overflow-hidden group cursor-pointer"
+                    className="relative flex-shrink-0 w-24 h-24 rounded-md border border-edge-input overflow-hidden group cursor-pointer"
                     onClick={() => setPreviewAttachment(att)}
                   >
                     <img
@@ -264,7 +264,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
                     >
                       <X size={14} />
                     </button>
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[9px] text-zinc-300 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[9px] text-fg-tertiary truncate opacity-0 group-hover:opacity-100 transition-opacity">
                       {att.filename}
                     </div>
                   </div>
@@ -276,20 +276,20 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+              className="flex items-center gap-1 text-xs text-fg-muted hover:text-fg-secondary transition-colors"
             >
               <ChevronRight size={12} className={`transition-transform ${showAdvanced ? 'rotate-90' : ''}`} />
               Advanced
             </button>
             {showAdvanced && (
               <div className="space-y-1">
-                <label className="text-xs text-zinc-400">Base Branch</label>
+                <label className="text-xs text-fg-muted">Base Branch</label>
                 <input
                   type="text"
                   placeholder={defaultBaseBranch || 'main'}
                   value={baseBranch}
                   onChange={(e) => setBaseBranch(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-600 rounded px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+                  className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-blue-500"
                 />
               </div>
             )}
@@ -311,7 +311,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
           onClick={() => setPreviewAttachment(null)}
         >
           <button
-            className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-zinc-200 transition-colors"
+            className="absolute top-4 right-4 p-2 text-fg-muted hover:text-fg-secondary transition-colors"
             onClick={() => setPreviewAttachment(null)}
           >
             <X size={24} />
@@ -322,7 +322,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
             className="max-w-[90vw] max-h-[85vh] object-contain"
             onClick={(e) => e.stopPropagation()}
           />
-          <p className="mt-2 text-sm text-zinc-400">{previewAttachment.filename}</p>
+          <p className="mt-2 text-sm text-fg-muted">{previewAttachment.filename}</p>
         </div>
       )}
     </>

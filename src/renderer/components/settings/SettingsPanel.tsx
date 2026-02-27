@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Bot, Check, ChevronDown, CircleAlert, GitBranch, Palette, SlidersHorizontal, Terminal, X } from 'lucide-react';
 import { useConfigStore } from '../../stores/config-store';
-import type { PermissionMode } from '../../../shared/types';
+import type { PermissionMode, ThemeMode } from '../../../shared/types';
 
 type Phase = 'entering' | 'visible' | 'exiting';
 type SettingsTab = 'appearance' | 'terminal' | 'agent' | 'git' | 'behavior';
@@ -59,7 +59,7 @@ export function SettingsPanel() {
       ? 'settings-panel-out 150ms ease-in forwards'
       : 'none';
 
-  const inputClass = 'bg-zinc-700 border border-zinc-600 rounded px-3 py-1.5 text-sm text-zinc-100 w-full focus:outline-none focus:border-blue-500';
+  const inputClass = 'bg-surface-hover border border-edge-input rounded px-3 py-1.5 text-sm text-fg w-full focus:outline-none focus:border-blue-500';
 
   return (
     <div
@@ -73,16 +73,16 @@ export function SettingsPanel() {
       }}
     >
       <div
-        className="fixed top-10 right-0 bottom-0 w-[720px] bg-zinc-800 border-l border-zinc-700 shadow-2xl flex flex-col"
+        className="fixed top-10 right-0 bottom-0 w-[720px] bg-surface-raised border-l border-edge shadow-2xl flex flex-col"
         style={{ animation: panelAnimation }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-700 flex-shrink-0">
-          <h2 className="text-base font-semibold text-zinc-100">Settings</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-edge flex-shrink-0">
+          <h2 className="text-base font-semibold text-fg">Settings</h2>
           <button
             onClick={requestClose}
-            className="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 rounded transition-colors"
+            className="p-1.5 text-fg-faint hover:text-fg-tertiary hover:bg-surface-hover rounded transition-colors"
           >
             <X size={16} />
           </button>
@@ -91,7 +91,7 @@ export function SettingsPanel() {
         {/* Two-column body */}
         <div className="flex flex-1 min-h-0">
           {/* Tab sidebar */}
-          <div className="w-44 bg-zinc-800 border-r border-zinc-700 p-2 flex-shrink-0">
+          <div className="w-44 bg-surface-raised border-r border-edge p-2 flex-shrink-0">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -101,8 +101,8 @@ export function SettingsPanel() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded text-base text-left transition-colors ${
                     isActive
-                      ? 'bg-zinc-700 text-zinc-100'
-                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50'
+                      ? 'bg-surface-hover text-fg'
+                      : 'text-fg-muted hover:text-fg-secondary hover:bg-surface-hover/50'
                   }`}
                 >
                   <Icon size={18} />
@@ -119,7 +119,7 @@ export function SettingsPanel() {
                 <SettingRow label="Theme" description="Color scheme for the interface">
                   <Select
                     value={config.theme}
-                    onChange={(e) => updateConfig({ theme: e.target.value as any })}
+                    onChange={(e) => updateConfig({ theme: e.target.value as ThemeMode })}
                   >
                     <option value="dark">Dark</option>
                     <option value="light">Light</option>
@@ -201,7 +201,7 @@ export function SettingsPanel() {
                       value={config.claude.cliPath || ''}
                       onChange={(e) => updateConfig({ claude: { ...config.claude, cliPath: e.target.value || null } })}
                       placeholder={claudeInfo?.found ? claudeInfo.path : 'Not found — enter path manually'}
-                      className={`${inputClass} pr-8 ${claudeInfo?.found ? 'placeholder-zinc-400' : 'placeholder-red-400/70'}`}
+                      className={`${inputClass} pr-8 ${claudeInfo?.found ? 'placeholder-fg-muted' : 'placeholder-red-400/70'}`}
                     />
                     {claudeInfo && (
                       <div className="absolute right-2.5 top-1/2 -translate-y-1/2" title={claudeInfo.found ? `Detected: ${claudeInfo.version || 'unknown version'}` : 'Claude CLI not found'}>
@@ -246,7 +246,7 @@ export function SettingsPanel() {
                       updateConfig({ git: { ...config.git, copyFiles: files } });
                     }}
                     placeholder=".env, .env.local"
-                    className={`${inputClass} placeholder-zinc-500`}
+                    className={`${inputClass} placeholder-fg-faint`}
                   />
                 </SettingRow>
                 <SettingRow label="Post-Worktree Script" description="Shell script to run after worktree creation">
@@ -255,7 +255,7 @@ export function SettingsPanel() {
                     value={config.git.initScript || ''}
                     onChange={(e) => updateConfig({ git: { ...config.git, initScript: e.target.value || null } })}
                     placeholder="npm install"
-                    className={`${inputClass} placeholder-zinc-500`}
+                    className={`${inputClass} placeholder-fg-faint`}
                   />
                 </SettingRow>
               </>
@@ -292,8 +292,8 @@ function SettingRow({
   return (
     <div className="space-y-1.5">
       <div>
-        <div className="text-sm font-medium text-zinc-200">{label}</div>
-        <div className="text-xs text-zinc-500">{description}</div>
+        <div className="text-sm font-medium text-fg-secondary">{label}</div>
+        <div className="text-xs text-fg-faint">{description}</div>
       </div>
       {children}
     </div>
@@ -307,11 +307,11 @@ function Select({ children, ...props }: React.SelectHTMLAttributes<HTMLSelectEle
     <div className="relative">
       <select
         {...props}
-        className="appearance-none bg-zinc-700 border border-zinc-600 rounded pl-3 pr-10 py-1.5 text-sm text-zinc-100 w-full focus:outline-none focus:border-blue-500"
+        className="appearance-none bg-surface-hover border border-edge-input rounded pl-3 pr-10 py-1.5 text-sm text-fg w-full focus:outline-none focus:border-blue-500"
       >
         {children}
       </select>
-      <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+      <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-muted pointer-events-none" />
     </div>
   );
 }
@@ -325,7 +325,7 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: b
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-        checked ? 'bg-blue-500' : 'bg-zinc-600'
+        checked ? 'bg-blue-500' : 'bg-edge-input'
       }`}
     >
       <span

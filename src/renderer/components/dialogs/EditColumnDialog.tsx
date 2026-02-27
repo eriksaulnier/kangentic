@@ -77,7 +77,7 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
         title="Delete column"
         message={<>
           <p>Are you sure you want to delete this column?</p>
-          <p className="text-zinc-200 bg-zinc-900 rounded px-3 py-2 truncate" title={swimlane.name}>{swimlane.name}</p>
+          <p className="text-fg-secondary bg-surface rounded px-3 py-2 truncate" title={swimlane.name}>{swimlane.name}</p>
         </>}
         confirmLabel="Delete"
         variant="danger"
@@ -91,9 +91,9 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
     <BaseDialog
       onClose={onClose}
       title="Edit Column"
-        icon={<Pencil size={14} className="text-zinc-400" />}
+        icon={<Pencil size={14} className="text-fg-muted" />}
         headerRight={isLocked ? (
-          <span className="text-xs text-zinc-500 flex items-center gap-1 flex-shrink-0">
+          <span className="text-xs text-fg-faint flex items-center gap-1 flex-shrink-0">
             <Lock size={12} />
             System
           </span>
@@ -116,7 +116,7 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-600 hover:border-zinc-500 rounded transition-colors"
+                className="px-4 py-1.5 text-xs text-fg-muted hover:text-fg-secondary border border-edge-input hover:border-fg-faint rounded transition-colors"
               >
                 Cancel
               </button>
@@ -135,7 +135,7 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
         <div className="space-y-4">
           {/* Name input */}
           <div>
-            <label className="text-xs text-zinc-400 mb-1.5 block">Name</label>
+            <label className="text-xs text-fg-muted mb-1.5 block">Name</label>
             <input
               ref={inputRef}
               type="text"
@@ -143,17 +143,17 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
-              className="w-full bg-zinc-900 border border-zinc-600 rounded px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+              className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-blue-500"
             />
           </div>
 
           {/* Icon picker */}
           <div>
-            <label className="text-xs text-zinc-400 mb-1.5 block">Icon</label>
+            <label className="text-xs text-fg-muted mb-1.5 block">Icon</label>
             <button
               type="button"
               onClick={() => setShowIconPicker(true)}
-              className="w-full flex items-center gap-2.5 bg-zinc-900 border border-zinc-600 hover:border-zinc-500 rounded px-3 py-2 transition-colors group"
+              className="w-full flex items-center gap-2.5 bg-surface border border-edge-input hover:border-fg-faint rounded px-3 py-2 transition-colors group"
             >
               <div className="flex-shrink-0">
                 {(() => {
@@ -173,10 +173,10 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
                   );
                 })()}
               </div>
-              <span className="text-xs text-zinc-300 flex-1 text-left truncate">
+              <span className="text-xs text-fg-tertiary flex-1 text-left truncate">
                 {icon ?? (swimlane.role ? `Default (${swimlane.role})` : 'None')}
               </span>
-              <ChevronRight size={14} className="text-zinc-500 group-hover:text-zinc-400 flex-shrink-0" />
+              <ChevronRight size={14} className="text-fg-faint group-hover:text-fg-muted flex-shrink-0" />
             </button>
           </div>
 
@@ -192,7 +192,7 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
 
           {/* Color picker */}
           <div>
-            <label className="text-xs text-zinc-400 mb-1.5 block">Color</label>
+            <label className="text-xs text-fg-muted mb-1.5 block">Color</label>
             <div className="flex gap-2 flex-wrap items-center">
               {PRESET_COLORS.map((c) => (
                 <button
@@ -204,7 +204,7 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
                     setShowCustomPicker(false);
                   }}
                   className={`w-6 h-6 rounded-full border-2 transition-all ${
-                    color === c ? 'border-white scale-110' : 'border-transparent hover:border-zinc-500'
+                    color === c ? 'border-white scale-110' : 'border-transparent hover:border-fg-faint'
                   }`}
                   style={{ backgroundColor: c }}
                 />
@@ -213,11 +213,11 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
                 type="button"
                 onClick={() => setShowCustomPicker(!showCustomPicker)}
                 className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                  showCustomPicker ? 'border-white bg-zinc-700' : 'border-zinc-600 hover:border-zinc-400 bg-zinc-800'
+                  showCustomPicker ? 'border-white bg-surface-hover' : 'border-edge-input hover:border-fg-muted bg-surface-raised'
                 }`}
                 title="Custom color"
               >
-                <Palette size={12} className="text-zinc-400" />
+                <Palette size={12} className="text-fg-muted" />
               </button>
             </div>
 
@@ -239,7 +239,7 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
                   onBlur={() => {
                     if (!/^#[0-9a-fA-F]{6}$/.test(hexInput)) setHexInput(color);
                   }}
-                  className="w-full bg-zinc-900 border border-zinc-600 rounded px-3 py-1.5 text-sm text-zinc-100 font-mono focus:outline-none focus:border-blue-500"
+                  className="w-full bg-surface border border-edge-input rounded px-3 py-1.5 text-sm text-fg font-mono focus:outline-none focus:border-blue-500"
                   placeholder="#000000"
                   maxLength={7}
                 />
