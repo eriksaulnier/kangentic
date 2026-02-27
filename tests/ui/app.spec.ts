@@ -51,6 +51,42 @@ test.describe('App Launch', () => {
   test('status bar exists', async () => {
     await expect(page.locator('.h-9.bg-zinc-900.border-t')).toBeVisible();
   });
+
+  test('window control buttons are visible', async () => {
+    await expect(page.locator('button[title="Minimize"]')).toBeVisible();
+    await expect(page.locator('button[title="Maximize"]')).toBeVisible();
+    await expect(page.locator('button[title="Close"]')).toBeVisible();
+  });
+
+  test('minimize button calls electronAPI', async () => {
+    await page.evaluate(() => {
+      (window as any).__minimizeCalled = false;
+      window.electronAPI.window.minimize = () => { (window as any).__minimizeCalled = true; };
+    });
+    await page.locator('button[title="Minimize"]').click();
+    const called = await page.evaluate(() => (window as any).__minimizeCalled);
+    expect(called).toBe(true);
+  });
+
+  test('maximize button calls electronAPI', async () => {
+    await page.evaluate(() => {
+      (window as any).__maximizeCalled = false;
+      window.electronAPI.window.maximize = () => { (window as any).__maximizeCalled = true; };
+    });
+    await page.locator('button[title="Maximize"]').click();
+    const called = await page.evaluate(() => (window as any).__maximizeCalled);
+    expect(called).toBe(true);
+  });
+
+  test('close button calls electronAPI', async () => {
+    await page.evaluate(() => {
+      (window as any).__closeCalled = false;
+      window.electronAPI.window.close = () => { (window as any).__closeCalled = true; };
+    });
+    await page.locator('button[title="Close"]').click();
+    const called = await page.evaluate(() => (window as any).__closeCalled);
+    expect(called).toBe(true);
+  });
 });
 
 test.describe('Project Management', () => {

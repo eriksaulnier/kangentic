@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, Settings } from 'lucide-react';
+import { Menu, Minus, Settings, Square, X } from 'lucide-react';
 import { useProjectStore } from '../../stores/project-store';
 import { useConfigStore } from '../../stores/config-store';
 
@@ -7,6 +7,8 @@ interface TitleBarProps {
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
 }
+
+const isMac = navigator.platform.toUpperCase().includes('MAC');
 
 export function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps) {
   const currentProject = useProjectStore((s) => s.currentProject);
@@ -45,6 +47,32 @@ export function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps) {
         >
           <Settings size={20} />
         </button>
+        {!isMac && (
+          <>
+            <div className="w-px h-4 bg-zinc-700 mx-1" />
+            <button
+              onClick={() => window.electronAPI.window.minimize()}
+              className="p-1.5 hover:bg-zinc-700 rounded text-zinc-400 hover:text-zinc-100 transition-colors"
+              title="Minimize"
+            >
+              <Minus size={16} />
+            </button>
+            <button
+              onClick={() => window.electronAPI.window.maximize()}
+              className="p-1.5 hover:bg-zinc-700 rounded text-zinc-400 hover:text-zinc-100 transition-colors"
+              title="Maximize"
+            >
+              <Square size={14} />
+            </button>
+            <button
+              onClick={() => window.electronAPI.window.close()}
+              className="p-1.5 hover:bg-red-600 rounded text-zinc-400 hover:text-white transition-colors"
+              title="Close"
+            >
+              <X size={16} />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

@@ -129,7 +129,7 @@ function openTerminalWindows(cwd, command) {
   // Try Windows Terminal first
   try {
     execSync('where wt.exe', { stdio: 'ignore' });
-    const proc = spawn('wt.exe', ['-d', cwd, 'cmd', '/k', command], {
+    const proc = spawn('wt.exe', ['-d', cwd, 'cmd', '/c', command], {
       detached: true,
       stdio: 'ignore',
       cwd,
@@ -140,7 +140,7 @@ function openTerminalWindows(cwd, command) {
     // Fall back to cmd.exe
   }
 
-  const proc = spawn('cmd.exe', ['/c', 'start', 'cmd', '/k', command], {
+  const proc = spawn('cmd.exe', ['/c', 'start', 'cmd', '/c', command], {
     detached: true,
     stdio: 'ignore',
     cwd,
@@ -152,7 +152,7 @@ function openTerminalWindows(cwd, command) {
 function openTerminalMac(cwd, command) {
   const script = `tell application "Terminal"
   activate
-  do script "cd '${cwd.replace(/'/g, "'\\''")}' && ${command.replace(/"/g, '\\"')}"
+  do script "cd '${cwd.replace(/'/g, "'\\''")}' && ${command.replace(/"/g, '\\"')}; exit"
 end tell`;
   const proc = spawn('osascript', ['-e', script], {
     detached: true,
@@ -164,10 +164,10 @@ end tell`;
 
 function openTerminalLinux(cwd, command) {
   const terminals = [
-    { bin: 'gnome-terminal', args: ['--working-directory', cwd, '--', 'bash', '-c', `${command}; exec bash`] },
-    { bin: 'konsole', args: ['--workdir', cwd, '-e', 'bash', '-c', `${command}; exec bash`] },
-    { bin: 'xfce4-terminal', args: ['--working-directory', cwd, '-e', `bash -c '${command}; exec bash'`] },
-    { bin: 'xterm', args: ['-e', `bash -c 'cd "${cwd}" && ${command}; exec bash'`] },
+    { bin: 'gnome-terminal', args: ['--working-directory', cwd, '--', 'bash', '-c', command] },
+    { bin: 'konsole', args: ['--workdir', cwd, '-e', 'bash', '-c', command] },
+    { bin: 'xfce4-terminal', args: ['--working-directory', cwd, '-e', `bash -c '${command}'`] },
+    { bin: 'xterm', args: ['-e', `bash -c 'cd "${cwd}" && ${command}'`] },
   ];
 
   for (const { bin, args } of terminals) {
