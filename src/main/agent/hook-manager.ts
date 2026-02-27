@@ -104,6 +104,10 @@ export function injectActivityHooks(
 
   settings.hooks = {
     ...existingHooks,
+    PreToolUse: [
+      ...filterActivityHooks(existingHooks.PreToolUse),
+      { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" idle` }] },
+    ],
     UserPromptSubmit: [
       ...filterActivityHooks(existingHooks.UserPromptSubmit),
       { matcher: '', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" thinking` }] },
@@ -148,6 +152,7 @@ export function injectEventHooks(
     PreToolUse: [
       ...filterEventHooks(existingHooks.PreToolUse),
       { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_start` }] },
+      { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
     ],
     PostToolUse: [
       ...filterEventHooks(existingHooks.PostToolUse),

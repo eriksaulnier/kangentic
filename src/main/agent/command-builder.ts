@@ -167,6 +167,10 @@ export class CommandBuilder {
       merged.hooks = { ...existingHooks };
 
       if (activityPath) {
+        merged.hooks.PreToolUse = [
+          ...(existingHooks.PreToolUse || []),
+          { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" idle` }] },
+        ];
         merged.hooks.UserPromptSubmit = [
           ...(existingHooks.UserPromptSubmit || []),
           { matcher: '', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" thinking` }] },
@@ -182,6 +186,7 @@ export class CommandBuilder {
         merged.hooks.PreToolUse = [
           ...(merged.hooks.PreToolUse || existingHooks.PreToolUse || []),
           { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_start` }] },
+          { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
         ];
         merged.hooks.PostToolUse = [
           ...(merged.hooks.PostToolUse || existingHooks.PostToolUse || []),
