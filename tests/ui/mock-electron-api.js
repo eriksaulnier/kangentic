@@ -13,6 +13,7 @@
   let sessions = [];
   let attachments = [];
   let activityCache = {};
+  let eventCache = {};
   let currentProjectId = null;
 
   let config = {
@@ -492,8 +493,11 @@
       onActivity: function () {
         return noop;
       },
-      getEvents: async function () {
-        return [];
+      getEvents: async function (sessionId) {
+        return eventCache[sessionId] || [];
+      },
+      getEventsCache: async function () {
+        return Object.assign({}, eventCache);
       },
       onEvent: function () {
         return noop;
@@ -561,6 +565,7 @@
       swimlanes: swimlanes,
       sessions: sessions,
       activityCache: activityCache,
+      eventCache: eventCache,
       uuid: uuid,
       now: now,
       DEFAULT_SWIMLANES: DEFAULT_SWIMLANES,

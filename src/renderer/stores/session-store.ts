@@ -48,12 +48,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Restore cached data from main process (survives renderer reloads)
     const cachedUsage = await window.electronAPI.sessions.getUsage();
     const cachedActivity = await window.electronAPI.sessions.getActivity();
+    const cachedEvents = await window.electronAPI.sessions.getEventsCache();
 
     set({
       sessions,
       activeSessionId: stillExists ? currentActive : null,
       sessionUsage: { ...get().sessionUsage, ...cachedUsage },
       sessionActivity: { ...get().sessionActivity, ...cachedActivity },
+      sessionEvents: { ...get().sessionEvents, ...cachedEvents },
     });
   },
 

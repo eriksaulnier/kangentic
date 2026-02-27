@@ -740,6 +740,7 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.SESSION_GET_USAGE, () => sessionManager.getUsageCache());
   ipcMain.handle(IPC.SESSION_GET_ACTIVITY, () => sessionManager.getActivityCache());
   ipcMain.handle(IPC.SESSION_GET_EVENTS, (_, sessionId: string) => sessionManager.getEventsForSession(sessionId));
+  ipcMain.handle(IPC.SESSION_GET_EVENTS_CACHE, () => sessionManager.getEventsCache());
 
   // === Session Suspend / Resume ===
   ipcMain.handle(IPC.SESSION_SUSPEND, async (_, taskId: string) => {

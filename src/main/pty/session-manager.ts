@@ -451,6 +451,15 @@ export class SessionManager extends EventEmitter {
     return this.eventCache.get(sessionId) || [];
   }
 
+  /** Return cached events for all sessions (survives renderer reloads). */
+  getEventsCache(): Record<string, SessionEvent[]> {
+    const result: Record<string, SessionEvent[]> = {};
+    for (const [id, events] of this.eventCache) {
+      result[id] = events;
+    }
+    return result;
+  }
+
   private findByTaskId(taskId: string): ManagedSession | undefined {
     for (const s of this.sessions.values()) {
       if (s.taskId === taskId) return s;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Loader2, Trash2, CirclePause, Plug, Mail } from 'lucide-react';
+import { Loader2, Trash2, CirclePause, Mail } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { TaskDetailDialog } from '../dialogs/TaskDetailDialog';
 import { useSessionStore } from '../../stores/session-store';
@@ -22,8 +22,9 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const openTaskId = useSessionStore((s) => s.openTaskId);
   const setOpenTaskId = useSessionStore((s) => s.setOpenTaskId);
-  const sessionUsage = useSessionStore((s) => s.sessionUsage);
-  const sessionActivity = useSessionStore((s) => s.sessionActivity);
+  const usage = useSessionStore((s) => task.session_id ? s.sessionUsage[task.session_id] : undefined);
+  const activity = useSessionStore((s) => task.session_id ? s.sessionActivity[task.session_id] : undefined);
+  const events = useSessionStore((s) => task.session_id ? s.sessionEvents[task.session_id] : undefined);
 
   const suspendSession = useSessionStore((s) => s.suspendSession);
   const resumeSession = useSessionStore((s) => s.resumeSession);
@@ -31,12 +32,14 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
 
   const session = task.session_id ? sessions.find((s) => s.id === task.session_id) : null;
   const isHighlighted = !!task.session_id && task.session_id === activeSessionId;
-  const usage = task.session_id ? sessionUsage[task.session_id] : undefined;
-  const activity = task.session_id ? sessionActivity[task.session_id] : undefined;
   // For toggle: find session by taskId (includes suspended sessions)
   const taskSession = sessions.find((s) => s.taskId === task.id);
-  const isInitializing = !!taskSession && !usage && taskSession.status !== 'suspended' && taskSession.status !== 'exited';
-  const isThinking = session?.status === 'running' && (activity !== 'idle' || isInitializing);
+  // Only "initializing" while waiting for BOTH usage data AND the first hook event.
+  // Once any event arrives (tool_start, prompt, idle, permission_request) Claude Code
+  // is running — the card should reflect the real activity state, not "Initializing...".
+  const hasReceivedEvents = !!events && events.length > 0;
+  const isInitializing = !!taskSession && !usage && !hasReceivedEvents && taskSession.status !== 'suspended' && taskSession.status !== 'exited';
+  const isThinking = session?.status === 'running' && activity !== 'idle' && !isInitializing;
   const isIdle = session?.status === 'running' && activity === 'idle' && !isInitializing;
   const canToggle = taskSession && (taskSession.status === 'running' || taskSession.status === 'queued' || taskSession.status === 'suspended');
   const isSessionActive = taskSession?.status === 'running' || taskSession?.status === 'queued';
@@ -186,7 +189,7 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
               </div>
             </div>
           );
-        })() : taskSession && taskSession.status !== 'exited' && (
+        })() : taskSession && taskSession.status !== 'exited' && (taskSession.status === 'suspended' || taskSession.status === 'queued' || isInitializing) && (
           <div className="mt-2 pt-2 border-t border-zinc-700" data-testid="initializing-bar">
             <span className="text-xs text-zinc-500 flex items-center gap-1">
               {taskSession?.status === 'suspended' ? (

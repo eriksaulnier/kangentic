@@ -3,7 +3,7 @@
  *
  * When a task first spawns a session, the backend defaults activity to 'idle'
  * before any hooks fire. During this initializing phase (no usage data yet),
- * the card should show the thinking spinner (Loader2), not the idle icon (Mail).
+ * the card should show only the "Initializing..." bottom bar — no title icon.
  */
 import { test, expect } from '@playwright/test';
 import { chromium, type Browser, type Page } from '@playwright/test';
@@ -39,7 +39,7 @@ const SESSION_ID = 'sess-activity-test';
 const SWIMLANE_ID = 'lane-backlog';
 
 /** Base pre-configure that creates a project with a task linked to a running session */
-function makePreConfig(opts: { sessionStatus: string; activity: string; withUsage: boolean; nullSessionId?: boolean }): string {
+function makePreConfig(opts: { sessionStatus: string; activity: string; withUsage: boolean; nullSessionId?: boolean; withEvents?: boolean }): string {
   return `
     window.__mockPreConfigure(function (state) {
       var ts = new Date().toISOString();
@@ -80,6 +80,11 @@ function makePreConfig(opts: { sessionStatus: string; activity: string; withUsag
       });
 
       state.activityCache['${SESSION_ID}'] = '${opts.activity}';
+      ${opts.withEvents ? `
+      state.eventCache['${SESSION_ID}'] = [
+        { ts: Date.now(), type: 'tool_start', tool: 'Read', detail: '/mock/file.ts' },
+      ];
+      ` : ''}
 
       state.tasks.push({
         id: '${TASK_ID}',
@@ -118,7 +123,7 @@ function makePreConfig(opts: { sessionStatus: string; activity: string; withUsag
 }
 
 test.describe('Task Activity Indicators', () => {
-  test('initializing task shows thinking spinner, not idle mail icon', async () => {
+  test('initializing task shows no title icon, only bottom bar', async () => {
     const { browser, page } = await launchWithState(
       makePreConfig({ sessionStatus: 'running', activity: 'idle', withUsage: false })
     );
@@ -129,13 +134,12 @@ test.describe('Task Activity Indicators', () => {
       const card = page.locator('text=Test Initializing Task').first();
       await expect(card).toBeVisible();
 
-      // The card's title row should contain the Loader2 spinner (thinking)
+      // During initializing, no title icon should appear (matches Queued/Suspended)
       const titleRow = card.locator('..');
-      await expect(titleRow.locator('.lucide-loader-circle')).toBeVisible();
-      // The Mail icon (idle) should NOT be present
+      await expect(titleRow.locator('.lucide-loader-circle')).not.toBeVisible();
       await expect(titleRow.locator('.lucide-mail')).not.toBeVisible();
 
-      // The initializing bar should also be shown
+      // The initializing bottom bar should be shown
       await expect(page.locator('[data-testid="initializing-bar"]')).toBeVisible();
     } finally {
       await browser.close();
@@ -262,6 +266,50 @@ test.describe('Task Activity Indicators', () => {
       const titleRow = card.locator('..');
       await expect(titleRow.locator('.lucide-loader-circle')).not.toBeVisible();
       await expect(titleRow.locator('.lucide-mail')).not.toBeVisible();
+      await expect(page.locator('[data-testid="initializing-bar"]')).not.toBeVisible();
+    } finally {
+      await browser.close();
+    }
+  });
+
+  test('task with events but no usage shows idle state, not initializing', async () => {
+    const { browser, page } = await launchWithState(
+      makePreConfig({ sessionStatus: 'running', activity: 'idle', withUsage: false, withEvents: true })
+    );
+
+    try {
+      await page.locator('[data-swimlane-name="Backlog"]').waitFor({ state: 'visible', timeout: 15000 });
+      const card = page.locator('text=Test Initializing Task').first();
+      await expect(card).toBeVisible();
+
+      // Events have fired, so card should show real idle state (Mail icon), not initializing
+      const titleRow = card.locator('..');
+      await expect(titleRow.locator('.lucide-mail')).toBeVisible();
+      await expect(titleRow.locator('.lucide-loader-circle')).not.toBeVisible();
+
+      // Initializing bar should NOT be visible (events prove agent is active)
+      await expect(page.locator('[data-testid="initializing-bar"]')).not.toBeVisible();
+    } finally {
+      await browser.close();
+    }
+  });
+
+  test('task with events and thinking activity shows thinking spinner, not initializing', async () => {
+    const { browser, page } = await launchWithState(
+      makePreConfig({ sessionStatus: 'running', activity: 'thinking', withUsage: false, withEvents: true })
+    );
+
+    try {
+      await page.locator('[data-swimlane-name="Backlog"]').waitFor({ state: 'visible', timeout: 15000 });
+      const card = page.locator('text=Test Initializing Task').first();
+      await expect(card).toBeVisible();
+
+      // Events have fired + thinking activity → green spinner, no initializing bar
+      const titleRow = card.locator('..');
+      await expect(titleRow.locator('.lucide-loader-circle')).toBeVisible();
+      await expect(titleRow.locator('.lucide-mail')).not.toBeVisible();
+
+      // No initializing bar (events prove agent is active, no usage yet is fine)
       await expect(page.locator('[data-testid="initializing-bar"]')).not.toBeVisible();
     } finally {
       await browser.close();
