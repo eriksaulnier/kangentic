@@ -292,18 +292,28 @@ export function deleteProjectFromIndex(id: string): void {
 }
 
 /**
- * Prune stale worktree-based projects whose paths no longer exist on disk.
- * Catches leftovers from crashed/force-killed preview instances.
+ * Prune all worktree-based preview projects from the global index.
+ * Any project whose path contains `.kangentic/worktrees/` is ephemeral —
+ * created by `/preview` and should not persist across app restarts.
+ * Uses lightweight DB-only cleanup (no filesystem changes) so it's safe
+ * even if the worktree is still in use by an active preview instance.
  */
 export async function pruneStaleWorktreeProjects(): Promise<void> {
   const projects = projectRepo.list();
   for (const project of projects) {
     const normalized = project.path.replace(/\\/g, '/');
     if (!normalized.includes('.kangentic/worktrees/')) continue;
-    if (fs.existsSync(project.path)) continue;
 
-    console.log(`[PRUNE] Removing stale worktree project: ${project.name} (${project.path})`);
-    await cleanupProject(project.id, project.path);
+    console.log(`[PRUNE] Removing ephemeral preview project: ${project.name} (${project.path})`);
+
+    // Lightweight cleanup: only delete DB records, not worktree filesystem.
+    // The worktree directory belongs to the main project's tasks — don't touch it.
+    closeProjectDb(project.id);
+    const dbPath = PATHS.projectDb(project.id);
+    try { fs.unlinkSync(dbPath); } catch { /* may not exist */ }
+    try { fs.unlinkSync(dbPath + '-wal'); } catch { /* may not exist */ }
+    try { fs.unlinkSync(dbPath + '-shm'); } catch { /* may not exist */ }
+
     projectRepo.delete(project.id);
   }
 }

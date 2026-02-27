@@ -149,11 +149,10 @@ describe('pruneStaleWorktreeProjects', () => {
     mockList.mockReturnValue([]);
   });
 
-  it('prunes worktree projects whose paths no longer exist', async () => {
+  it('prunes worktree projects regardless of path existence', async () => {
     mockList.mockReturnValue([
       { id: 'proj-1', name: 'stale-preview', path: 'C:\\repo\\.kangentic\\worktrees\\my-feature-abc123' },
     ]);
-    mockExistsSync.mockReturnValue(false);
 
     await pruneStaleWorktreeProjects();
 
@@ -161,23 +160,10 @@ describe('pruneStaleWorktreeProjects', () => {
     expect(mockDelete).toHaveBeenCalledWith('proj-1');
   });
 
-  it('preserves worktree projects whose paths still exist', async () => {
-    mockList.mockReturnValue([
-      { id: 'proj-2', name: 'active-preview', path: '/repo/.kangentic/worktrees/active-feature' },
-    ]);
-    mockExistsSync.mockReturnValue(true);
-
-    await pruneStaleWorktreeProjects();
-
-    expect(mockCloseProjectDb).not.toHaveBeenCalled();
-    expect(mockDelete).not.toHaveBeenCalled();
-  });
-
-  it('skips non-worktree projects even if path is missing', async () => {
+  it('skips non-worktree projects', async () => {
     mockList.mockReturnValue([
       { id: 'proj-3', name: 'normal-project', path: 'C:\\Users\\dev\\my-app' },
     ]);
-    mockExistsSync.mockReturnValue(false);
 
     await pruneStaleWorktreeProjects();
 
@@ -194,20 +180,19 @@ describe('pruneStaleWorktreeProjects', () => {
     expect(mockDelete).not.toHaveBeenCalled();
   });
 
-  it('prunes only stale worktree projects in a mixed list', async () => {
+  it('prunes all worktree projects but preserves normal projects', async () => {
     mockList.mockReturnValue([
       { id: 'normal', name: 'normal', path: '/home/user/project' },
       { id: 'stale', name: 'stale', path: '/repo/.kangentic/worktrees/gone-feature' },
       { id: 'alive', name: 'alive', path: '/repo/.kangentic/worktrees/still-here' },
     ]);
-    mockExistsSync.mockImplementation((p: string) => {
-      if (typeof p === 'string' && p.includes('gone-feature')) return false;
-      return true;
-    });
 
     await pruneStaleWorktreeProjects();
 
-    expect(mockDelete).toHaveBeenCalledTimes(1);
+    expect(mockDelete).toHaveBeenCalledTimes(2);
     expect(mockDelete).toHaveBeenCalledWith('stale');
+    expect(mockDelete).toHaveBeenCalledWith('alive');
+    expect(mockCloseProjectDb).toHaveBeenCalledWith('stale');
+    expect(mockCloseProjectDb).toHaveBeenCalledWith('alive');
   });
 });
