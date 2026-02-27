@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useRef } from 'react';
 import {
   DndContext,
   DragOverlay,
+  closestCenter,
   closestCorners,
   pointerWithin,
   KeyboardSensor,
@@ -204,12 +205,19 @@ export function KanbanBoard() {
       if (doneCollisions.length > 0) return doneCollisions;
     }
 
-    // Everything else: closestCorners (docs-recommended for Kanban)
-    return closestCorners({
+    // closestCenter for responsive 50% column switching.
+    // Exclude the current column's swimlane container so its large rect
+    // can't outcompete nearby task cards during within-column reordering.
+    // Other columns' swimlanes remain for cross-column detection.
+    const activeColumn = findSwimlane(String(args.active.id));
+    return closestCenter({
       ...args,
-      droppableContainers: args.droppableContainers.filter(
-        (c) => !String(c.id).startsWith('column:'),
-      ),
+      droppableContainers: args.droppableContainers.filter((c) => {
+        const cId = String(c.id);
+        if (cId.startsWith('column:')) return false;
+        if (cId === activeColumn) return false;
+        return true;
+      }),
     });
   }, []);
 
