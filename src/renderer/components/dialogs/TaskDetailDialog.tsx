@@ -49,8 +49,8 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
         setShowMoveSubmenu(false);
       }
     };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('mousedown', handleClick, true);
+    return () => document.removeEventListener('mousedown', handleClick, true);
   }, [showKebabMenu]);
 
   // Columns available as move targets: exclude current column and Done column (for archived tasks)
