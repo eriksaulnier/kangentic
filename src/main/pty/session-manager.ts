@@ -165,13 +165,43 @@ export class SessionManager extends EventEmitter {
     // when Kangentic itself was launched from inside a Claude Code session.
     const { CLAUDECODE: _, ...cleanEnv } = { ...process.env, ...input.env };
 
-    const ptyProcess = pty.spawn(shellExe, shellArgs, {
-      name: 'xterm-256color',
-      cols: 120,
-      rows: 30,
-      cwd: input.cwd,
-      env: cleanEnv as Record<string, string>,
-    });
+    let ptyProcess: pty.IPty;
+    try {
+      ptyProcess = pty.spawn(shellExe, shellArgs, {
+        name: 'xterm-256color',
+        cols: 120,
+        rows: 30,
+        cwd: input.cwd,
+        env: cleanEnv as Record<string, string>,
+      });
+    } catch (err) {
+      // PTY spawn failed — return a dead session so the renderer sees
+      // a failed session instead of crashing the main process
+      const failedSession: ManagedSession = {
+        id,
+        taskId: input.taskId,
+        pty: null,
+        status: 'exited',
+        shell,
+        cwd: input.cwd,
+        startedAt: new Date().toISOString(),
+        exitCode: -1,
+        buffer: '',
+        flushScheduled: false,
+        scrollback: previousScrollback,
+        statusOutputPath: input.statusOutputPath || null,
+        statusWatcher: null,
+        activityOutputPath: input.activityOutputPath || null,
+        activityWatcher: null,
+        eventsOutputPath: input.eventsOutputPath || null,
+        eventsWatcher: null,
+        eventsFileOffset: 0,
+        mergedSettingsPath: null,
+      };
+      this.sessions.set(id, failedSession);
+      this.emit('exit', id, -1);
+      return this.toSession(failedSession);
+    }
 
     // Derive merged settings path from statusOutputPath pattern
     // statusOutputPath = <project>/.kangentic/sessions/<sessionId>/status.json

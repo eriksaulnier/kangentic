@@ -219,7 +219,7 @@ export function KanbanBoard() {
         return true;
       }),
     });
-  }, []);
+  }, [findSwimlane]);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const id = event.active.id as string;
@@ -291,6 +291,7 @@ export function KanbanBoard() {
       return;
     }
 
+    try {
     const activeId = active.id as string;
 
     // --- Column reorder ---
@@ -384,6 +385,11 @@ export function KanbanBoard() {
       if (!task) return;
       // Capture where the DragOverlay was at drop time
       const initialRect = active.rect.current.initial;
+      if (!initialRect) {
+        // DOM element was destroyed mid-drag — skip animation, move directly
+        await moveTask({ taskId, targetSwimlaneId, targetPosition });
+        return;
+      }
       const startRect = {
         left: initialRect.left + event.delta.x,
         top: initialRect.top + event.delta.y,
@@ -403,6 +409,15 @@ export function KanbanBoard() {
 
     // Persist the move (moveTask handles optimistic update, IPC, and reload)
     await moveTask({ taskId, targetSwimlaneId, targetPosition });
+
+    } catch (err) {
+      console.error('handleDragEnd error:', err);
+      await useBoardStore.getState().loadBoard();
+      useToastStore.getState().addToast({
+        message: `Drag failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        variant: 'error',
+      });
+    }
   }, [moveTask, setCompletingTask, findSwimlane, swimlanes, reorderSwimlanes, reorderTaskInColumn]);
 
   const handleDragCancel = useCallback(() => {

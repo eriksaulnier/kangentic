@@ -122,26 +122,34 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       return { tasks };
     });
 
-    await window.electronAPI.tasks.move(input);
-    // Reload tasks, archived tasks, and sessions (transition engine may have spawned/killed sessions)
-    const [tasks, archivedTasks, sessions] = await Promise.all([
-      window.electronAPI.tasks.list(),
-      window.electronAPI.tasks.listArchived(),
-      window.electronAPI.sessions.list(),
-    ]);
-    set({ tasks, archivedTasks });
-    useSessionStore.setState({ sessions });
+    try {
+      await window.electronAPI.tasks.move(input);
+      // Reload tasks, archived tasks, and sessions (transition engine may have spawned/killed sessions)
+      const [tasks, archivedTasks, sessions] = await Promise.all([
+        window.electronAPI.tasks.list(),
+        window.electronAPI.tasks.listArchived(),
+        window.electronAPI.sessions.list(),
+      ]);
+      set({ tasks, archivedTasks });
+      useSessionStore.setState({ sessions });
 
-    // Detect if the moved task now has a new/different session
-    const movedTask = tasks.find((t) => t.id === input.taskId);
-    if (movedTask?.session_id && movedTask.session_id !== prevSessionId) {
-      useSessionStore.setState({ activeSessionId: movedTask.session_id });
-      const isResume = prevSessionId !== null;
+      // Detect if the moved task now has a new/different session
+      const movedTask = tasks.find((t) => t.id === input.taskId);
+      if (movedTask?.session_id && movedTask.session_id !== prevSessionId) {
+        useSessionStore.setState({ activeSessionId: movedTask.session_id });
+        const isResume = prevSessionId !== null;
+        useToastStore.getState().addToast({
+          message: isResume
+            ? `Agent resumed for "${movedTask.title}"`
+            : `Agent started for "${movedTask.title}"`,
+          variant: 'success',
+        });
+      }
+    } catch (err) {
+      await get().loadBoard();
       useToastStore.getState().addToast({
-        message: isResume
-          ? `Agent resumed for "${movedTask.title}"`
-          : `Agent started for "${movedTask.title}"`,
-        variant: 'success',
+        message: `Failed to move task: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        variant: 'error',
       });
     }
   },
@@ -300,15 +308,23 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       }),
     }));
 
-    await window.electronAPI.tasks.move({
-      taskId,
-      targetSwimlaneId: swimlaneId,
-      targetPosition: newIndex,
-    });
+    try {
+      await window.electronAPI.tasks.move({
+        taskId,
+        targetSwimlaneId: swimlaneId,
+        targetPosition: newIndex,
+      });
 
-    // Lightweight reload — only tasks (no session changes for same-column reorder)
-    const tasks = await window.electronAPI.tasks.list();
-    set({ tasks });
+      // Lightweight reload — only tasks (no session changes for same-column reorder)
+      const tasks = await window.electronAPI.tasks.list();
+      set({ tasks });
+    } catch (err) {
+      await get().loadBoard();
+      useToastStore.getState().addToast({
+        message: `Failed to reorder task: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        variant: 'error',
+      });
+    }
   },
 
   createSwimlane: async (input) => {
@@ -337,6 +353,14 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
         return { ...lane, position: index };
       }),
     }));
-    await window.electronAPI.swimlanes.reorder(ids);
+    try {
+      await window.electronAPI.swimlanes.reorder(ids);
+    } catch (err) {
+      await get().loadBoard();
+      useToastStore.getState().addToast({
+        message: `Failed to reorder columns: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        variant: 'error',
+      });
+    }
   },
 }));

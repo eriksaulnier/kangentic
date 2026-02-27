@@ -7,6 +7,14 @@ import { closeAll, getProjectDb } from './db/database';
 import { SessionRepository } from './db/repositories/session-repository';
 import { IPC } from '../shared/ipc-channels';
 
+// Global error handlers — keep the app running through transient IPC/PTY errors
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason);
+});
+
 // Handle Squirrel.Windows lifecycle events (install/update/uninstall shortcuts)
 if (require('electron-squirrel-startup')) app.quit();
 
