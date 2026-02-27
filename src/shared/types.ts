@@ -226,7 +226,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     worktreesEnabled: true,
     autoCleanup: true,
     defaultBaseBranch: 'main',
-    copyFiles: ['.env', '.env.local', '.claude/settings.local.json'],
+    copyFiles: ['.claude/settings.json', '.claude/settings.local.json'],
     initScript: null,
   },
   skipDeleteConfirm: false,
