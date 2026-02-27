@@ -5,14 +5,18 @@ import { useConfigStore } from '../../stores/config-store';
 interface TerminalTabProps {
   sessionId: string;
   active: boolean;
+  isClaudeSession?: boolean;
+  shell?: string;
 }
 
-export function TerminalTab({ sessionId, active }: TerminalTabProps) {
+export function TerminalTab({ sessionId, active, isClaudeSession, shell }: TerminalTabProps) {
   const config = useConfigStore((s) => s.config);
   const { terminalRef, initTerminal, fit, focus, scrollbackPending } = useTerminal({
     sessionId,
     fontFamily: config.terminal.fontFamily,
     fontSize: config.terminal.fontSize,
+    isClaudeSession,
+    shell,
   });
   const initialized = useRef(false);
   const draggingRef = useRef(false);

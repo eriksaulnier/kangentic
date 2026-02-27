@@ -648,7 +648,13 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
           <>
             <div className="flex-1 min-h-0 relative">
               <div className="absolute inset-0">
-                <TerminalTab key={session.id} sessionId={session.id} active={true} />
+                <TerminalTab
+                  key={session.id}
+                  sessionId={session.id}
+                  active={true}
+                  isClaudeSession={task.agent === 'claude'}
+                  shell={session.shell}
+                />
               </div>
             </div>
             <ContextBar sessionId={session.id} />

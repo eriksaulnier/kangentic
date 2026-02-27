@@ -166,7 +166,12 @@ export function TerminalPanel({ collapsed = false, showContent = true, onToggleC
                   className="absolute inset-0"
                 >
                   {!ownedByDialog && (
-                    <TerminalTab sessionId={session.id} active={isActive} />
+                    <TerminalTab
+                      sessionId={session.id}
+                      active={isActive}
+                      isClaudeSession={tasks.find((t) => t.id === session.taskId)?.agent === 'claude'}
+                      shell={session.shell}
+                    />
                   )}
                 </div>
               );
