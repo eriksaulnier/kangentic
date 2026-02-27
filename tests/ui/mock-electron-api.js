@@ -12,6 +12,7 @@
   let actions = [];
   let sessions = [];
   let attachments = [];
+  let activityCache = {};
   let currentProjectId = null;
 
   let config = {
@@ -419,6 +420,8 @@
           exitCode: null,
         };
         sessions.push(newSession);
+        // Default activity to 'idle' on spawn (matches real backend behavior)
+        activityCache[newSession.id] = 'idle';
         var task = tasks.find(function (t) { return t.id === taskId; });
         if (task) {
           task.session_id = newSession.id;
@@ -447,7 +450,7 @@
         return noop;
       },
       getActivity: async function () {
-        return {};
+        return Object.assign({}, activityCache);
       },
       onActivity: function () {
         return noop;
@@ -507,5 +510,26 @@
       maximize: noop,
       close: noop,
     },
+  };
+
+  /**
+   * Expose mock internals for test state pre-configuration.
+   * Called from addInitScript before React mounts to set up complex scenarios
+   * (e.g. tasks with sessions, activity state, usage data).
+   */
+  window.__mockPreConfigure = function (fn) {
+    var result = fn({
+      projects: projects,
+      tasks: tasks,
+      swimlanes: swimlanes,
+      sessions: sessions,
+      activityCache: activityCache,
+      uuid: uuid,
+      now: now,
+      DEFAULT_SWIMLANES: DEFAULT_SWIMLANES,
+    });
+    if (result && result.currentProjectId !== undefined) {
+      currentProjectId = result.currentProjectId;
+    }
   };
 })();

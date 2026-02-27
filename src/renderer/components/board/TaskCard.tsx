@@ -26,11 +26,11 @@ export function TaskCard({ task, isDragOverlay, compact, onDelete }: TaskCardPro
   const isHighlighted = !!task.session_id && task.session_id === activeSessionId;
   const usage = task.session_id ? sessionUsage[task.session_id] : undefined;
   const activity = task.session_id ? sessionActivity[task.session_id] : undefined;
-  const isThinking = session?.status === 'running' && activity !== 'idle';
-  const isIdle = session?.status === 'running' && activity === 'idle';
-
   // For toggle: find session by taskId (includes suspended sessions)
   const taskSession = sessions.find((s) => s.taskId === task.id);
+  const isInitializing = !!taskSession && !usage && taskSession.status !== 'suspended';
+  const isThinking = session?.status === 'running' && (activity !== 'idle' || isInitializing);
+  const isIdle = session?.status === 'running' && activity === 'idle' && !isInitializing;
   const canToggle = taskSession && (taskSession.status === 'running' || taskSession.status === 'queued' || taskSession.status === 'suspended');
   const isSessionActive = taskSession?.status === 'running' || taskSession?.status === 'queued';
   const [toggling, setToggling] = useState(false);
