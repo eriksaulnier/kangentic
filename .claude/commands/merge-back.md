@@ -2,6 +2,11 @@
 
 Merge the current worktree branch back into the source branch via rebase and direct push.
 
+**Usage:** `/merge-back [commit message]`
+
+- `/merge-back` — auto-generates a commit message from the diff
+- `/merge-back added new e2e tests` — uses the provided text as the commit message
+
 ## Pre-flight Checks
 
 1. Verify the current working directory is inside a Kangentic worktree (path contains `.kangentic/worktrees/`). If not, warn the user and stop.
@@ -20,12 +25,10 @@ Run `npm run typecheck` in the worktree. If it fails, report the type errors and
 
 If there are uncommitted changes (non-empty `git status --porcelain` output):
 
-1. **Ask the user first** (before showing diffs) how they want to handle the commit message:
-   - **Auto-generate** — you will read the diff and write the message
-   - **Manual** — the user will provide the message
-2. Show the user `git status` and `git diff --stat` for a summary of changes.
-3. If **auto-generate**: read the full diff (`git diff`), draft a concise commit message summarizing the changes, then `git add -A` and `git commit -m "<message>"` immediately — do not ask the user to confirm or edit the message.
-4. If **manual**: ask the user for their commit message, then `git add -A` and `git commit -m "<message>"`.
+1. Show the user `git status` and `git diff --stat` for a summary of changes.
+2. If the user provided a commit message with the command (e.g., `/merge-back added new e2e tests`), use that text as the commit message.
+3. Otherwise, read the full diff (`git diff`), draft a concise commit message summarizing the changes.
+4. Run `git add -A`, then commit using the **Write tool** to write the message to a temp file and `git commit -F <tempfile>`. **Never use `$(...)` or backtick command substitution in the commit command** — this triggers an unnecessary safety prompt. Always use `-F` with a file written by the Write tool.
 
 If the working tree is clean, skip to Step 2.
 
@@ -78,6 +81,6 @@ If this fails (e.g., non-fast-forward divergence), report the warning but do not
 
 ## Allowed Tools
 
-Use `Read`, `Glob`, `Grep`, `Bash` (for `git` commands), `Edit` (for conflict resolution), and `AskUserQuestion`. Do not use `Write`.
+Use `Read`, `Glob`, `Grep`, `Bash` (for `git` and `npm` commands), `Write` (for commit message temp files), `Edit` (for conflict resolution), and `AskUserQuestion`.
 
 **CRITICAL: No chained commands.** Every Bash call must contain exactly ONE command. Never use `&&`, `||`, `|`, or `;`. For git commands in the worktree, use `git -C <worktreePath>` — never `cd <path> && git ...`.
