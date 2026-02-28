@@ -141,26 +141,21 @@ test.describe('Task CRUD', () => {
     await taskCard('Test Task Alpha').click();
     await page.waitForTimeout(300);
 
-    const dialogTitle = page.locator('h2:has-text("Test Task Alpha")');
-    await expect(dialogTitle).toBeVisible();
+    // Backlog tasks open directly in edit mode — title shows as input
+    const titleInput = page.locator('.fixed input[type="text"]');
+    await expect(titleInput).toBeVisible();
+    await expect(titleInput).toHaveValue('Test Task Alpha');
 
     // Close dialog and confirm it's gone
     await page.keyboard.press('Escape');
-    await expect(dialogTitle).not.toBeVisible({ timeout: 2000 });
+    await expect(titleInput).not.toBeVisible({ timeout: 2000 });
   });
 
   test('can edit task title and description', async () => {
     await taskCard('Test Task Alpha').click();
     await page.waitForTimeout(300);
 
-    // Open kebab menu (the "..." Actions button), then click Edit
-    await page.locator('button[title="Actions"]').click();
-    await page.waitForTimeout(200);
-
-    // Click the Edit menu item (has Pencil icon + "Edit" text)
-    await page.locator('button:has-text("Edit")').first().click();
-    await page.waitForTimeout(200);
-
+    // Backlog tasks open directly in edit mode — no need to click kebab → Edit
     const titleInput = page.locator('.fixed input[type="text"]');
     await titleInput.fill('Updated Task Alpha');
 
@@ -185,6 +180,10 @@ test.describe('Task CRUD', () => {
   test('can archive a task', async () => {
     await taskCard('Test Task Beta').click();
     await page.waitForTimeout(300);
+
+    // Backlog tasks open in edit mode — cancel to view mode first
+    await page.locator('button:has-text("Cancel")').click();
+    await page.waitForTimeout(200);
 
     // Open kebab menu, click Archive
     await page.locator('button[title="Actions"]').click();
@@ -264,10 +263,9 @@ test.describe('Session & Column Details', () => {
     await taskCard('Updated Task Alpha').click();
     await page.waitForTimeout(300);
 
-    // With no session spawned, either "No active session" or the task description is visible
-    const emptyMsg = page.locator('text=No active session');
-    const hasEmpty = await emptyMsg.isVisible().catch(() => false);
-    expect(hasEmpty || (await page.locator('text=Description for alpha task').isVisible())).toBeTruthy();
+    // Backlog tasks open in edit mode — the edit textarea is visible instead of "No active session"
+    const textarea = page.locator('.fixed textarea');
+    await expect(textarea).toBeVisible();
 
     await page.keyboard.press('Escape');
     await page.waitForTimeout(300);

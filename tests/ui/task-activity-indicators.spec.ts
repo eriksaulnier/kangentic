@@ -316,6 +316,29 @@ test.describe('Task Activity Indicators', () => {
     }
   });
 
+  test('task with session opens detail dialog in view mode (not edit mode)', async () => {
+    const { browser, page } = await launchWithState(
+      makePreConfig({ sessionStatus: 'running', activity: 'idle', withUsage: true })
+    );
+
+    try {
+      await page.locator('[data-swimlane-name="Backlog"]').waitFor({ state: 'visible', timeout: 15000 });
+      const card = page.locator('text=Test Initializing Task').first();
+      await card.click();
+      await page.waitForTimeout(300);
+
+      // Should open in view mode — h2 heading visible, no title input
+      const heading = page.locator('.fixed h2:has-text("Test Initializing Task")');
+      await expect(heading).toBeVisible();
+      const titleInput = page.locator('.fixed input[type="text"]');
+      await expect(titleInput).not.toBeVisible();
+
+      await page.keyboard.press('Escape');
+    } finally {
+      await browser.close();
+    }
+  });
+
   test('suspended task during initialization shows neither activity icon', async () => {
     const { browser, page } = await launchWithState(
       makePreConfig({ sessionStatus: 'suspended', activity: 'idle', withUsage: false })

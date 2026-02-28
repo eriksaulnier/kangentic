@@ -27,9 +27,10 @@ interface AttachmentWithPreview extends TaskAttachment {
 interface TaskDetailDialogProps {
   task: Task;
   onClose: () => void;
+  initialEdit?: boolean;
 }
 
-export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialogProps) {
   const updateTask = useBoardStore((s) => s.updateTask);
   const deleteTask = useBoardStore((s) => s.deleteTask);
   const moveTask = useBoardStore((s) => s.moveTask);
@@ -41,13 +42,18 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
   const sessions = useSessionStore((s) => s.sessions);
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(!!initialEdit);
   const [showKebabMenu, setShowKebabMenu] = useState(false);
   const [showMoveSubmenu, setShowMoveSubmenu] = useState(false);
+  const [baseBranch, setBaseBranch] = useState(task.base_branch || '');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [textareaFocused, setTextareaFocused] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [toggling, setToggling] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dontAskAgain, setDontAskAgain] = useState(false);
   const skipDeleteConfirm = useConfigStore((s) => s.config.skipDeleteConfirm);
+  const defaultBaseBranch = useConfigStore((s) => s.config.git.defaultBaseBranch);
   const updateConfig = useConfigStore((s) => s.updateConfig);
   const kebabMenuRef = useRef<HTMLDivElement>(null);
 
@@ -230,6 +236,15 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
   // Use large dialog when there's an active session OR a suspended one
   const hasSessionContext = !!session || !!isSuspended || toggling;
 
+  // Auto-expand textarea for no-session edit mode
+  useEffect(() => {
+    if (!isEditing || hasSessionContext) return;
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 800)}px`;
+  }, [description, isEditing, hasSessionContext]);
+
   // Usage data for the suspended placeholder (may come from the old session id)
   const taskUsage = taskSession ? sessionUsage[taskSession.id] : undefined;
 
@@ -264,6 +279,15 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
     }
   }, [session?.status]);
 
+  // Refit terminal when edit mode toggles (changes available height)
+  useEffect(() => {
+    if (!session) return;
+    const id = setTimeout(() => {
+      window.dispatchEvent(new Event('terminal-panel-resize'));
+    }, 100);
+    return () => clearTimeout(id);
+  }, [isEditing, session?.id]);
+
   // Register this session with the store so the bottom panel unmounts its
   // TerminalTab BEFORE any terminal effects fire. useLayoutEffect runs
   // synchronously after DOM mutations but before paint, ensuring the panel's
@@ -276,7 +300,15 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
   }, [session?.id, setDialogSessionId]);
 
   const handleSave = async () => {
-    await updateTask({ id: task.id, title, description });
+    const payload: Parameters<typeof updateTask>[0] = { id: task.id, title, description };
+    if (!hasSessionContext) {
+      const trimmed = baseBranch.trim();
+      const original = task.base_branch || '';
+      if (trimmed !== original) {
+        payload.base_branch = trimmed || null;
+      }
+    }
+    await updateTask(payload);
     if (!session) {
       onClose();
     } else {
@@ -396,7 +428,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
       {isEditing ? (
         <>
           <button
-            onClick={() => { setTitle(task.title); setDescription(task.description); setIsEditing(false); }}
+            onClick={() => { setTitle(task.title); setDescription(task.description); setBaseBranch(task.base_branch || ''); setShowAdvanced(false); setIsEditing(false); }}
             className="px-3 py-1.5 text-xs text-fg-muted hover:text-fg-secondary border border-edge-input hover:border-fg-faint rounded transition-colors flex-shrink-0"
           >
             Cancel
@@ -567,7 +599,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
         onClose={onClose}
         header={customHeader}
         rawBody
-        className={hasSessionContext ? 'w-[90vw] h-[85vh]' : 'w-[480px] max-h-[80vh]'}
+        className={hasSessionContext ? 'w-[90vw] h-[85vh]' : 'w-[640px] max-h-[80vh]'}
         backdropClassName="p-6"
       >
         {/* Description edit mode with drag/drop support */}
@@ -579,26 +611,79 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
             onDrop={handleAttachmentDrop}
           >
             <div className="relative">
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                onPaste={handleAttachmentPaste}
-                rows={3}
-                className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent resize-y min-h-[80px] max-h-[300px]"
-              />
+              {hasSessionContext ? (
+                /* Compact textarea for tasks with an active/suspended session */
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  onPaste={handleAttachmentPaste}
+                  rows={3}
+                  className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent resize-y min-h-[80px] max-h-[300px]"
+                />
+              ) : (
+                /* Premium textarea for no-session tasks — matches NewTaskDialog */
+                <textarea
+                  ref={textareaRef}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  onPaste={handleAttachmentPaste}
+                  onFocus={() => setTextareaFocused(true)}
+                  onBlur={() => setTextareaFocused(false)}
+                  className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent min-h-[200px] max-h-[800px] resize-y overflow-y-auto"
+                />
+              )}
               {!description && (
-                <div className="absolute inset-0 flex flex-col pointer-events-none px-3 py-2">
-                  <span className="text-sm text-fg-faint">Description</span>
-                  <div className="flex-1 flex items-center justify-center">
-                    <div className="flex flex-col items-center gap-1.5 border border-dashed border-edge rounded-lg px-5 py-3">
-                      <Image size={18} className="text-fg-disabled" />
-                      <span className="text-xs text-fg-disabled">Paste or drop images here</span>
+                hasSessionContext ? (
+                  <div className="absolute inset-0 flex flex-col pointer-events-none px-3 py-2">
+                    <span className="text-sm text-fg-faint">Description</span>
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className="flex flex-col items-center gap-1.5 border border-dashed border-edge rounded-lg px-5 py-3">
+                        <Image size={18} className="text-fg-disabled" />
+                        <span className="text-xs text-fg-disabled">Paste or drop images here</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className={`absolute inset-0 flex flex-col pointer-events-none px-3 py-2 transition-opacity duration-200 ${textareaFocused ? 'opacity-100' : 'opacity-40'}`}>
+                    <span className="text-sm text-fg-faint">Describe the task for the agent...</span>
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className="flex flex-col items-center gap-1.5 border border-dashed border-edge rounded-lg px-6 py-4">
+                        <Image size={20} className="text-fg-disabled" />
+                        <span className="text-xs text-fg-disabled">Paste or drop images here</span>
+                      </div>
+                    </div>
+                  </div>
+                )
               )}
             </div>
             {thumbnailStrip}
+
+            {/* Advanced section — base branch (no-session edit only) */}
+            {!hasSessionContext && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="flex items-center gap-1 text-xs text-fg-muted hover:text-fg-secondary transition-colors"
+                >
+                  <ChevronRight size={12} className={`transition-transform ${showAdvanced ? 'rotate-90' : ''}`} />
+                  Advanced
+                </button>
+                {showAdvanced && (
+                  <div className="space-y-1">
+                    <label className="text-xs text-fg-muted">Base Branch</label>
+                    <input
+                      type="text"
+                      placeholder={defaultBaseBranch || 'main'}
+                      value={baseBranch}
+                      onChange={(e) => setBaseBranch(e.target.value)}
+                      className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
             {isDragOver && (
               <div className="absolute inset-0 bg-accent/10 border-2 border-dashed border-accent rounded-lg flex items-center justify-center z-10 pointer-events-none">
                 <span className="text-sm text-accent-fg font-medium">Drop images here</span>
