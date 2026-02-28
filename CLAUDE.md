@@ -2,6 +2,41 @@
 
 Cross-platform desktop Kanban for Claude Code agents.
 
+## CRITICAL: Single-Command Bash Calls Only
+
+**THIS IS THE #1 RULE. Every Bash tool call MUST contain exactly ONE command.**
+
+Claude Code does not support chained, piped, or redirected-stderr commands. Violations **will** produce errors or silent data loss.
+
+**Forbidden operators:** `&&`, `||`, `|`, `;`, `2>/dev/null`, `2>&1`
+
+**Forbidden patterns — NEVER do this:**
+```
+cd /some/path && git status          # WRONG — chained commands
+git diff | head -20                  # WRONG — pipe
+npm run build && npm test            # WRONG — chained commands
+cat file.json | grep "key"          # WRONG — pipe
+find . -name "*.ts" -type f         # WRONG — use Glob tool instead
+find /path -name "types.ts" | head  # WRONG — pipe + find
+command1 ; command2                  # WRONG — semicolon
+some-command 2>/dev/null            # WRONG — stderr redirection
+```
+
+**ALWAYS use dedicated tools instead of shell commands:**
+- **`Read`** tool (with `offset`/`limit`) — replaces `cat`, `head`, `tail`, `less`
+- **`Grep`** tool — replaces `grep`, `rg`, and piping into `grep`
+- **`Glob`** tool — replaces `find`, `ls` for file discovery
+- **`Write`** tool — replaces `echo` redirection, `cat <<EOF`
+- **Bash `timeout` parameter** — replaces `sleep`
+- Run commands separately in individual Bash tool calls — replaces `&&`, `;`, `||`
+
+**Correct alternatives:**
+```
+git -C /some/path status             # Use git -C for git commands in other dirs
+```
+
+**This rule applies everywhere: main sessions, subagents, worktree agents, commands, and skills. No exceptions.**
+
 ## Tech Stack
 
 - **Runtime:** Electron 40 + Node 20
@@ -110,34 +145,6 @@ Three test tiers — prefer **unit tests** for pure logic, **UI tests** for anyt
 - **WebGL renderer:** xterm instances attempt WebGL acceleration first, with automatic fallback to canvas on context loss or unavailability.
 - **Resize debouncing:** PTY resize calls are debounced (200ms) and suppressed entirely during panel drag operations to prevent scrollback eviction from rapid row-count changes.
 
-## CRITICAL: Single-Command Bash Calls Only
-
-**Every Bash tool call MUST contain exactly ONE command.** Claude Code does not support chained or piped commands — they will error or produce unexpected results.
-
-**Forbidden operators:** `&&`, `||`, `|`, `;`
-
-**Forbidden patterns — NEVER do this:**
-```
-cd /some/path && git status          # WRONG
-git diff | head -20                  # WRONG
-npm run build && npm test            # WRONG
-cat file.json | grep "key"          # WRONG
-command1 ; command2                  # WRONG
-```
-
-**Correct alternatives:**
-```
-git -C /some/path status             # Use git -C for git commands in other directories
-```
-- Use the `Read` tool (with `offset`/`limit`) instead of `cat`, `head`, `tail`
-- Use the `Grep` tool instead of `grep` or piping into `grep`
-- Use the `Glob` tool instead of `find`
-- Use the `Write` tool instead of `echo` redirection
-- Use the `timeout` parameter on Bash instead of `sleep`
-- Run commands separately in individual Bash tool calls
-
-This rule applies everywhere: main sessions, worktree agents, commands, and skills.
-
 ## Conventions
 
 - TypeScript strict mode
@@ -145,3 +152,4 @@ This rule applies everywhere: main sessions, worktree agents, commands, and skil
 - Use `data-testid` and `data-swimlane-name` attributes for test selectors
 - All dialogs use global `useEffect` Escape key listener
 - When adding or updating tests, use the `/add-update-tests` command to ensure correct tier classification
+- **No `any` types** — never use `any` in new code. Use proper types from `src/shared/types.ts`, `unknown` with type guards, or generic constraints. The `/code-review` command will flag `any` usage. Existing `any` casts should be replaced when touching the file.

@@ -5,7 +5,7 @@ import { Loader2, Trash2, CirclePause, Mail } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { TaskDetailDialog } from '../dialogs/TaskDetailDialog';
 import { useSessionStore } from '../../stores/session-store';
-import { useBoardStore } from '../../stores/board-store';
+import { useSessionDisplayState } from '../../utils/session-display-state';
 import { getProgressColor } from '../../utils/color-lerp';
 import type { Task } from '../../../shared/types';
 
@@ -18,50 +18,11 @@ interface TaskCardProps {
 
 const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete }: TaskCardProps) {
   const [showDetail, setShowDetail] = useState(false);
-  const sessions = useSessionStore((s) => s.sessions);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const openTaskId = useSessionStore((s) => s.openTaskId);
   const setOpenTaskId = useSessionStore((s) => s.setOpenTaskId);
-  const usage = useSessionStore((s) => task.session_id ? s.sessionUsage[task.session_id] : undefined);
-  const activity = useSessionStore((s) => task.session_id ? s.sessionActivity[task.session_id] : undefined);
-  const events = useSessionStore((s) => task.session_id ? s.sessionEvents[task.session_id] : undefined);
-
-  const suspendSession = useSessionStore((s) => s.suspendSession);
-  const resumeSession = useSessionStore((s) => s.resumeSession);
-  const loadBoard = useBoardStore((s) => s.loadBoard);
-
-  const session = task.session_id ? sessions.find((s) => s.id === task.session_id) : null;
+  const displayState = useSessionDisplayState(task);
   const isHighlighted = !!task.session_id && task.session_id === activeSessionId;
-  // For toggle: find session by taskId (includes suspended sessions)
-  const taskSession = sessions.find((s) => s.taskId === task.id);
-  // Only "initializing" while waiting for BOTH usage data AND the first hook event.
-  // Once any event arrives (tool_start, prompt, idle, permission_request) Claude Code
-  // is running — the card should reflect the real activity state, not "Initializing...".
-  const hasReceivedEvents = !!events && events.length > 0;
-  const isInitializing = !!taskSession && !usage && !hasReceivedEvents && taskSession.status !== 'suspended' && taskSession.status !== 'exited';
-  const isThinking = session?.status === 'running' && activity !== 'idle' && !isInitializing;
-  const isIdle = session?.status === 'running' && activity === 'idle' && !isInitializing;
-  const canToggle = taskSession && (taskSession.status === 'running' || taskSession.status === 'queued' || taskSession.status === 'suspended');
-  const isSessionActive = taskSession?.status === 'running' || taskSession?.status === 'queued';
-  const [toggling, setToggling] = useState(false);
-
-  const handleToggle = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!canToggle || toggling) return;
-    setToggling(true);
-    try {
-      if (isSessionActive) {
-        await suspendSession(task.id);
-      } else {
-        await resumeSession(task.id);
-      }
-      await loadBoard();
-    } catch (err) {
-      console.error('Toggle session failed:', err);
-    } finally {
-      setToggling(false);
-    }
-  };
 
   useEffect(() => {
     if (openTaskId === task.id) {
@@ -134,6 +95,10 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
     );
   }
 
+  // Derive visual indicators from display state
+  const isIdle = displayState.kind === 'running' && displayState.activity === 'idle';
+  const isThinking = displayState.kind === 'running' && displayState.activity !== 'idle';
+
   return (
     <>
       <div
@@ -170,42 +135,63 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
           <div className="text-xs text-fg-faint mt-1 line-clamp-3">{task.description}</div>
         )}
 
-        {usage ? (() => {
-          const pct = Math.round(usage.contextWindow.usedPercentage);
-          const progressColor = getProgressColor(pct);
-          return (
-            <div className="mt-2 pt-2 border-t border-edge" data-testid="usage-bar">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs text-fg-faint">
-                  {usage.model.displayName || 'Claude'}
-                </span>
-                <span className="text-xs text-fg-faint">{pct}%</span>
-              </div>
-              <div className="w-full h-1 bg-surface-hover rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-300"
-                  style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: progressColor }}
-                />
-              </div>
-            </div>
-          );
-        })() : taskSession && taskSession.status !== 'exited' && (taskSession.status === 'suspended' || taskSession.status === 'queued' || isInitializing) && (
-          <div className="mt-2 pt-2 border-t border-edge" data-testid="initializing-bar">
-            <span className="text-xs text-fg-faint flex items-center gap-1">
-              {taskSession?.status === 'suspended' ? (
-                <>
-                  <CirclePause size={12} />
-                  Paused
-                </>
-              ) : (
-                <>
-                  <Loader2 size={12} className="animate-spin" />
-                  {session?.status === 'queued' ? 'Queued...' : 'Initializing...'}
-                </>
-              )}
-            </span>
-          </div>
-        )}
+        {/* Bottom bar — exhaustive switch on display state */}
+        {(() => {
+          switch (displayState.kind) {
+            case 'running': {
+              if (!displayState.usage) return null;
+              const pct = Math.round(displayState.usage.contextWindow.usedPercentage);
+              const progressColor = getProgressColor(pct);
+              return (
+                <div className="mt-2 pt-2 border-t border-edge" data-testid="usage-bar">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs text-fg-faint">
+                      {displayState.usage.model.displayName || 'Claude'}
+                    </span>
+                    <span className="text-xs text-fg-faint">{pct}%</span>
+                  </div>
+                  <div className="w-full h-1 bg-surface-hover rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: progressColor }}
+                    />
+                  </div>
+                </div>
+              );
+            }
+            case 'initializing':
+              return (
+                <div className="mt-2 pt-2 border-t border-edge" data-testid="initializing-bar">
+                  <span className="text-xs text-fg-faint flex items-center gap-1">
+                    <Loader2 size={12} className="animate-spin" />
+                    Initializing...
+                  </span>
+                </div>
+              );
+            case 'queued':
+              return (
+                <div className="mt-2 pt-2 border-t border-edge" data-testid="initializing-bar">
+                  <span className="text-xs text-fg-faint flex items-center gap-1">
+                    <Loader2 size={12} className="animate-spin" />
+                    Queued...
+                  </span>
+                </div>
+              );
+            case 'suspended':
+              return (
+                <div className="mt-2 pt-2 border-t border-edge" data-testid="initializing-bar">
+                  <span className="text-xs text-fg-faint flex items-center gap-1">
+                    <CirclePause size={12} />
+                    Paused
+                  </span>
+                </div>
+              );
+            case 'none':
+            case 'exited':
+            default:
+              return null;
+          }
+        })()}
       </div>
 
       {showDetail && (

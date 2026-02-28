@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC } from '../shared/ipc-channels';
-import type { ElectronAPI } from '../shared/types';
+import type { ElectronAPI, Project, SessionUsage, ActivityState, SessionEvent } from '../shared/types';
 
 const api: ElectronAPI = {
   projects: {
@@ -10,8 +10,8 @@ const api: ElectronAPI = {
     open: (id) => ipcRenderer.invoke(IPC.PROJECT_OPEN, id),
     getCurrent: () => ipcRenderer.invoke(IPC.PROJECT_GET_CURRENT),
     openByPath: (path: string) => ipcRenderer.invoke(IPC.PROJECT_OPEN_BY_PATH, path),
-    onAutoOpened: (callback: (project: any) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, project: any) => callback(project);
+    onAutoOpened: (callback) => {
+      const handler = (_event: Electron.IpcRendererEvent, project: Project) => callback(project);
       ipcRenderer.on(IPC.PROJECT_AUTO_OPENED, handler);
       return () => ipcRenderer.removeListener(IPC.PROJECT_AUTO_OPENED, handler);
     },
@@ -76,20 +76,20 @@ const api: ElectronAPI = {
       return () => ipcRenderer.removeListener(IPC.SESSION_EXIT, handler);
     },
     onUsage: (callback) => {
-      const handler = (_event: Electron.IpcRendererEvent, sessionId: string, data: any) => callback(sessionId, data);
+      const handler = (_event: Electron.IpcRendererEvent, sessionId: string, data: SessionUsage) => callback(sessionId, data);
       ipcRenderer.on(IPC.SESSION_USAGE, handler);
       return () => ipcRenderer.removeListener(IPC.SESSION_USAGE, handler);
     },
     getActivity: () => ipcRenderer.invoke(IPC.SESSION_GET_ACTIVITY),
     onActivity: (callback) => {
-      const handler = (_event: Electron.IpcRendererEvent, sessionId: string, state: string) => callback(sessionId, state as any);
+      const handler = (_event: Electron.IpcRendererEvent, sessionId: string, state: ActivityState) => callback(sessionId, state);
       ipcRenderer.on(IPC.SESSION_ACTIVITY, handler);
       return () => ipcRenderer.removeListener(IPC.SESSION_ACTIVITY, handler);
     },
     getEvents: (sessionId) => ipcRenderer.invoke(IPC.SESSION_GET_EVENTS, sessionId),
     getEventsCache: () => ipcRenderer.invoke(IPC.SESSION_GET_EVENTS_CACHE),
     onEvent: (callback) => {
-      const handler = (_event: Electron.IpcRendererEvent, sessionId: string, event: any) => callback(sessionId, event);
+      const handler = (_event: Electron.IpcRendererEvent, sessionId: string, event: SessionEvent) => callback(sessionId, event);
       ipcRenderer.on(IPC.SESSION_EVENT, handler);
       return () => ipcRenderer.removeListener(IPC.SESSION_EVENT, handler);
     },

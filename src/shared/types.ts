@@ -104,7 +104,7 @@ export interface SwimlaneTransition {
 
 // === Session Management ===
 
-export type SessionStatus = 'running' | 'queued' | 'idle' | 'exited' | 'suspended' | 'error';
+export type SessionStatus = 'running' | 'queued' | 'exited' | 'suspended';
 
 export interface Session {
   id: string;
@@ -168,6 +168,16 @@ export interface SessionUsage {
     displayName: string;
   };
 }
+
+// === Session Display State (discriminated union for UI) ===
+
+export type SessionDisplayState =
+  | { kind: 'none' }
+  | { kind: 'initializing' }
+  | { kind: 'queued' }
+  | { kind: 'running'; activity: ActivityState; usage: SessionUsage | null }
+  | { kind: 'suspended' }
+  | { kind: 'exited'; exitCode: number };
 
 // === Configuration ===
 

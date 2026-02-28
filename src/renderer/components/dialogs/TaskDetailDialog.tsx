@@ -9,6 +9,7 @@ import { BaseDialog } from './BaseDialog';
 import { ConfirmDialog } from './ConfirmDialog';
 import { useToastStore } from '../../stores/toast-store';
 import { useConfigStore } from '../../stores/config-store';
+import { useSessionDisplayState } from '../../utils/session-display-state';
 import type { Task, TaskAttachment } from '../../../shared/types';
 
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -220,21 +221,19 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
 
   const setDialogSessionId = useSessionStore((s) => s.setDialogSessionId);
   const loadBoard = useBoardStore((s) => s.loadBoard);
-  const sessionActivity = useSessionStore((s) => s.sessionActivity);
   const session = task.session_id ? sessions.find((s) => s.id === task.session_id) : null;
-  const activity = task.session_id ? sessionActivity[task.session_id] : undefined;
-  const isThinking = session?.status === 'running' && activity !== 'idle';
 
-  const sessionUsage = useSessionStore((s) => s.sessionUsage);
-
-  // For toggle: find session by taskId (includes suspended sessions)
-  const taskSession = sessions.find((s) => s.taskId === task.id);
-  const canToggle = taskSession && (taskSession.status === 'running' || taskSession.status === 'queued' || taskSession.status === 'suspended');
-  const isSessionActive = taskSession?.status === 'running' || taskSession?.status === 'queued';
-  const isSuspended = taskSession?.status === 'suspended';
+  // Centralized display state derivation
+  const displayState = useSessionDisplayState(task);
+  const isThinking = displayState.kind === 'running' && displayState.activity !== 'idle';
+  const canToggle = displayState.kind === 'running' || displayState.kind === 'queued'
+    || displayState.kind === 'initializing' || displayState.kind === 'suspended';
+  const isSessionActive = displayState.kind === 'running' || displayState.kind === 'queued'
+    || displayState.kind === 'initializing';
+  const isSuspended = displayState.kind === 'suspended';
 
   // Use large dialog when there's an active session OR a suspended one
-  const hasSessionContext = !!session || !!isSuspended || toggling;
+  const hasSessionContext = (displayState.kind !== 'none' && displayState.kind !== 'exited') || toggling;
 
   // Auto-expand textarea for no-session edit mode
   useEffect(() => {
@@ -244,9 +243,6 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 800)}px`;
   }, [description, isEditing, hasSessionContext]);
-
-  // Usage data for the suspended placeholder (may come from the old session id)
-  const taskUsage = taskSession ? sessionUsage[taskSession.id] : undefined;
 
   const handleToggle = async () => {
     if (!canToggle || toggling) return;

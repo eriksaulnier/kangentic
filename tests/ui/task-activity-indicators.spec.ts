@@ -162,9 +162,10 @@ test.describe('Task Activity Indicators', () => {
       // Loader2 spinner should NOT be present
       await expect(titleRow.locator('.lucide-loader-circle')).not.toBeVisible();
 
-      // Usage bar should be shown instead of initializing bar
-      await expect(page.locator('[data-testid="usage-bar"]')).toBeVisible();
-      await expect(page.locator('[data-testid="initializing-bar"]')).not.toBeVisible();
+      // Usage bar should be shown on the card instead of initializing bar
+      const cardEl = page.locator(`[data-task-id="${TASK_ID}"]`);
+      await expect(cardEl.locator('[data-testid="usage-bar"]')).toBeVisible();
+      await expect(cardEl.locator('[data-testid="initializing-bar"]')).not.toBeVisible();
     } finally {
       await browser.close();
     }
@@ -353,6 +354,76 @@ test.describe('Task Activity Indicators', () => {
       const titleRow = card.locator('..');
       await expect(titleRow.locator('.lucide-mail')).not.toBeVisible();
       await expect(titleRow.locator('.lucide-loader-circle')).not.toBeVisible();
+    } finally {
+      await browser.close();
+    }
+  });
+
+  test('queued task shows "Queued..." bottom bar with spinner', async () => {
+    const { browser, page } = await launchWithState(
+      makePreConfig({ sessionStatus: 'queued', activity: 'idle', withUsage: false })
+    );
+
+    try {
+      await page.locator('[data-swimlane-name="Backlog"]').waitFor({ state: 'visible', timeout: 15000 });
+      const card = page.locator(`[data-task-id="${TASK_ID}"]`);
+      await expect(card).toBeVisible();
+
+      // Queued card should show spinner + "Queued..." text in bottom bar
+      const bottomBar = card.locator('[data-testid="initializing-bar"]');
+      await expect(bottomBar).toBeVisible();
+      await expect(bottomBar).toContainText('Queued...');
+      await expect(bottomBar.locator('.lucide-loader-circle')).toBeVisible();
+
+      // No title-row activity icons
+      const titleRow = card.locator('text=Test Initializing Task').first().locator('..');
+      await expect(titleRow.locator('.lucide-mail')).not.toBeVisible();
+    } finally {
+      await browser.close();
+    }
+  });
+
+  test('suspended task shows "Paused" bottom bar with pause icon', async () => {
+    const { browser, page } = await launchWithState(
+      makePreConfig({ sessionStatus: 'suspended', activity: 'idle', withUsage: false })
+    );
+
+    try {
+      await page.locator('[data-swimlane-name="Backlog"]').waitFor({ state: 'visible', timeout: 15000 });
+      const card = page.locator(`[data-task-id="${TASK_ID}"]`);
+      await expect(card).toBeVisible();
+
+      // Suspended card should show "Paused" text with CirclePause icon
+      const bottomBar = card.locator('[data-testid="initializing-bar"]');
+      await expect(bottomBar).toBeVisible();
+      await expect(bottomBar).toContainText('Paused');
+      await expect(bottomBar.locator('.lucide-circle-pause')).toBeVisible();
+
+      // No spinner in bottom bar
+      await expect(bottomBar.locator('.lucide-loader-circle')).not.toBeVisible();
+    } finally {
+      await browser.close();
+    }
+  });
+
+  test('suspended task dialog shows wide layout with Resume button', async () => {
+    const { browser, page } = await launchWithState(
+      makePreConfig({ sessionStatus: 'suspended', activity: 'idle', withUsage: false })
+    );
+
+    try {
+      await page.locator('[data-swimlane-name="Backlog"]').waitFor({ state: 'visible', timeout: 15000 });
+
+      // Click the card to open the detail dialog
+      await page.locator('text=Test Initializing Task').first().click();
+
+      // "Resume session" button should be present in the suspended placeholder
+      const resumeBtn = page.locator('text=Resume session');
+      await expect(resumeBtn).toBeVisible({ timeout: 5000 });
+
+      // Dialog container should be in wide mode (w-[90vw]) for suspended sessions
+      const dialogPanel = page.locator('.w-\\[90vw\\]');
+      await expect(dialogPanel).toBeVisible();
     } finally {
       await browser.close();
     }

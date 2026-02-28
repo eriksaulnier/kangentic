@@ -4,6 +4,7 @@ import { useSessionStore } from '../../stores/session-store';
 import { useBoardStore } from '../../stores/board-store';
 import { TerminalTab } from './TerminalTab';
 import { ActivityLog } from './ActivityLog';
+import { ContextBar } from './ContextBar';
 import { slugify } from '../../utils/slugify';
 
 const ACTIVITY_TAB = '__all__';
@@ -175,6 +176,11 @@ export function TerminalPanel({ collapsed = false, showContent = true, onToggleC
               );
             })}
           </div>
+
+          {/* Context bar for individual session tabs (hidden when dialog owns the session) */}
+          {effectiveActiveId && effectiveActiveId !== ACTIVITY_TAB && effectiveActiveId !== dialogSessionId && (
+            <ContextBar sessionId={effectiveActiveId} compact />
+          )}
         </>
       )}
     </div>
