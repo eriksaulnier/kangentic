@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { useSessionStore } from '../../stores/session-store';
 import type { SessionEvent } from '../../../shared/types';
@@ -27,6 +28,14 @@ export function ActivityLog({ active, sessionIds, taskLabelMap }: ActivityLogPro
   const autoScrollRef = useRef(true);
   const colorMapRef = useRef(new Map<string, number>());
   const colorIndexRef = useRef(0);
+  const [filterSessionId, setFilterSessionId] = useState<string | null>(null);
+
+  // Auto-clear filter when the filtered session exits
+  useEffect(() => {
+    if (filterSessionId && !sessionIds.includes(filterSessionId)) {
+      setFilterSessionId(null);
+    }
+  }, [filterSessionId, sessionIds]);
 
   // Stable color assignment per session
   const getColorIndex = (sessionId: string): number => {
@@ -37,9 +46,12 @@ export function ActivityLog({ active, sessionIds, taskLabelMap }: ActivityLogPro
     return colorMapRef.current.get(sessionId)!;
   };
 
-  // Merge events from all active sessions, sorted by timestamp
+  // Filter to selected session or show all
+  const effectiveSessionIds = filterSessionId ? [filterSessionId] : sessionIds;
+
+  // Merge events from active sessions, sorted by timestamp
   const allEvents: Array<{ sessionId: string; event: SessionEvent }> = [];
-  for (const sid of sessionIds) {
+  for (const sid of effectiveSessionIds) {
     const events = sessionEvents[sid] || [];
     for (const event of events) {
       allEvents.push({ sessionId: sid, event });
@@ -65,10 +77,27 @@ export function ActivityLog({ active, sessionIds, taskLabelMap }: ActivityLogPro
     }
   }, [displayEvents.length]);
 
+  const showFilter = sessionIds.length >= 2;
+  const filteredLabel = filterSessionId
+    ? taskLabelMap.get(filterSessionId) || filterSessionId.slice(0, 8)
+    : null;
+
   if (displayEvents.length === 0) {
     return (
-      <div className="h-full w-full bg-surface flex items-center justify-center text-fg-disabled text-sm font-mono">
-        Waiting for agent activity...
+      <div className="h-full w-full bg-surface flex flex-col font-mono">
+        {showFilter && (
+          <FilterPill
+            sessionIds={sessionIds}
+            taskLabelMap={taskLabelMap}
+            filterSessionId={filterSessionId}
+            onFilter={setFilterSessionId}
+          />
+        )}
+        <div className="flex-1 flex items-center justify-center text-fg-disabled text-sm">
+          {filteredLabel
+            ? `No activity yet for ${filteredLabel}...`
+            : 'Waiting for agent activity...'}
+        </div>
       </div>
     );
   }
@@ -77,8 +106,17 @@ export function ActivityLog({ active, sessionIds, taskLabelMap }: ActivityLogPro
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="h-full w-full bg-surface overflow-y-auto font-mono text-xs leading-5 p-2"
+      className={`h-full w-full bg-surface overflow-y-auto font-mono text-xs leading-5 px-2 pb-2 ${showFilter ? 'pt-0' : 'pt-2'}`}
     >
+      {showFilter && (
+        <FilterPill
+          sessionIds={sessionIds}
+          taskLabelMap={taskLabelMap}
+          filterSessionId={filterSessionId}
+          onFilter={setFilterSessionId}
+          getColorIndex={getColorIndex}
+        />
+      )}
       {displayEvents.map((item, i) => (
         <EventLine
           key={`${item.sessionId}-${item.event.ts}-${i}`}
@@ -86,9 +124,49 @@ export function ActivityLog({ active, sessionIds, taskLabelMap }: ActivityLogPro
           event={item.event}
           label={taskLabelMap.get(item.sessionId) || item.sessionId.slice(0, 8)}
           colorClass={BADGE_COLORS[getColorIndex(item.sessionId)]}
-          showLabel={sessionIds.length > 1}
+          showLabel={!filterSessionId && sessionIds.length > 1}
         />
       ))}
+    </div>
+  );
+}
+
+/* ── Filter Pill ── */
+
+interface FilterPillProps {
+  sessionIds: string[];
+  taskLabelMap: Map<string, string>;
+  filterSessionId: string | null;
+  onFilter: (id: string | null) => void;
+}
+
+function FilterPill({
+  sessionIds,
+  taskLabelMap,
+  filterSessionId,
+  onFilter,
+}: FilterPillProps) {
+  return (
+    <div className="sticky top-0 z-10 bg-surface pt-2 pb-1.5 mb-1 border-b border-edge">
+      <div className="relative inline-block">
+        <select
+          data-testid="activity-filter"
+          value={filterSessionId ?? ''}
+          onChange={(e) => onFilter(e.target.value || null)}
+          className="appearance-none bg-surface-raised text-fg-muted pl-2.5 pr-7 py-0.5 text-xs font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
+        >
+          <option value="">All Tasks</option>
+          {sessionIds.map((sid) => (
+            <option key={sid} value={sid}>
+              {taskLabelMap.get(sid) || sid.slice(0, 8)}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          size={12}
+          className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-fg-muted"
+        />
+      </div>
     </div>
   );
 }
