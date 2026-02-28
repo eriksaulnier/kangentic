@@ -412,7 +412,7 @@ test.describe('Task Card Spinner', () => {
     await page.waitForTimeout(300);
 
     // The initializing bar should still show a spinner (always spins while initializing)
-    const initBar = page.locator('[data-swimlane-name="Planning"]').locator('[data-testid="initializing-bar"]');
+    const initBar = page.locator('[data-swimlane-name="Planning"]').locator('[data-testid="status-bar"]');
     await expect(initBar).toBeVisible({ timeout: 3000 });
 
     const spinner = initBar.locator('.animate-spin');

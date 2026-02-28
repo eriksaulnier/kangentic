@@ -28,6 +28,7 @@ interface BaseDialogProps {
   className?: string;
   zIndex?: string;
   backdropClassName?: string;
+  testId?: string;
 }
 
 export function BaseDialog({
@@ -43,6 +44,7 @@ export function BaseDialog({
   className = 'w-[400px]',
   zIndex = 'z-50',
   backdropClassName,
+  testId,
 }: BaseDialogProps) {
   const [phase, setPhase] = useState<Phase>('entering');
 
@@ -92,6 +94,7 @@ export function BaseDialog({
         onMouseDown={(e) => e.stopPropagation()}
         style={{ animation: contentAnimation }}
         className={`bg-surface-raised border border-edge rounded-lg shadow-2xl flex flex-col overflow-visible ${className}`}
+        {...(testId ? { 'data-testid': testId } : {})}
       >
         {/* Standard header */}
         {title && !header && (

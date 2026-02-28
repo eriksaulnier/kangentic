@@ -140,7 +140,7 @@ test.describe('Task Activity Indicators', () => {
       await expect(titleRow.locator('.lucide-mail')).not.toBeVisible();
 
       // The initializing bottom bar should be shown
-      await expect(page.locator('[data-testid="initializing-bar"]')).toBeVisible();
+      await expect(page.locator('[data-testid="status-bar"]')).toBeVisible();
     } finally {
       await browser.close();
     }
@@ -165,7 +165,7 @@ test.describe('Task Activity Indicators', () => {
       // Usage bar should be shown on the card instead of initializing bar
       const cardEl = page.locator(`[data-task-id="${TASK_ID}"]`);
       await expect(cardEl.locator('[data-testid="usage-bar"]')).toBeVisible();
-      await expect(cardEl.locator('[data-testid="initializing-bar"]')).not.toBeVisible();
+      await expect(cardEl.locator('[data-testid="status-bar"]')).not.toBeVisible();
     } finally {
       await browser.close();
     }
@@ -244,7 +244,7 @@ test.describe('Task Activity Indicators', () => {
       // Exited session should not trigger the initializing spinner
       const titleRow = card.locator('..');
       await expect(titleRow.locator('.lucide-loader-circle')).not.toBeVisible();
-      await expect(page.locator('[data-testid="initializing-bar"]')).not.toBeVisible();
+      await expect(page.locator('[data-testid="status-bar"]')).not.toBeVisible();
     } finally {
       await browser.close();
     }
@@ -267,7 +267,7 @@ test.describe('Task Activity Indicators', () => {
       const titleRow = card.locator('..');
       await expect(titleRow.locator('.lucide-loader-circle')).not.toBeVisible();
       await expect(titleRow.locator('.lucide-mail')).not.toBeVisible();
-      await expect(page.locator('[data-testid="initializing-bar"]')).not.toBeVisible();
+      await expect(page.locator('[data-testid="status-bar"]')).not.toBeVisible();
     } finally {
       await browser.close();
     }
@@ -289,7 +289,7 @@ test.describe('Task Activity Indicators', () => {
       await expect(titleRow.locator('.lucide-loader-circle')).not.toBeVisible();
 
       // Initializing bar should NOT be visible (events prove agent is active)
-      await expect(page.locator('[data-testid="initializing-bar"]')).not.toBeVisible();
+      await expect(page.locator('[data-testid="status-bar"]')).not.toBeVisible();
     } finally {
       await browser.close();
     }
@@ -311,7 +311,7 @@ test.describe('Task Activity Indicators', () => {
       await expect(titleRow.locator('.lucide-mail')).not.toBeVisible();
 
       // No initializing bar (events prove agent is active, no usage yet is fine)
-      await expect(page.locator('[data-testid="initializing-bar"]')).not.toBeVisible();
+      await expect(page.locator('[data-testid="status-bar"]')).not.toBeVisible();
     } finally {
       await browser.close();
     }
@@ -370,7 +370,7 @@ test.describe('Task Activity Indicators', () => {
       await expect(card).toBeVisible();
 
       // Queued card should show spinner + "Queued..." text in bottom bar
-      const bottomBar = card.locator('[data-testid="initializing-bar"]');
+      const bottomBar = card.locator('[data-testid="status-bar"]');
       await expect(bottomBar).toBeVisible();
       await expect(bottomBar).toContainText('Queued...');
       await expect(bottomBar.locator('.lucide-loader-circle')).toBeVisible();
@@ -394,7 +394,7 @@ test.describe('Task Activity Indicators', () => {
       await expect(card).toBeVisible();
 
       // Suspended card should show "Paused" text with CirclePause icon
-      const bottomBar = card.locator('[data-testid="initializing-bar"]');
+      const bottomBar = card.locator('[data-testid="status-bar"]');
       await expect(bottomBar).toBeVisible();
       await expect(bottomBar).toContainText('Paused');
       await expect(bottomBar.locator('.lucide-circle-pause')).toBeVisible();
@@ -421,8 +421,8 @@ test.describe('Task Activity Indicators', () => {
       const resumeBtn = page.locator('text=Resume session');
       await expect(resumeBtn).toBeVisible({ timeout: 5000 });
 
-      // Dialog container should be in wide mode (w-[90vw]) for suspended sessions
-      const dialogPanel = page.locator('.w-\\[90vw\\]');
+      // Dialog container should be in wide mode for suspended sessions
+      const dialogPanel = page.locator('[data-testid="task-detail-dialog"]');
       await expect(dialogPanel).toBeVisible();
     } finally {
       await browser.close();

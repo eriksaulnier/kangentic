@@ -597,6 +597,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
         rawBody
         className={hasSessionContext ? 'w-[90vw] h-[85vh]' : 'w-[640px] max-h-[80vh]'}
         backdropClassName="p-6"
+        testId="task-detail-dialog"
       >
         {/* Description edit mode with drag/drop support */}
         {isEditing && (

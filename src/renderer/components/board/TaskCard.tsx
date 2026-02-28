@@ -161,7 +161,7 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
             }
             case 'initializing':
               return (
-                <div className="mt-2 pt-2 border-t border-edge" data-testid="initializing-bar">
+                <div className="mt-2 pt-2 border-t border-edge" data-testid="status-bar">
                   <span className="text-xs text-fg-faint flex items-center gap-1">
                     <Loader2 size={12} className="animate-spin" />
                     Initializing...
@@ -170,7 +170,7 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
               );
             case 'queued':
               return (
-                <div className="mt-2 pt-2 border-t border-edge" data-testid="initializing-bar">
+                <div className="mt-2 pt-2 border-t border-edge" data-testid="status-bar">
                   <span className="text-xs text-fg-faint flex items-center gap-1">
                     <Loader2 size={12} className="animate-spin" />
                     Queued...
@@ -179,7 +179,7 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
               );
             case 'suspended':
               return (
-                <div className="mt-2 pt-2 border-t border-edge" data-testid="initializing-bar">
+                <div className="mt-2 pt-2 border-t border-edge" data-testid="status-bar">
                   <span className="text-xs text-fg-faint flex items-center gap-1">
                     <CirclePause size={12} />
                     Paused
