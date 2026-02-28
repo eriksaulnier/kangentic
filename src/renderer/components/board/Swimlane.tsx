@@ -13,12 +13,14 @@ export interface SwimlaneProps {
   tasks: Task[];
   /** Event listeners for the drag handle (only for sortable/custom columns) */
   dragHandleProps?: Record<string, any>;
+  /** Whether this column is the current drop target during a drag */
+  isDropTarget?: boolean;
 }
 
-export function Swimlane({ swimlane, tasks, dragHandleProps }: SwimlaneProps) {
+export function Swimlane({ swimlane, tasks, dragHandleProps, isDropTarget }: SwimlaneProps) {
   const [showNewTask, setShowNewTask] = useState(false);
   const [showEditColumn, setShowEditColumn] = useState(false);
-  const { setNodeRef, isOver } = useDroppable({
+  const { setNodeRef } = useDroppable({
     id: swimlane.id,
     data: { type: 'swimlane' },
   });
@@ -34,8 +36,8 @@ export function Swimlane({ swimlane, tasks, dragHandleProps }: SwimlaneProps) {
       data-testid="swimlane"
       data-swimlane-name={swimlane.name}
       className={`flex-shrink-0 w-72 h-full flex flex-col rounded-lg ${
-        isSystemColumn ? 'bg-surface-raised/70 ring-1 ring-edge/50' : 'bg-surface-raised/50'
-      }`}
+        isDropTarget ? 'ring-2 ring-accent/40' : isSystemColumn ? 'ring-1 ring-edge/50' : ''
+      } ${isSystemColumn ? 'bg-surface-raised/70' : 'bg-surface-raised/50'}`}
     >
       {/* Accent bar for system columns */}
       {isSystemColumn && (
@@ -90,7 +92,7 @@ export function Swimlane({ swimlane, tasks, dragHandleProps }: SwimlaneProps) {
       <div
         ref={setNodeRef}
         className={`flex-1 overflow-y-auto p-2 space-y-2 min-h-[100px] transition-colors ${
-          isOver ? 'bg-surface-hover/30' : ''
+          isDropTarget ? 'bg-surface-hover/30' : ''
         }`}
       >
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>

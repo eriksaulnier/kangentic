@@ -1,10 +1,11 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
   closestCenter,
   closestCorners,
   pointerWithin,
+  rectIntersection,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -32,7 +33,7 @@ import { useToastStore } from '../../stores/toast-store';
 /** Wrapper that registers a column with @dnd-kit/sortable.
  *  All columns participate so dnd-kit knows their positions,
  *  but only custom columns (role === null) get a drag handle. */
-const SortableSwimlane = React.memo(function SortableSwimlane({ swimlane, tasks }: SwimlaneProps) {
+const SortableSwimlane = React.memo(function SortableSwimlane({ swimlane, tasks, isDropTarget }: SwimlaneProps) {
   const {
     attributes,
     listeners,
@@ -72,6 +73,7 @@ const SortableSwimlane = React.memo(function SortableSwimlane({ swimlane, tasks 
         swimlane={swimlane}
         tasks={tasks}
         dragHandleProps={isDraggable ? listeners : undefined}
+        isDropTarget={isDropTarget}
       />
     </div>
   );
@@ -143,6 +145,7 @@ export function KanbanBoard() {
   const reorderSwimlanes = useBoardStore((s) => s.reorderSwimlanes);
   const reorderTaskInColumn = useBoardStore((s) => s.reorderTaskInColumn);
   const [activeTask, setActiveTask] = React.useState<Task | null>(null);
+  const [hoveringSwimlaneId, setHoveringSwimlaneId] = useState<string | null>(null);
 
   // Track the original swimlane when drag starts (for proper transitions)
   const dragOriginRef = useRef<string | null>(null);
@@ -194,7 +197,7 @@ export function KanbanBoard() {
   }, [swimlaneIds]);
 
   const collisionDetection = useCallback<CollisionDetection>((args) => {
-    // Column drags: closestCorners
+    // Column drags: closestCorners (unchanged)
     if (String(args.active.id).startsWith('column:')) {
       return closestCorners(args);
     }
@@ -212,21 +215,51 @@ export function KanbanBoard() {
       if (doneCollisions.length > 0) return doneCollisions;
     }
 
-    // closestCenter for responsive 50% column switching.
-    // Exclude the current column's swimlane container so its large rect
-    // can't outcompete nearby task cards during within-column reordering.
-    // Other columns' swimlanes remain for cross-column detection.
+    // Two-tier collision detection for task drags:
+    // Tier 1: rectIntersection on column sortable containers (full visual column rects)
+    // Tier 2: closestCenter scoped to the detected column (precise insertion positioning)
     const activeColumn = findSwimlane(String(args.active.id));
-    return closestCenter({
-      ...args,
-      droppableContainers: args.droppableContainers.filter((c) => {
+    const swimlaneContainers = args.droppableContainers.filter((c) => {
+      const cId = String(c.id);
+      return !cId.startsWith('column:') && swimlaneIds.has(cId);
+    });
+
+    // Tier 1: which column does the card overlap?
+    // Uses column: sortable containers (full visual column rects) rather than
+    // swimlane droppables (inner task-list area only) for earlier activation.
+    const columnContainers = args.droppableContainers.filter((c) => {
+      const cId = String(c.id);
+      if (!cId.startsWith('column:')) return false;
+      const laneId = cId.slice(7);
+      return swimlaneIds.has(laneId) && laneId !== doneLaneId;
+    });
+    const columnHits = rectIntersection({ ...args, droppableContainers: columnContainers });
+
+    if (columnHits.length > 0) {
+      const targetId = String(columnHits[0].id).slice(7);
+      const isSameColumn = targetId === activeColumn;
+
+      // Tier 2: closestCenter among tasks in that column.
+      // Include the swimlane container only for cross-column drags (empty-column target).
+      // Exclude it for same-column drags so the container's large rect can't
+      // outcompete task cards during within-column reordering.
+      const inColumn = args.droppableContainers.filter((c) => {
         const cId = String(c.id);
         if (cId.startsWith('column:')) return false;
-        if (cId === activeColumn) return false;
-        return true;
-      }),
+        if (swimlaneIds.has(cId)) return !isSameColumn && cId === targetId;
+        return findSwimlane(cId) === targetId;
+      });
+      return closestCenter({ ...args, droppableContainers: inColumn });
+    }
+
+    // Fallback: pointer in gap between columns — closestCenter against other swimlanes
+    return closestCenter({
+      ...args,
+      droppableContainers: swimlaneContainers.filter(
+        (c) => String(c.id) !== activeColumn,
+      ),
     });
-  }, [findSwimlane, doneLaneId]);
+  }, [findSwimlane, doneLaneId, swimlaneIds]);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const id = event.active.id as string;
@@ -241,16 +274,21 @@ export function KanbanBoard() {
     }
   }, []);
 
-  // No visual cross-container transfer during drag — the DragOverlay provides
-  // the floating card feedback. Mutating tasks mid-drag caused rect shifts that
-  // made closestCenter oscillate at column boundaries.
-  const handleDragOver = useCallback((_event: DragOverEvent) => {}, []);
+  // Track which swimlane the pointer is hovering over for column highlights.
+  // Done is excluded — it has its own drop-zone animation (green spinning border)
+  // via useDroppable's isOver, so the generic blue ring would conflict.
+  const handleDragOver = useCallback((event: DragOverEvent) => {
+    if (!event.over) { setHoveringSwimlaneId(null); return; }
+    const targetLane = findSwimlane(String(event.over.id)) ?? null;
+    setHoveringSwimlaneId(targetLane === doneLaneId ? null : targetLane);
+  }, [findSwimlane, doneLaneId]);
 
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
     const originalSwimlane = dragOriginRef.current;
     dragOriginRef.current = null;
     setActiveTask(null);
+    setHoveringSwimlaneId(null);
 
     if (!over) {
       // Cancelled — reload from DB to restore original positions
@@ -389,6 +427,7 @@ export function KanbanBoard() {
 
   const handleDragCancel = useCallback(() => {
     setActiveTask(null);
+    setHoveringSwimlaneId(null);
     dragOriginRef.current = null;
     useBoardStore.getState().loadBoard();
   }, []);
@@ -410,6 +449,7 @@ export function KanbanBoard() {
                 key={swimlane.id}
                 swimlane={swimlane}
                 tasks={tasksPerLane.get(swimlane.id) ?? []}
+                isDropTarget={hoveringSwimlaneId === swimlane.id}
               />
             ))}
             <AddColumnButton />

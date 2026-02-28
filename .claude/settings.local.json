@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:deepwiki.com)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "context7"
+  ]
+}

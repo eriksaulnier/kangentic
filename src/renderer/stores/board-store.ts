@@ -53,6 +53,11 @@ interface BoardStore {
   reorderSwimlanes: (ids: string[]) => Promise<void>;
 }
 
+/** Generation counter for stale reload protection.
+ *  Each moveTask/reorderTaskInColumn increments before async work.
+ *  After IPC completes, the reload is only applied if no newer move has started. */
+let moveGeneration = 0;
+
 export const useBoardStore = create<BoardStore>((set, get) => ({
   tasks: [],
   swimlanes: [],
@@ -99,6 +104,8 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   },
 
   moveTask: async (input) => {
+    const thisGen = ++moveGeneration;
+
     // Capture the task's current session before the move
     const prevTask = get().tasks.find((t) => t.id === input.taskId);
     const prevSessionId = prevTask?.session_id ?? null;
@@ -119,12 +126,16 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
 
     try {
       await window.electronAPI.tasks.move(input);
+      if (moveGeneration !== thisGen) return; // Skip stale reload
+
       // Reload tasks, archived tasks, and sessions (transition engine may have spawned/killed sessions)
       const [tasks, archivedTasks, sessions] = await Promise.all([
         window.electronAPI.tasks.list(),
         window.electronAPI.tasks.listArchived(),
         window.electronAPI.sessions.list(),
       ]);
+      if (moveGeneration !== thisGen) return; // Skip stale reload
+
       set({ tasks, archivedTasks });
       useSessionStore.setState({ sessions });
 
@@ -141,6 +152,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
         });
       }
     } catch (err) {
+      if (moveGeneration !== thisGen) return; // Don't clobber newer state on error
       await get().loadBoard();
       useToastStore.getState().addToast({
         message: `Failed to move task: ${err instanceof Error ? err.message : 'Unknown error'}`,
@@ -276,6 +288,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
 
   reorderTaskInColumn: async (taskId, swimlaneId, activeId, overId) => {
     if (activeId === overId) return;
+    const thisGen = ++moveGeneration;
 
     // Compute indices from IDs
     const laneTasks = get().tasks
@@ -309,11 +322,14 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
         targetSwimlaneId: swimlaneId,
         targetPosition: newIndex,
       });
+      if (moveGeneration !== thisGen) return; // Skip stale reload
 
       // Lightweight reload — only tasks (no session changes for same-column reorder)
       const tasks = await window.electronAPI.tasks.list();
+      if (moveGeneration !== thisGen) return; // Skip stale reload
       set({ tasks });
     } catch (err) {
+      if (moveGeneration !== thisGen) return; // Don't clobber newer state on error
       await get().loadBoard();
       useToastStore.getState().addToast({
         message: `Failed to reorder task: ${err instanceof Error ? err.message : 'Unknown error'}`,
