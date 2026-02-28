@@ -65,7 +65,7 @@ export function Swimlane({ swimlane, tasks, dragHandleProps }: SwimlaneProps) {
         {(() => {
           const Icon = getSwimlaneIcon(swimlane);
           return Icon ? (
-            <span style={{ color: swimlane.color }}><Icon size={14} strokeWidth={1.75} /></span>
+            <span style={{ color: swimlane.color }}><Icon size={16} strokeWidth={1.75} /></span>
           ) : (
             <div
               className="w-2.5 h-2.5 rounded-full flex-shrink-0"
