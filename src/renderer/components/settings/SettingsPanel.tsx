@@ -182,8 +182,9 @@ export function SettingsPanel() {
                     value={config.claude.permissionMode}
                     onChange={(e) => updateConfig({ claude: { ...config.claude, permissionMode: e.target.value as PermissionMode } })}
                   >
-                    <option value="project-settings">Allowlist (default)</option>
-                    <option value="dangerously-skip">Bypass Permissions</option>
+                    <option value="default">Default (Allowlist)</option>
+                    <option value="acceptEdits">Accept Edits</option>
+                    <option value="bypass-permissions">Bypass (Unsafe)</option>
                   </Select>
                 </SettingRow>
                 <SettingRow label="Max Concurrent Sessions" description="Limit how many agents can run at the same time">

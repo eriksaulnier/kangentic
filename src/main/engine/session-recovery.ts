@@ -10,7 +10,7 @@ import { SessionManager } from '../pty/session-manager';
 import { ClaudeDetector } from '../agent/claude-detector';
 import { CommandBuilder } from '../agent/command-builder';
 import { ConfigManager } from '../config/config-manager';
-import type { SessionRecord, ActionConfig, Task } from '../../shared/types';
+import type { SessionRecord, ActionConfig, Task, PermissionMode } from '../../shared/types';
 import { ensureWorktreeTrust } from '../agent/trust-manager';
 
 // ---------------------------------------------------------------------------
@@ -139,11 +139,11 @@ export async function recoverSessions(
     );
   }
 
-  // 4. Determine which columns should NOT have active agents (backlog + done)
+  // 4. Determine which columns should NOT have active agents (auto_spawn=false)
   const swimlaneRepo = new SwimlaneRepository(db);
   const excludedLaneIds = new Set(
     swimlaneRepo.list()
-      .filter(l => l.role === 'backlog' || l.role === 'done')
+      .filter(l => !l.auto_spawn)
       .map(l => l.id),
   );
 
@@ -184,7 +184,7 @@ export async function recoverSessions(
   if (toProcess.length === 0) {
     if (skipped > 0) {
       console.log(
-        `Session recovery: skipped ${skipped} of ${toRecover.length} task(s) — all in Backlog/Done or deleted`,
+        `Session recovery: skipped ${skipped} of ${toRecover.length} task(s) — all in non-auto-spawn columns or deleted`,
       );
     }
     return;
@@ -229,9 +229,10 @@ export async function recoverSessions(
         ensureWorktreeTrust(record.cwd);
       }
 
-      // Always use the CURRENT config permission mode, not the stale value
-      // from the old session record (which may be outdated after settings change).
-      const permissionMode = config.claude.permissionMode;
+      // Resolution order: lane override → global config.
+      // Use the task's current swimlane to resolve permission mode.
+      const taskLane = swimlaneRepo.getById(task.swimlane_id);
+      const permissionMode = taskLane?.permission_strategy ?? config.claude.permissionMode;
 
       // Decide whether to resume or start fresh.
       // Both SUSPENDED (clean shutdown) and ORPHANED (crash) sessions can
@@ -299,7 +300,7 @@ export async function recoverSessions(
         taskId: task.id,
         prompt,
         cwd: record.cwd,
-        permissionMode: permissionMode as any,
+        permissionMode: permissionMode as PermissionMode,
         projectRoot: projectPath,
         sessionId: claudeSessionId,
         resume: canResume,
@@ -369,14 +370,12 @@ export async function recoverSessions(
 // ---------------------------------------------------------------------------
 
 /**
- * Reconcile sessions on project open: find tasks in any non-Backlog/non-Done
- * column that don't have a running PTY session, and spawn one.
+ * Reconcile sessions on project open: find tasks in auto_spawn columns
+ * that don't have a running PTY session, and spawn one.
  *
  * This handles the case where a task is in an active column but has no
  * session (e.g., session exited, app closed without suspend, or the task
  * was placed there manually).
- *
- * All columns except those with role 'backlog' or 'done' are considered.
  */
 export async function reconcileSessions(
   projectId: string,
@@ -392,10 +391,10 @@ export async function reconcileSessions(
   const sessionRepo = new SessionRepository(db);
   const config = configManager.getEffectiveConfig(projectPath);
 
-  // Determine which columns should have active agents (all except backlog/done)
+  // Determine which columns should have active agents (auto_spawn=true)
   const swimlaneRepo = new SwimlaneRepository(db);
   const allLanes = swimlaneRepo.list();
-  const activeLanes = allLanes.filter(l => l.role !== 'backlog' && l.role !== 'done');
+  const activeLanes = allLanes.filter(l => l.auto_spawn);
   if (activeLanes.length === 0) return;
 
   // Build set of task IDs that already have a running PTY session
@@ -438,8 +437,9 @@ export async function reconcileSessions(
           }
         }
 
+        // Resolution order: lane override → action config → global setting
         const permissionMode =
-          actionConfig?.permissionMode || config.claude.permissionMode;
+          lane.permission_strategy ?? actionConfig?.permissionMode ?? config.claude.permissionMode;
         let cwd = task.worktree_path || projectPath;
 
         // Guard: CWD must still exist — fall back to projectPath if worktree was deleted
@@ -497,7 +497,7 @@ export async function reconcileSessions(
           taskId: task.id,
           prompt,
           cwd,
-          permissionMode: permissionMode as any,
+          permissionMode: permissionMode as PermissionMode,
           projectRoot: projectPath,
           sessionId: claudeSessionId,
           statusOutputPath,

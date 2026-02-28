@@ -1,16 +1,31 @@
 import { v4 as uuidv4 } from 'uuid';
 import type Database from 'better-sqlite3';
-import type { Swimlane, SwimlaneCreateInput, SwimlaneUpdateInput, SwimlaneRole } from '../../../shared/types';
+import type { Swimlane, SwimlaneCreateInput, SwimlaneUpdateInput, SwimlaneRole, PermissionMode } from '../../../shared/types';
+
+/** Raw row shape returned by better-sqlite3 for the swimlanes table. */
+interface SwimlaneRow {
+  id: string;
+  name: string;
+  role: string | null;
+  position: number;
+  color: string;
+  icon: string | null;
+  is_terminal: number;
+  permission_strategy: string | null;
+  auto_spawn: number;
+  created_at: string;
+}
 
 export class SwimlaneRepository {
   constructor(private db: Database.Database) {}
 
   list(): Swimlane[] {
-    return this.db.prepare('SELECT * FROM swimlanes ORDER BY position ASC').all().map(this.mapRow) as Swimlane[];
+    const rows = this.db.prepare('SELECT * FROM swimlanes ORDER BY position ASC').all() as SwimlaneRow[];
+    return rows.map(this.mapRow);
   }
 
   getById(id: string): Swimlane | undefined {
-    const row = this.db.prepare('SELECT * FROM swimlanes WHERE id = ?').get(id);
+    const row = this.db.prepare('SELECT * FROM swimlanes WHERE id = ?').get(id) as SwimlaneRow | undefined;
     return row ? this.mapRow(row) : undefined;
   }
 
@@ -41,12 +56,14 @@ export class SwimlaneRepository {
       color: input.color || '#3b82f6',
       icon: input.icon || null,
       is_terminal: input.is_terminal || false,
+      permission_strategy: input.permission_strategy ?? null,
+      auto_spawn: input.auto_spawn ?? true,
       created_at: now,
     };
 
     this.db.prepare(
-      'INSERT INTO swimlanes (id, name, role, position, color, icon, is_terminal, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(swimlane.id, swimlane.name, swimlane.role, swimlane.position, swimlane.color, swimlane.icon, swimlane.is_terminal ? 1 : 0, swimlane.created_at);
+      'INSERT INTO swimlanes (id, name, role, position, color, icon, is_terminal, permission_strategy, auto_spawn, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(swimlane.id, swimlane.name, swimlane.role, swimlane.position, swimlane.color, swimlane.icon, swimlane.is_terminal ? 1 : 0, swimlane.permission_strategy, swimlane.auto_spawn ? 1 : 0, swimlane.created_at);
 
     return swimlane;
   }
@@ -61,10 +78,12 @@ export class SwimlaneRepository {
     if (input.icon !== undefined) updated.icon = input.icon;
     if (input.position !== undefined) updated.position = input.position;
     if (input.is_terminal !== undefined) updated.is_terminal = input.is_terminal;
+    if (input.permission_strategy !== undefined) updated.permission_strategy = input.permission_strategy;
+    if (input.auto_spawn !== undefined) updated.auto_spawn = input.auto_spawn;
 
     this.db.prepare(
-      'UPDATE swimlanes SET name = ?, color = ?, icon = ?, position = ?, is_terminal = ? WHERE id = ?'
-    ).run(updated.name, updated.color, updated.icon, updated.position, updated.is_terminal ? 1 : 0, updated.id);
+      'UPDATE swimlanes SET name = ?, color = ?, icon = ?, position = ?, is_terminal = ?, permission_strategy = ?, auto_spawn = ? WHERE id = ?'
+    ).run(updated.name, updated.color, updated.icon, updated.position, updated.is_terminal ? 1 : 0, updated.permission_strategy, updated.auto_spawn ? 1 : 0, updated.id);
 
     return updated;
   }
@@ -81,18 +100,7 @@ export class SwimlaneRepository {
       throw new Error('Backlog column must remain at position 0.');
     }
 
-    // 2. 'planning' must be immediately before 'running'
-    const planningId = allLanes.find((l) => l.role === 'planning')?.id;
-    const runningId = allLanes.find((l) => l.role === 'running')?.id;
-    if (planningId && runningId) {
-      const planIdx = ids.indexOf(planningId);
-      const runIdx = ids.indexOf(runningId);
-      if (planIdx === -1 || runIdx === -1 || runIdx !== planIdx + 1) {
-        throw new Error('Planning and Running columns must remain adjacent.');
-      }
-    }
-
-    // 3. Custom columns (role=null) cannot be at position 0 (Backlog slot)
+    // 2. Custom columns (role=null) cannot be at position 0 (Backlog slot)
     if (!roleById.get(ids[0])) {
       throw new Error('Custom columns cannot be at the first position.');
     }
@@ -107,7 +115,7 @@ export class SwimlaneRepository {
   }
 
   delete(id: string): void {
-    // Cannot delete columns with a role (backlog, planning, running, done)
+    // Cannot delete columns with a role (backlog, planning, done)
     const lane = this.getById(id);
     if (lane && lane.role) {
       throw new Error(`Cannot delete the ${lane.role} column.`);
@@ -121,12 +129,18 @@ export class SwimlaneRepository {
     this.db.prepare('DELETE FROM swimlanes WHERE id = ?').run(id);
   }
 
-  private mapRow(row: any): Swimlane {
+  private mapRow(row: SwimlaneRow): Swimlane {
     return {
-      ...row,
-      role: row.role || null,
+      id: row.id,
+      name: row.name,
+      role: (row.role as SwimlaneRole) || null,
+      position: row.position,
+      color: row.color,
       icon: row.icon || null,
       is_terminal: Boolean(row.is_terminal),
+      permission_strategy: (row.permission_strategy as PermissionMode) ?? null,
+      auto_spawn: Boolean(row.auto_spawn),
+      created_at: row.created_at,
     };
   }
 }

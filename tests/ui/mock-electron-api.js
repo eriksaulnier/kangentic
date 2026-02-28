@@ -31,7 +31,7 @@
       width: 224,
     },
     claude: {
-      permissionMode: 'project-settings',
+      permissionMode: 'default',
       cliPath: null,
       maxConcurrentSessions: 8,
       queueOverflow: 'queue',
@@ -80,11 +80,11 @@
   }
 
   var DEFAULT_SWIMLANES = [
-    { name: 'Backlog', role: 'backlog', color: '#71717a', icon: null, is_terminal: false },
-    { name: 'Planning', role: 'planning', color: '#f59e0b', icon: 'map', is_terminal: false },
-    { name: 'Running', role: 'running', color: '#3b82f6', icon: 'play', is_terminal: false },
-    { name: 'Review', role: null, color: '#8b5cf6', icon: null, is_terminal: false },
-    { name: 'Done', role: 'done', color: '#22c55e', icon: 'check', is_terminal: true },
+    { name: 'Backlog', role: 'backlog', color: '#71717a', icon: null, is_terminal: false, permission_strategy: null, auto_spawn: false },
+    { name: 'Planning', role: 'planning', color: '#f59e0b', icon: 'map', is_terminal: false, permission_strategy: 'plan', auto_spawn: true },
+    { name: 'Code Review', role: null, color: '#8b5cf6', icon: 'code', is_terminal: false, permission_strategy: null, auto_spawn: true },
+    { name: 'Tests', role: null, color: '#06b6d4', icon: 'flask-conical', is_terminal: false, permission_strategy: null, auto_spawn: true },
+    { name: 'Done', role: 'done', color: '#22c55e', icon: 'check', is_terminal: true, permission_strategy: null, auto_spawn: false },
   ];
 
   function noop() {}
@@ -362,6 +362,8 @@
           color: input.color || '#71717a',
           icon: input.icon || null,
           is_terminal: input.is_terminal || false,
+          permission_strategy: input.permission_strategy || null,
+          auto_spawn: (input.auto_spawn !== undefined && input.auto_spawn !== null) ? input.auto_spawn : true,
           position: swimlanes.length,
           created_at: now(),
         };

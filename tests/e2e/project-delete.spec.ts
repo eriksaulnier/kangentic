@@ -49,7 +49,7 @@ test.beforeAll(async () => {
     JSON.stringify({
       claude: {
         cliPath: mockClaudePath(),
-        permissionMode: 'project-settings',
+        permissionMode: 'default',
         maxConcurrentSessions: 5,
         queueOverflow: 'queue',
       },
@@ -127,7 +127,7 @@ test.describe('Project Delete Cleanup', () => {
     // Create a task and move to Running to spawn a session (which injects hooks)
     const taskTitle = `Cleanup Task ${runId}`;
     await createTask(page, taskTitle, 'Will be cleaned up');
-    await dragTaskToColumn(taskTitle, 'Running');
+    await dragTaskToColumn(taskTitle, 'Code Review');
     await waitForSession(taskTitle);
 
     // Verify .kangentic/ and .claude/settings.local.json were created
@@ -187,7 +187,7 @@ test.describe('Project Delete Cleanup', () => {
     // Create a task and move to Running to spawn a session (injects hooks)
     const taskTitle = `Preserve Task ${runId}`;
     await createTask(page, taskTitle, 'Claude dir has user files');
-    await dragTaskToColumn(taskTitle, 'Running');
+    await dragTaskToColumn(taskTitle, 'Code Review');
     await waitForSession(taskTitle);
 
     // Verify our hooks file was created

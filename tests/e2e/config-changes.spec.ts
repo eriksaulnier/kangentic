@@ -45,7 +45,7 @@ function writeTestConfig(dataDir: string, maxConcurrent: number): void {
     JSON.stringify({
       claude: {
         cliPath: mockClaudePath(),
-        permissionMode: 'project-settings',
+        permissionMode: 'default',
         maxConcurrentSessions: maxConcurrent,
         queueOverflow: 'queue',
       },

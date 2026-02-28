@@ -135,49 +135,49 @@ test.describe('Drag and Drop', () => {
     await expect(backlog.locator(`text=${taskName}`)).not.toBeVisible({ timeout: 3000 });
   });
 
-  test('drag task from Backlog to Running', async () => {
-    const taskName = `DnD Run ${runId}`;
-    await createTask(page, taskName, 'Test drag to Running');
+  test('drag task from Backlog to Code Review', async () => {
+    const taskName = `DnD Rev ${runId}`;
+    await createTask(page, taskName, 'Test drag to Code Review');
 
     const backlog = page.locator('[data-swimlane-name="Backlog"]');
     await expect(backlog.locator(`text=${taskName}`).first()).toBeVisible();
 
-    await dragTaskToColumn(taskName, 'Running');
+    await dragTaskToColumn(taskName, 'Code Review');
 
-    const running = page.locator('[data-swimlane-name="Running"]');
+    const review = page.locator('[data-swimlane-name="Code Review"]');
     await expect(
-      running.locator(`text=${taskName}`).first(),
+      review.locator(`text=${taskName}`).first(),
     ).toBeVisible({ timeout: 5000 });
     await expect(backlog.locator(`text=${taskName}`)).not.toBeVisible({ timeout: 3000 });
   });
 
-  test('drag task from Planning to Running (adjacent)', async () => {
+  test('drag task from Planning to Code Review', async () => {
     const taskName = `DnD PtoR ${runId}`;
-    await createTask(page, taskName, 'Test drag adjacent', 'Planning');
+    await createTask(page, taskName, 'Test drag to Code Review', 'Planning');
 
     const planning = page.locator('[data-swimlane-name="Planning"]');
     await expect(planning.locator(`text=${taskName}`).first()).toBeVisible();
 
-    await dragTaskToColumn(taskName, 'Running');
-    const running = page.locator('[data-swimlane-name="Running"]');
+    await dragTaskToColumn(taskName, 'Code Review');
+    const review = page.locator('[data-swimlane-name="Code Review"]');
     await expect(
-      running.locator(`text=${taskName}`).first(),
+      review.locator(`text=${taskName}`).first(),
     ).toBeVisible({ timeout: 5000 });
     await expect(
       planning.locator(`text=${taskName}`),
     ).not.toBeVisible({ timeout: 3000 });
   });
 
-  test('drag task skipping columns (Backlog to Review)', async () => {
+  test('drag task skipping columns (Backlog to Code Review)', async () => {
     const taskName = `DnD Skip ${runId}`;
     await createTask(page, taskName, 'Test skip columns');
 
     const backlog = page.locator('[data-swimlane-name="Backlog"]');
     await expect(backlog.locator(`text=${taskName}`).first()).toBeVisible();
 
-    // Drag directly from Backlog to Review, skipping Planning and Running
-    await dragTaskToColumn(taskName, 'Review');
-    const review = page.locator('[data-swimlane-name="Review"]');
+    // Drag directly from Backlog to Code Review, skipping Planning
+    await dragTaskToColumn(taskName, 'Code Review');
+    const review = page.locator('[data-swimlane-name="Code Review"]');
     await expect(
       review.locator(`text=${taskName}`).first(),
     ).toBeVisible({ timeout: 5000 });

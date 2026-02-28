@@ -55,7 +55,7 @@ test.beforeAll(async () => {
     JSON.stringify({
       claude: {
         cliPath: mockClaudePath(),
-        permissionMode: 'project-settings',
+        permissionMode: 'default',
         maxConcurrentSessions: 5,
         queueOverflow: 'queue',
       },
@@ -159,8 +159,8 @@ test.describe('Claude Agent — Task Prompt', () => {
     const description = 'Implement the login feature with OAuth support';
     await createTask(page, title, description);
 
-    // Drag to Running (Backlog → Running triggers spawn_agent)
-    await dragTaskToColumn(title, 'Running');
+    // Drag to Code Review (Backlog → Code Review triggers spawn_agent)
+    await dragTaskToColumn(title, 'Code Review');
 
     // The shell echoes the full command including the quoted prompt.
     // Wait for the title to appear in terminal scrollback.
@@ -193,7 +193,7 @@ test.describe('Claude Agent — Task Prompt', () => {
     const description = 'Build a REST API with pagination and filtering';
     await createTask(page, title, description);
 
-    await dragTaskToColumn(title, 'Running');
+    await dragTaskToColumn(title, 'Code Review');
 
     const scrollback = await waitForTerminalOutput(title);
 

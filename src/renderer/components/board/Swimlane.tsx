@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Lock, Pencil, GripVertical } from 'lucide-react';
+import { GripVertical } from 'lucide-react';
 import { TaskCard } from './TaskCard';
 import { NewTaskDialog } from '../dialogs/NewTaskDialog';
 import { EditColumnDialog } from '../dialogs/EditColumnDialog';
@@ -47,14 +47,16 @@ export function Swimlane({ swimlane, tasks, dragHandleProps }: SwimlaneProps) {
 
       {/* Column header */}
       <div
-        className={`px-3 py-2 flex items-center gap-2 border-b border-edge/50 w-full text-left hover:bg-surface-hover/30 transition-colors group ${
+        className={`px-3 py-2 flex items-center gap-2 border-b border-edge/50 w-full text-left hover:bg-surface-hover/30 transition-colors cursor-pointer ${
           isSystemColumn ? '' : 'rounded-t-lg'
         }`}
+        onClick={() => setShowEditColumn(true)}
       >
         {/* Drag handle for custom columns */}
         {isDraggable && (
           <div
             {...dragHandleProps}
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
             className="text-fg-disabled hover:text-fg-muted cursor-grab active:cursor-grabbing transition-colors -ml-1"
           >
             <GripVertical size={14} />
@@ -74,32 +76,14 @@ export function Swimlane({ swimlane, tasks, dragHandleProps }: SwimlaneProps) {
           );
         })()}
 
-        {/* Clickable name area opens edit dialog */}
-        <button
-          type="button"
-          onClick={() => setShowEditColumn(true)}
-          className="flex items-center gap-2 flex-1 min-w-0"
-        >
-          <span className={`text-sm font-medium truncate ${
-            isSystemColumn ? 'text-fg' : 'text-fg-secondary'
-          }`}>
-            {swimlane.name}
-          </span>
-        </button>
+        {/* Column name */}
+        <span className={`text-sm font-medium truncate flex-1 min-w-0 ${
+          isSystemColumn ? 'text-fg' : 'text-fg-secondary'
+        }`}>
+          {swimlane.name}
+        </span>
 
         <span className="text-xs text-fg-faint tabular-nums">{tasks.length}</span>
-
-        {role === 'backlog' ? (
-          <Lock size={12} className="flex-shrink-0 opacity-40" />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setShowEditColumn(true)}
-            className="flex-shrink-0"
-          >
-            <Pencil size={12} className="text-fg-disabled group-hover:text-fg-muted transition-colors" />
-          </button>
-        )}
       </div>
 
       {/* Task list */}

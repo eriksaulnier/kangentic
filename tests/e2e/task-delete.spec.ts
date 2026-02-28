@@ -51,7 +51,7 @@ test.beforeAll(async () => {
     JSON.stringify({
       claude: {
         cliPath: mockClaudePath(),
-        permissionMode: 'project-settings',
+        permissionMode: 'default',
         maxConcurrentSessions: 5,
         queueOverflow: 'queue',
       },
@@ -152,7 +152,7 @@ test.describe('Task Delete', () => {
     await createTask(page, title, 'Session should be cleaned up');
 
     // Drag to Running to spawn a session
-    await dragTaskToColumn(title, 'Running');
+    await dragTaskToColumn(title, 'Code Review');
     await waitForSession(title);
 
     // Click on the task card to open the detail dialog
@@ -185,7 +185,7 @@ test.describe('Task Delete', () => {
     await createTask(page, title, 'Exited session cleanup');
 
     // Drag to Running to spawn a session
-    await dragTaskToColumn(title, 'Running');
+    await dragTaskToColumn(title, 'Code Review');
     await waitForSession(title);
 
     // Kill the session via IPC so it becomes "(exited)"

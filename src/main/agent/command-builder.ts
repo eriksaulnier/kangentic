@@ -4,6 +4,19 @@ import { toForwardSlash, quoteArg } from '../../shared/paths';
 import type { PermissionMode, Task } from '../../shared/types';
 import { injectActivityHooks, injectEventHooks } from './hook-manager';
 
+/** Hook entry in Claude Code's settings.json. */
+interface ClaudeHookEntry {
+  matcher: string;
+  hooks: Array<{ type: string; command: string }>;
+}
+
+/** Subset of Claude Code settings.json that we read/write. */
+interface ClaudeSettings {
+  statusLine?: { type: string; command: string };
+  hooks?: Record<string, ClaudeHookEntry[]>;
+  [key: string]: unknown; // preserve unknown keys from user's settings
+}
+
 interface CommandOptions {
   claudePath: string;
   taskId: string;
@@ -32,14 +45,14 @@ export class CommandBuilder {
 
     // Permission mode flags
     switch (options.permissionMode) {
-      case 'dangerously-skip':
+      case 'bypass-permissions':
         parts.push('--dangerously-skip-permissions');
         // Still pass merged settings for the status line even with skip-permissions
         if (mergedSettingsPath) {
           parts.push('--settings', quoteArg(toForwardSlash(mergedSettingsPath)));
         }
         break;
-      case 'project-settings':
+      case 'default':
         // When running from a worktree, Claude resolves settings from CWD,
         // not the git root. Explicitly pass --settings for the main project.
         if (mergedSettingsPath) {
@@ -47,6 +60,18 @@ export class CommandBuilder {
         } else {
           const settingsArg = this.getProjectSettingsArg(options);
           if (settingsArg) parts.push('--settings', quoteArg(settingsArg));
+        }
+        break;
+      case 'plan':
+        parts.push('--permission-mode', 'plan');
+        if (mergedSettingsPath) {
+          parts.push('--settings', quoteArg(toForwardSlash(mergedSettingsPath)));
+        }
+        break;
+      case 'acceptEdits':
+        parts.push('--permission-mode', 'acceptEdits');
+        if (mergedSettingsPath) {
+          parts.push('--settings', quoteArg(toForwardSlash(mergedSettingsPath)));
         }
         break;
       case 'manual':
@@ -105,7 +130,7 @@ export class CommandBuilder {
     const projectRoot = options.projectRoot || options.cwd;
 
     // Read existing project settings
-    let existingSettings: Record<string, any> = {};
+    let existingSettings: ClaudeSettings = {};
     const projectSettingsPath = path.join(projectRoot, '.claude', 'settings.json');
     try {
       const raw = fs.readFileSync(projectSettingsPath, 'utf-8');
@@ -135,7 +160,7 @@ export class CommandBuilder {
     const activityBridge = toForwardSlash(activityCandidates.find(p => fs.existsSync(p)) || activityCandidates[0]);
     const activityPath = options.activityOutputPath ? toForwardSlash(options.activityOutputPath) : null;
 
-    const merged: Record<string, any> = {
+    const merged: ClaudeSettings = {
       ...existingSettings,
       statusLine: {
         type: 'command',

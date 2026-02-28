@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { Task, Action, ActionConfig, SwimlaneTransition, AppConfig } from '../../shared/types';
+import type { Task, Action, ActionConfig, SwimlaneTransition, AppConfig, PermissionMode } from '../../shared/types';
 import { SessionManager } from '../pty/session-manager';
 import { CommandBuilder } from '../agent/command-builder';
 import { ClaudeDetector } from '../agent/claude-detector';
@@ -28,9 +28,11 @@ export class TransitionEngine {
    * Resume a suspended session for a task. Used when moving out of
    * Backlog/Done into a non-agent column (no spawn_agent transition fires).
    */
-  async resumeSuspendedSession(task: Task): Promise<void> {
+  async resumeSuspendedSession(task: Task, permissionOverride?: PermissionMode | null): Promise<void> {
     const attachmentPaths = this.attachmentRepo?.getPathsForTask(task.id) ?? [];
-    await this.executeSpawnAgent({}, task, {
+    await this.executeSpawnAgent({
+      promptTemplate: 'Task: {{title}}\n\n{{description}}{{attachments}}',
+    }, task, {
       title: task.title,
       description: task.description,
       taskId: task.id,
@@ -39,10 +41,10 @@ export class TransitionEngine {
       attachments: attachmentPaths.length > 0
         ? '\n\nAttached images for reference (use Read tool to view):\n' + attachmentPaths.map(p => `- ${p}`).join('\n')
         : '',
-    });
+    }, permissionOverride);
   }
 
-  async executeTransition(task: Task, fromSwimlaneId: string, toSwimlaneId: string): Promise<void> {
+  async executeTransition(task: Task, fromSwimlaneId: string, toSwimlaneId: string, permissionOverride?: PermissionMode | null): Promise<void> {
     const transitions = this.actionRepo.getTransitionsFor(fromSwimlaneId, toSwimlaneId);
     if (transitions.length === 0) return;
 
@@ -50,11 +52,11 @@ export class TransitionEngine {
       const action = this.actionRepo.getById(transition.action_id);
       if (!action) continue;
 
-      await this.executeAction(action, task);
+      await this.executeAction(action, task, permissionOverride);
     }
   }
 
-  private async executeAction(action: Action, task: Task): Promise<void> {
+  private async executeAction(action: Action, task: Task, permissionOverride?: PermissionMode | null): Promise<void> {
     let config: ActionConfig;
     try {
       config = JSON.parse(action.config_json);
@@ -76,7 +78,7 @@ export class TransitionEngine {
 
     switch (action.type) {
       case 'spawn_agent':
-        await this.executeSpawnAgent(config, task, templateVars);
+        await this.executeSpawnAgent(config, task, templateVars, permissionOverride);
         break;
 
       case 'send_command':
@@ -105,14 +107,15 @@ export class TransitionEngine {
     }
   }
 
-  private async executeSpawnAgent(config: ActionConfig, task: Task, vars: Record<string, string>): Promise<void> {
+  private async executeSpawnAgent(config: ActionConfig, task: Task, vars: Record<string, string>, permissionOverride?: PermissionMode | null): Promise<void> {
     const appConfig = this.getConfig();
     const claude = await this.claudeDetector.detect(appConfig.claudePath);
     if (!claude.found || !claude.path) {
       throw new Error('Claude CLI not found on PATH');
     }
 
-    const permissionMode = config.permissionMode || appConfig.permissionMode;
+    // Resolution order: swimlane override → action config → global setting
+    const permissionMode = permissionOverride ?? config.permissionMode ?? appConfig.permissionMode;
     const cwd = task.worktree_path || appConfig.projectPath || process.cwd();
 
     // Pre-populate trust so the agent doesn't block on the trust dialog
@@ -166,7 +169,7 @@ export class TransitionEngine {
       taskId: task.id,
       prompt,
       cwd,
-      permissionMode: permissionMode as any,
+      permissionMode: permissionMode as PermissionMode,
       projectRoot: appConfig.projectPath || undefined,
       sessionId: claudeSessionId,
       resume: !!canResume,

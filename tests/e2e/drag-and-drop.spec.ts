@@ -124,21 +124,21 @@ test.describe('Drag and Drop', () => {
     await expect(backlog.locator(`text=${taskName}`)).not.toBeVisible({ timeout: 3000 });
   });
 
-  test('drag task from Backlog to Running', async () => {
+  test('drag task from Backlog to Code Review', async () => {
     const taskName = `DnD Run ${runId}`;
-    await createTask(page, taskName, 'Test drag to Running');
+    await createTask(page, taskName, 'Test drag to Code Review');
 
     const backlog = page.locator('[data-swimlane-name="Backlog"]');
     await expect(backlog.locator(`text=${taskName}`).first()).toBeVisible();
 
-    await dragTaskToColumn(taskName, 'Running');
+    await dragTaskToColumn(taskName, 'Code Review');
 
-    const running = page.locator('[data-swimlane-name="Running"]');
-    await expect(running.locator(`text=${taskName}`).first()).toBeVisible({ timeout: 5000 });
+    const codeReview = page.locator('[data-swimlane-name="Code Review"]');
+    await expect(codeReview.locator(`text=${taskName}`).first()).toBeVisible({ timeout: 5000 });
     await expect(backlog.locator(`text=${taskName}`)).not.toBeVisible({ timeout: 3000 });
   });
 
-  test('drag task from Planning to Running (adjacent)', async () => {
+  test('drag task from Planning to Code Review (adjacent)', async () => {
     const taskName = `DnD PtoR ${runId}`;
     // Create directly in Planning to avoid race conditions from consecutive drags
     await createTask(page, taskName, 'Test drag adjacent', 'Planning');
@@ -146,9 +146,9 @@ test.describe('Drag and Drop', () => {
     const planning = page.locator('[data-swimlane-name="Planning"]');
     await expect(planning.locator(`text=${taskName}`).first()).toBeVisible();
 
-    await dragTaskToColumn(taskName, 'Running');
-    const running = page.locator('[data-swimlane-name="Running"]');
-    await expect(running.locator(`text=${taskName}`).first()).toBeVisible({ timeout: 5000 });
+    await dragTaskToColumn(taskName, 'Code Review');
+    const codeReview = page.locator('[data-swimlane-name="Code Review"]');
+    await expect(codeReview.locator(`text=${taskName}`).first()).toBeVisible({ timeout: 5000 });
     await expect(planning.locator(`text=${taskName}`)).not.toBeVisible({ timeout: 3000 });
   });
 
@@ -156,16 +156,16 @@ test.describe('Drag and Drop', () => {
     const taskName = `DnD Multi ${runId}`;
     await createTask(page, taskName, 'Test multi drag');
 
-    // Backlog → Review (skip Planning and Running, no transitions for this path)
-    await dragTaskToColumn(taskName, 'Review');
-    const review = page.locator('[data-swimlane-name="Review"]');
-    await expect(review.locator(`text=${taskName}`).first()).toBeVisible({ timeout: 5000 });
+    // Backlog → Tests (skip Planning and Code Review, no transitions for this path)
+    await dragTaskToColumn(taskName, 'Tests');
+    const tests = page.locator('[data-swimlane-name="Tests"]');
+    await expect(tests.locator(`text=${taskName}`).first()).toBeVisible({ timeout: 5000 });
 
-    // Review → Done (no session to wait for, just kill_session which is no-op)
+    // Tests → Done (no session to wait for, just kill_session which is no-op)
     await page.waitForTimeout(1000);
     await dragTaskToColumn(taskName, 'Done');
     const done = page.locator('[data-swimlane-name="Done"]');
     await expect(done.locator(`text=${taskName}`).first()).toBeVisible({ timeout: 5000 });
-    await expect(review.locator(`text=${taskName}`)).not.toBeVisible({ timeout: 3000 });
+    await expect(tests.locator(`text=${taskName}`)).not.toBeVisible({ timeout: 3000 });
   });
 });

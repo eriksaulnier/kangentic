@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Layers, Map as MapIcon, Zap, CircleCheckBig,
+  Layers, Map as MapIcon, CircleCheckBig,
   icons,
 } from 'lucide-react';
 import type { Swimlane, SwimlaneRole } from '../../shared/types';
@@ -47,7 +47,6 @@ export const ICON_REGISTRY = new Map<string, IconComponent>(
 export const ROLE_DEFAULTS: Record<SwimlaneRole, IconComponent> = {
   backlog: Layers,
   planning: MapIcon,
-  running: Zap,
   done: CircleCheckBig,
 };
 
@@ -55,7 +54,6 @@ export const ROLE_DEFAULTS: Record<SwimlaneRole, IconComponent> = {
 const ROLE_DEFAULT_NAMES: Record<SwimlaneRole, string> = {
   backlog: 'layers',
   planning: 'map',
-  running: 'zap',
   done: 'circle-check-big',
 };
 

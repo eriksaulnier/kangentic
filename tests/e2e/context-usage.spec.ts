@@ -61,7 +61,7 @@ test.beforeAll(async () => {
     JSON.stringify({
       claude: {
         cliPath: mockClaudePath(),
-        permissionMode: 'project-settings',
+        permissionMode: 'default',
         maxConcurrentSessions: 5,
         queueOverflow: 'queue',
       },
@@ -153,24 +153,22 @@ async function waitForTerminalOutput(marker: string, timeoutMs = 15000): Promise
  * Returns the status output path that the session manager is watching.
  */
 function findStatusOutputPath(): string | null {
-  const kangenticDir = path.join(tmpDir, '.kangentic');
-  if (!fs.existsSync(kangenticDir)) return null;
+  const sessionsDir = path.join(tmpDir, '.kangentic', 'sessions');
+  if (!fs.existsSync(sessionsDir)) return null;
 
-  // Find the most recently modified claude-settings-*.json file
-  const settingsFiles = fs.readdirSync(kangenticDir)
-    .filter(f => f.startsWith('claude-settings-') && f.endsWith('.json'))
+  // Find the most recently modified settings.json in .kangentic/sessions/<id>/
+  const settingsFiles = fs.readdirSync(sessionsDir)
+    .map(dir => path.join(sessionsDir, dir, 'settings.json'))
+    .filter(f => fs.existsSync(f))
     .map(f => ({
-      name: f,
-      mtime: fs.statSync(path.join(kangenticDir, f)).mtimeMs,
+      path: f,
+      mtime: fs.statSync(f).mtimeMs,
     }))
-    .sort((a, b) => b.mtime - a.mtime)
-    .map(f => f.name);
+    .sort((a, b) => b.mtime - a.mtime);
 
   if (settingsFiles.length === 0) return null;
 
-  const settingsContent = JSON.parse(
-    fs.readFileSync(path.join(kangenticDir, settingsFiles[0]), 'utf-8'),
-  );
+  const settingsContent = JSON.parse(fs.readFileSync(settingsFiles[0].path, 'utf-8'));
 
   // Extract status output path from the statusLine command
   const cmd: string = settingsContent.statusLine?.command || '';
@@ -187,7 +185,7 @@ test.describe('Context Window Usage', () => {
     const title = `Settings Check ${runId}`;
     await createTask(page, title, 'Check settings format');
 
-    await dragTaskToColumn(title, 'Running');
+    await dragTaskToColumn(title, 'Code Review');
 
     // Wait for the mock Claude to start and report the --settings flag
     const scrollback = await waitForTerminalOutput('MOCK_CLAUDE_SETTINGS:');
@@ -212,7 +210,7 @@ test.describe('Context Window Usage', () => {
     const title = `Usage Bar ${runId}`;
     await createTask(page, title, 'Test usage bar display');
 
-    await dragTaskToColumn(title, 'Running');
+    await dragTaskToColumn(title, 'Code Review');
 
     // Wait for mock to start
     await waitForTerminalOutput('MOCK_CLAUDE_SESSION:');
@@ -258,7 +256,7 @@ test.describe('Context Window Usage', () => {
     const title = `Bar Color ${runId}`;
     await createTask(page, title, 'Test color changes');
 
-    await dragTaskToColumn(title, 'Running');
+    await dragTaskToColumn(title, 'Code Review');
 
     // Wait for the new session to start — need a brief delay so the
     // merged settings file for this session is written before we read it.
@@ -276,24 +274,25 @@ test.describe('Context Window Usage', () => {
       model: { display_name: 'Opus 4.6' },
     }));
 
-    // Look specifically for a usage bar containing "95%" text
-    const usageBar = page.locator('[data-testid="usage-bar"]', { hasText: '95%' });
+    // Look specifically for a usage bar containing "95%" text on the task card
+    // (not the bottom panel bar — use .first() to avoid strict mode violation)
+    const usageBar = page.locator('[data-testid="usage-bar"]', { hasText: '95%' }).first();
     await usageBar.waitFor({ state: 'visible', timeout: 10000 });
 
-    // Verify the bar fill has the red color via inline style (smooth gradient)
+    // Verify the bar fill has the yellow color via inline style (smooth gradient)
     const barFill = usageBar.locator('.rounded-full.transition-all');
     const bgColor = await barFill.evaluate(
       (el) => getComputedStyle(el).backgroundColor,
     );
-    // red-500 is rgb(239, 68, 68) — at 95% the lerp is clamped to pure red
-    expect(bgColor).toBe('rgb(239, 68, 68)');
+    // yellow-500 is rgb(234, 179, 8) — at 95% the gradient is at the yellow stop
+    expect(bgColor).toBe('rgb(234, 179, 8)');
   });
 
   test('usage bar appears on the task card for first session', async () => {
     // The "Usage Bar" task from a prior test should still have usage data.
-    // Scroll to the Running column where it was dragged.
+    // Scroll to the Code Review column where it was dragged.
     await page.evaluate(() => {
-      const el = document.querySelector('[data-swimlane-name="Running"]');
+      const el = document.querySelector('[data-swimlane-name="Code Review"]');
       if (el) el.scrollIntoView({ inline: 'nearest', behavior: 'instant' });
     });
     await page.waitForTimeout(300);

@@ -62,7 +62,7 @@ test.beforeAll(async () => {
     JSON.stringify({
       claude: {
         cliPath: mockClaudePath(),
-        permissionMode: 'project-settings',
+        permissionMode: 'default',
         maxConcurrentSessions: 5,
         queueOverflow: 'queue',
       },
@@ -147,26 +147,25 @@ async function waitForTerminalOutput(marker: string, timeoutMs = 15000): Promise
 }
 
 /**
- * Find the merged settings file and return its parsed contents.
+ * Find the most recent merged settings file and return its parsed contents.
+ * Settings are at .kangentic/sessions/<id>/settings.json.
  */
 function findMergedSettings(): Record<string, any> | null {
-  const kangenticDir = path.join(tmpDir, '.kangentic');
-  if (!fs.existsSync(kangenticDir)) return null;
+  const sessionsDir = path.join(tmpDir, '.kangentic', 'sessions');
+  if (!fs.existsSync(sessionsDir)) return null;
 
-  const settingsFiles = fs.readdirSync(kangenticDir)
-    .filter(f => f.startsWith('claude-settings-') && f.endsWith('.json'))
+  const settingsFiles = fs.readdirSync(sessionsDir)
+    .map(dir => path.join(sessionsDir, dir, 'settings.json'))
+    .filter(f => fs.existsSync(f))
     .map(f => ({
-      name: f,
-      mtime: fs.statSync(path.join(kangenticDir, f)).mtimeMs,
+      path: f,
+      mtime: fs.statSync(f).mtimeMs,
     }))
-    .sort((a, b) => b.mtime - a.mtime)
-    .map(f => f.name);
+    .sort((a, b) => b.mtime - a.mtime);
 
   if (settingsFiles.length === 0) return null;
 
-  return JSON.parse(
-    fs.readFileSync(path.join(kangenticDir, settingsFiles[0]), 'utf-8'),
-  );
+  return JSON.parse(fs.readFileSync(settingsFiles[0].path, 'utf-8'));
 }
 
 /**
@@ -177,7 +176,7 @@ function findActivityOutputPath(): string | null {
   if (!settings?.hooks?.Stop?.[0]?.hooks?.[0]?.command) return null;
   const cmd: string = settings.hooks.Stop[0].hooks[0].command;
   // Extract the path from: node "bridge" "path" idle
-  const match = cmd.match(/"([^"]+\.activity\.json)"/);
+  const match = cmd.match(/"([^"]+activity\.json)"/);
   return match ? match[1].replace(/\//g, path.sep) : null;
 }
 
@@ -262,7 +261,7 @@ test.describe('Merged Settings Hooks', () => {
     const title = `Hooks Check ${runId}`;
     await createTask(page, title, 'Check hooks in merged settings');
 
-    await dragTaskToColumn(title, 'Running');
+    await dragTaskToColumn(title, 'Code Review');
     await waitForTerminalOutput('MOCK_CLAUDE_SESSION:');
 
     const settings = findMergedSettings();
@@ -291,8 +290,8 @@ test.describe('Merged Settings Hooks', () => {
     expect(settings).toBeTruthy();
 
     const stopCmd: string = settings!.hooks.Stop[0].hooks[0].command;
-    // Activity file should be in .kangentic/status/<id>.activity.json
-    expect(stopCmd).toMatch(/\.kangentic[/\\]status[/\\].*\.activity\.json/);
+    // Activity file should be in .kangentic/sessions/<id>/activity.json
+    expect(stopCmd).toMatch(/\.kangentic[/\\]sessions[/\\].*activity\.json/);
   });
 });
 
@@ -305,7 +304,7 @@ test.describe('Activity State via IPC', () => {
     const title = `Default State ${runId}`;
     await createTask(page, title, 'Check default idle state');
 
-    await dragTaskToColumn(title, 'Running');
+    await dragTaskToColumn(title, 'Code Review');
     await waitForTerminalOutput('MOCK_CLAUDE_SESSION:');
 
     // Check activity cache has 'idle' for the session (safe default —
@@ -429,7 +428,7 @@ test.describe('Usage Bar Spinner', () => {
     const title = `Usage Spinner ${runId}`;
     await createTask(page, title, 'Test spinner in usage bar');
 
-    await dragTaskToColumn(title, 'Running');
+    await dragTaskToColumn(title, 'Code Review');
     await waitForTerminalOutput('MOCK_CLAUDE_SESSION:');
 
     // Wait for session to start then get the status output path
@@ -460,8 +459,9 @@ test.describe('Usage Bar Spinner', () => {
       model: { display_name: 'Opus 4.6' },
     }));
 
-    // Wait for usage bar to appear
-    const usageBar = page.locator('[data-testid="usage-bar"]', { hasText: '25%' });
+    // Wait for usage bar to appear on the task card
+    // Use .first() to avoid strict mode violation (card bar + bottom panel bar)
+    const usageBar = page.locator('[data-testid="usage-bar"]', { hasText: '25%' }).first();
     await usageBar.waitFor({ state: 'visible', timeout: 10000 });
 
     // Should have a spinner in the usage bar (thinking state from hook)
@@ -483,7 +483,7 @@ test.describe('Usage Bar Spinner', () => {
     await page.waitForTimeout(500);
 
     // The usage bar with 25% should still exist but without a spinner
-    const usageBar = page.locator('[data-testid="usage-bar"]', { hasText: '25%' });
+    const usageBar = page.locator('[data-testid="usage-bar"]', { hasText: '25%' }).first();
     await expect(usageBar).toBeVisible();
 
     const spinner = usageBar.locator('.animate-spin');

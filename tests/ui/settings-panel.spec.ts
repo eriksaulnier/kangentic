@@ -70,7 +70,7 @@ test.describe('Settings Panel', () => {
     await closeSettings();
   });
 
-  test('permission strategy dropdown has correct options (no Plan Mode)', async () => {
+  test('permission strategy dropdown has correct options (no Plan)', async () => {
     await openSettings();
     await page.locator('button:has-text("Agent")').click();
 
@@ -78,13 +78,16 @@ test.describe('Settings Panel', () => {
     const options = select.locator('option');
     const texts = await options.allTextContents();
 
-    expect(texts).toContain('Allowlist (default)');
-    expect(texts).toContain('Bypass Permissions');
+    expect(texts).toContain('Default (Allowlist)');
+    expect(texts).toContain('Accept Edits');
+    expect(texts).toContain('Bypass (Unsafe)');
     expect(texts).not.toContain('Manual Approval');
-    expect(texts).not.toContain('Plan Mode');
-    // Verify old labels are gone too
+    expect(texts).not.toContain('Plan');
+    // Verify old labels and legacy internal values are gone
     expect(texts.join()).not.toContain('Project Settings');
     expect(texts.join()).not.toContain('Skip Permissions');
+    expect(texts.join()).not.toContain('project-settings');
+    expect(texts.join()).not.toContain('dangerously-skip');
 
     await closeSettings();
   });

@@ -99,8 +99,8 @@ test.describe('Project Management', () => {
     await ensureBoardVisible();
     await expect(page.locator('[data-swimlane-name="Backlog"]')).toBeVisible();
     await expect(page.locator('[data-swimlane-name="Planning"]')).toBeVisible();
-    await expect(page.locator('[data-swimlane-name="Running"]')).toBeVisible();
-    await expect(page.locator('[data-swimlane-name="Review"]')).toBeVisible();
+    await expect(page.locator('[data-swimlane-name="Code Review"]')).toBeVisible();
+    await expect(page.locator('[data-swimlane-name="Tests"]')).toBeVisible();
     await expect(page.locator('[data-swimlane-name="Done"]')).toBeVisible();
   });
 
@@ -232,9 +232,13 @@ test.describe('Column Management', () => {
     await ensureBoardVisible();
   });
 
-  test('system columns have lock icons', async () => {
-    const planning = page.locator('[data-swimlane-name="Planning"]');
-    await expect(planning.locator('svg').first()).toBeVisible();
+  test('clicking column header opens edit dialog', async () => {
+    const col = page.locator('[data-swimlane-name="Code Review"]');
+    await col.locator('text=Code Review').click();
+    await page.waitForTimeout(300);
+    await expect(page.locator('text=Edit Column')).toBeVisible({ timeout: 3000 });
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
   });
 
   test('can add a new custom column', async () => {

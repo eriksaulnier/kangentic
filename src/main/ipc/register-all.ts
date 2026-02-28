@@ -494,6 +494,22 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
       return;
     }
 
+    // --- Priority 2.5: TARGET HAS auto_spawn=false (and not backlog/done which are handled above) ---
+    // → Suspend session if one exists, do NOT spawn new agent
+    if (toLane && !toLane.auto_spawn) {
+      if (task.session_id) {
+        const record = sessionRepo.getLatestForTask(task.id);
+        if (record && record.claude_session_id
+            && (record.status === 'running' || record.status === 'exited')) {
+          sessionRepo.updateStatus(record.id, 'suspended', { suspended_at: new Date().toISOString() });
+        }
+        sessionManager.suspend(task.session_id);
+        tasks.update({ id: task.id, session_id: null });
+        console.log(`[TASK_MOVE] Suspended session for task ${task.id.slice(0, 8)} (target column has auto_spawn=false)`);
+      }
+      return;
+    }
+
     // --- Priority 3: TASK HAS ACTIVE SESSION → keep alive, skip transitions ---
     // If the agent is already running, moving between non-terminal columns
     // (e.g. Review → Running) should NOT kill and respawn — just let it continue.
@@ -540,7 +556,7 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
     );
 
     try {
-      await engine.executeTransition(task, fromSwimlaneId, input.targetSwimlaneId);
+      await engine.executeTransition(task, fromSwimlaneId, input.targetSwimlaneId, toLane?.permission_strategy);
     } catch (err) {
       console.error('Transition engine error:', err);
     }
@@ -550,10 +566,10 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
 
     // If task STILL has no session, resume a suspended session or spawn fresh.
     // resumeSuspendedSession handles both cases internally via executeSpawnAgent.
-    if (updatedTask && !updatedTask.session_id) {
+    if (updatedTask && !updatedTask.session_id && toLane?.auto_spawn) {
       console.log(`[TASK_MOVE] Ensuring agent for task ${task.id.slice(0, 8)}`);
       try {
-        await engine.resumeSuspendedSession(updatedTask);
+        await engine.resumeSuspendedSession(updatedTask, toLane.permission_strategy);
       } catch (err) {
         console.error('Failed to start session:', err);
       }
@@ -576,8 +592,8 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
 
     const toLane = swimlanes.getById(input.targetSwimlaneId);
 
-    // Guard: don't resume if target is Backlog (shouldn't happen, but safe)
-    if (toLane?.role === 'backlog') {
+    // Guard: don't resume if target doesn't auto-spawn (backlog, done, or custom with auto_spawn=false)
+    if (!toLane?.auto_spawn) {
       return tasks.getById(input.id);
     }
 
@@ -620,7 +636,7 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
         );
 
         try {
-          await engine.executeTransition(task, doneLane.id, input.targetSwimlaneId);
+          await engine.executeTransition(task, doneLane.id, input.targetSwimlaneId, toLane?.permission_strategy);
         } catch (err) {
           console.error('Transition engine error during unarchive:', err);
         }
@@ -628,10 +644,10 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
         // Re-read task; if still no session, resume suspended or spawn fresh.
         // resumeSuspendedSession handles both cases internally via executeSpawnAgent.
         const updatedTask = tasks.getById(task.id);
-        if (updatedTask && !updatedTask.session_id) {
+        if (updatedTask && !updatedTask.session_id && toLane?.auto_spawn) {
           console.log(`[TASK_UNARCHIVE] Ensuring agent for task ${task.id.slice(0, 8)}`);
           try {
-            await engine.resumeSuspendedSession(updatedTask);
+            await engine.resumeSuspendedSession(updatedTask, toLane.permission_strategy);
           } catch (err) {
             console.error('Failed to start session during unarchive:', err);
           }
@@ -768,12 +784,14 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC.SESSION_RESUME, async (_, taskId: string) => {
-    const { tasks, actions, attachments: attachmentRepo } = getProjectRepos();
+    const { tasks, actions, swimlanes, attachments: attachmentRepo } = getProjectRepos();
     const task = tasks.getById(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
 
     // Guard: don't resume if already has an active session
     if (task.session_id) throw new Error(`Task ${taskId} already has an active session`);
+
+    const lane = swimlanes.getById(task.swimlane_id);
 
     // Create worktree if needed
     if (!task.worktree_path && currentProjectPath) {
@@ -810,7 +828,7 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
       attachmentRepo,
     );
 
-    await engine.resumeSuspendedSession(task);
+    await engine.resumeSuspendedSession(task, lane?.permission_strategy);
 
     // Re-read task to get the new session_id
     const updated = tasks.getById(taskId);

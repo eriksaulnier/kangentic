@@ -2,12 +2,21 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Pencil, Lock, Trash2, Palette, ChevronRight } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 import { useBoardStore } from '../../stores/board-store';
+import { useConfigStore } from '../../stores/config-store';
 import { useToastStore } from '../../stores/toast-store';
 import { BaseDialog } from './BaseDialog';
 import { ConfirmDialog } from './ConfirmDialog';
 import { IconPickerDialog } from './IconPickerDialog';
 import { ICON_REGISTRY, ROLE_DEFAULTS, getUsedIcons } from '../../utils/swimlane-icons';
-import type { Swimlane } from '../../../shared/types';
+import type { Swimlane, PermissionMode } from '../../../shared/types';
+
+const PERMISSION_LABELS: Record<PermissionMode, string> = {
+  'default': 'Default (Allowlist)',
+  'bypass-permissions': 'Bypass (Unsafe)',
+  plan: 'Plan',
+  manual: 'Manual',
+  acceptEdits: 'Accept Edits',
+};
 
 const PRESET_COLORS = [
   '#6b7280', '#ef4444', '#f59e0b', '#10b981',
@@ -23,6 +32,7 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
   const updateSwimlane = useBoardStore((s) => s.updateSwimlane);
   const deleteSwimlane = useBoardStore((s) => s.deleteSwimlane);
   const tasks = useBoardStore((s) => s.tasks);
+  const globalPermissionMode = useConfigStore((s) => s.config.claude.permissionMode);
 
   const swimlanes = useBoardStore((s) => s.swimlanes);
 
@@ -32,12 +42,19 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
   const [showCustomPicker, setShowCustomPicker] = useState(false);
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [hexInput, setHexInput] = useState(swimlane.color);
+  const [permissionStrategy, setPermissionStrategy] = useState<PermissionMode | null>(swimlane.permission_strategy);
+  const [autoSpawn, setAutoSpawn] = useState(swimlane.auto_spawn);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const taskCount = tasks.filter((t) => t.swimlane_id === swimlane.id).length;
   const isLocked = swimlane.role !== null;
+
+  const isBacklogOrDone = swimlane.role === 'backlog' || swimlane.role === 'done';
+  const isPlanning = swimlane.role === 'planning';
+  const permissionLocked = isPlanning || isBacklogOrDone;
+  const autoSpawnLocked = isLocked; // backlog, planning, done all have locked auto_spawn
 
   const usedIcons = getUsedIcons(swimlanes, swimlane.id);
 
@@ -47,7 +64,14 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
 
   const handleSave = async () => {
     if (!name.trim()) return;
-    await updateSwimlane({ id: swimlane.id, name: name.trim(), color, icon });
+    await updateSwimlane({
+      id: swimlane.id,
+      name: name.trim(),
+      color,
+      icon,
+      permission_strategy: permissionLocked ? undefined : permissionStrategy,
+      auto_spawn: autoSpawnLocked ? undefined : autoSpawn,
+    });
     onClose();
   };
 
@@ -65,8 +89,8 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
         variant: 'info',
       });
       onClose();
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete column.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete column.');
       setConfirmDelete(false);
     }
   };
@@ -245,6 +269,66 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
                 />
               </div>
             )}
+          </div>
+
+          {/* Agent section divider */}
+          <div className="flex items-center gap-2 pt-1">
+            <span className="text-[11px] text-fg-faint uppercase tracking-wider">Agent</span>
+            <div className="flex-1 border-t border-edge-subtle" />
+          </div>
+
+          {/* Permissions dropdown */}
+          <div>
+            <label className="text-xs text-fg-muted mb-1.5 block">Permissions</label>
+            <select
+              value={permissionStrategy ?? ''}
+              onChange={(e) => setPermissionStrategy(e.target.value ? e.target.value as PermissionMode : null)}
+              disabled={permissionLocked}
+              className="w-full appearance-none bg-surface border border-edge-input rounded px-3 py-1.5 text-sm text-fg focus:outline-none focus:border-accent disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="">{PERMISSION_LABELS[globalPermissionMode]}</option>
+              {globalPermissionMode !== 'plan' && <option value="plan">Plan</option>}
+              {globalPermissionMode !== 'acceptEdits' && <option value="acceptEdits">Accept Edits</option>}
+              {globalPermissionMode !== 'default' && <option value="default">Default (Allowlist)</option>}
+              {globalPermissionMode !== 'bypass-permissions' && <option value="bypass-permissions">Bypass (Unsafe)</option>}
+            </select>
+            <p className="text-[11px] text-fg-faint mt-1">
+              {isPlanning
+                ? 'Locked to Plan for this column.'
+                : 'Override the global permission setting for agents in this column.'}
+            </p>
+          </div>
+
+          <div className="border-t border-edge-subtle" />
+
+          {/* Auto-spawn toggle */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-fg-muted">Auto-spawn</label>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={autoSpawn}
+                onClick={() => { if (!autoSpawnLocked) setAutoSpawn(!autoSpawn); }}
+                disabled={autoSpawnLocked}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  autoSpawn ? 'bg-accent' : 'bg-edge-input'
+                }`}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                    autoSpawn ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="text-[11px] text-fg-faint mt-1">
+              {isBacklogOrDone
+                ? 'Tasks in this column do not start agents.'
+                : isPlanning
+                  ? 'Starts an agent when tasks enter this column.'
+                  : 'Start an agent when a task enters this column.'}
+            </p>
           </div>
 
           {error && (

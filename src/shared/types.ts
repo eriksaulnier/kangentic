@@ -38,7 +38,7 @@ export interface TaskAttachment {
   created_at: string;
 }
 
-export type SwimlaneRole = 'backlog' | 'planning' | 'running' | 'done';
+export type SwimlaneRole = 'backlog' | 'planning' | 'done';
 
 export interface Swimlane {
   id: string;
@@ -48,6 +48,8 @@ export interface Swimlane {
   color: string;
   icon: string | null;
   is_terminal: boolean;
+  permission_strategy: PermissionMode | null;
+  auto_spawn: boolean;
   created_at: string;
 }
 
@@ -181,7 +183,7 @@ export type SessionDisplayState =
 
 // === Configuration ===
 
-export type PermissionMode = 'dangerously-skip' | 'project-settings' | 'manual';
+export type PermissionMode = 'bypass-permissions' | 'default' | 'manual' | 'plan' | 'acceptEdits';
 
 export type ThemeMode = 'dark' | 'light'
   | 'moon' | 'forest' | 'ocean' | 'ember'
@@ -253,7 +255,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     panelHeight: 250,
   },
   claude: {
-    permissionMode: 'project-settings',
+    permissionMode: 'default',
     cliPath: null,
     maxConcurrentSessions: 8,
     queueOverflow: 'queue',
@@ -316,6 +318,8 @@ export interface SwimlaneCreateInput {
   color?: string;
   icon?: string | null;
   is_terminal?: boolean;
+  permission_strategy?: PermissionMode | null;
+  auto_spawn?: boolean;
 }
 
 export interface SwimlaneUpdateInput {
@@ -325,6 +329,8 @@ export interface SwimlaneUpdateInput {
   icon?: string | null;
   position?: number;
   is_terminal?: boolean;
+  permission_strategy?: PermissionMode | null;
+  auto_spawn?: boolean;
 }
 
 export interface ActionCreateInput {

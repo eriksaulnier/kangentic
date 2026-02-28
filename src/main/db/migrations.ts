@@ -29,7 +29,10 @@ export function runProjectMigrations(db: Database.Database): void {
       role TEXT,
       position INTEGER NOT NULL,
       color TEXT NOT NULL DEFAULT '#3b82f6',
+      icon TEXT DEFAULT NULL,
       is_terminal INTEGER NOT NULL DEFAULT 0,
+      permission_strategy TEXT DEFAULT NULL,
+      auto_spawn INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL
     );
 
@@ -99,46 +102,6 @@ export function runProjectMigrations(db: Database.Database): void {
         db.prepare('UPDATE swimlanes SET role = ? WHERE id = ?').run(role, lane.id);
       }
     }
-  }
-
-  // Seed default swimlanes if empty
-  const laneCount = db.prepare('SELECT COUNT(*) as c FROM swimlanes').get() as { c: number };
-  if (laneCount.c === 0) {
-    const now = new Date().toISOString();
-    const insertLane = db.prepare(
-      'INSERT INTO swimlanes (id, name, role, position, color, is_terminal, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    );
-    const defaults = [
-      { name: 'Backlog', role: 'backlog', color: '#6b7280', terminal: 0 },
-      { name: 'Planning', role: 'planning', color: '#8b5cf6', terminal: 0 },
-      { name: 'Running', role: 'running', color: '#3b82f6', terminal: 0 },
-      { name: 'Review', role: null, color: '#f59e0b', terminal: 0 },
-      { name: 'Done', role: 'done', color: '#10b981', terminal: 1 },
-    ];
-
-    const tx = db.transaction(() => {
-      const laneIds: string[] = [];
-      defaults.forEach((lane, i) => {
-        const id = uuidv4();
-        insertLane.run(id, lane.name, lane.role, i, lane.color, lane.terminal, now);
-        laneIds.push(id);
-      });
-
-      // Seed default actions and transitions
-      seedActionsAndTransitions(db, now);
-
-    });
-    tx();
-  }
-
-  // For existing projects: seed default actions if the actions table is empty
-  const actionCount = db.prepare('SELECT COUNT(*) as c FROM actions').get() as { c: number };
-  if (actionCount.c === 0 && laneCount.c > 0) {
-    const now = new Date().toISOString();
-    const tx = db.transaction(() => {
-      seedActionsAndTransitions(db, now);
-    });
-    tx();
   }
 
   // Migration: add 'icon' column for custom swimlane icons
@@ -242,8 +205,8 @@ export function runProjectMigrations(db: Database.Database): void {
     } catch { /* skip malformed config */ }
   }
 
-  // Data migration: update spawn_agent actions that still use 'dangerously-skip'
-  // permission mode to omit it (falling through to app default: project-settings).
+  // Data migration: update spawn_agent actions that still use legacy
+  // permission mode values to omit them (falling through to app default).
   const agentActions = db.prepare(
     "SELECT id, config_json FROM actions WHERE type = 'spawn_agent'"
   ).all() as Array<{ id: string; config_json: string }>;
@@ -251,12 +214,66 @@ export function runProjectMigrations(db: Database.Database): void {
   for (const action of agentActions) {
     try {
       const config = JSON.parse(action.config_json);
-      if (config.permissionMode === 'dangerously-skip') {
+      if (config.permissionMode === 'dangerously-skip' || config.permissionMode === 'bypass-permissions') {
         delete config.permissionMode;
         db.prepare('UPDATE actions SET config_json = ? WHERE id = ?')
           .run(JSON.stringify(config), action.id);
       }
     } catch { /* skip malformed config */ }
+  }
+
+  // Migration: add permission_strategy and auto_spawn columns to swimlanes
+  const hasPermissionStrategy = (db.pragma('table_info(swimlanes)') as Array<{ name: string }>)
+    .some((col) => col.name === 'permission_strategy');
+  if (!hasPermissionStrategy) {
+    db.exec('ALTER TABLE swimlanes ADD COLUMN permission_strategy TEXT DEFAULT NULL');
+    db.exec('ALTER TABLE swimlanes ADD COLUMN auto_spawn INTEGER NOT NULL DEFAULT 1');
+    // Backfill: backlog/done columns don't auto-spawn; planning uses plan mode
+    db.exec("UPDATE swimlanes SET auto_spawn = 0 WHERE role IN ('backlog', 'done')");
+    db.exec("UPDATE swimlanes SET permission_strategy = 'plan' WHERE role = 'planning'");
+    // Convert running role to custom column (no longer a system role)
+    db.exec("UPDATE swimlanes SET role = NULL WHERE role = 'running'");
+  }
+
+  // Data migration: rename legacy permission_strategy values in swimlanes
+  db.prepare("UPDATE swimlanes SET permission_strategy = 'default' WHERE permission_strategy = 'project-settings'").run();
+  db.prepare("UPDATE swimlanes SET permission_strategy = 'bypass-permissions' WHERE permission_strategy = 'dangerously-skip'").run();
+
+  // Seed default swimlanes if empty (must run after all ALTER TABLE migrations)
+  const laneCount = db.prepare('SELECT COUNT(*) as c FROM swimlanes').get() as { c: number };
+  if (laneCount.c === 0) {
+    const now = new Date().toISOString();
+    const insertLane = db.prepare(
+      'INSERT INTO swimlanes (id, name, role, position, color, icon, is_terminal, permission_strategy, auto_spawn, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    const defaults = [
+      { name: 'Backlog', role: 'backlog', color: '#6b7280', icon: null, terminal: 0, permission_strategy: null, auto_spawn: 0 },
+      { name: 'Planning', role: 'planning', color: '#8b5cf6', icon: null, terminal: 0, permission_strategy: 'plan', auto_spawn: 1 },
+      { name: 'Code Review', role: null, color: '#f59e0b', icon: 'code', terminal: 0, permission_strategy: null, auto_spawn: 1 },
+      { name: 'Tests', role: null, color: '#06b6d4', icon: 'flask-conical', terminal: 0, permission_strategy: null, auto_spawn: 1 },
+      { name: 'Done', role: 'done', color: '#10b981', icon: null, terminal: 1, permission_strategy: null, auto_spawn: 0 },
+    ];
+
+    const tx = db.transaction(() => {
+      defaults.forEach((lane, i) => {
+        const id = uuidv4();
+        insertLane.run(id, lane.name, lane.role, i, lane.color, lane.icon, lane.terminal, lane.permission_strategy, lane.auto_spawn, now);
+      });
+
+      // Seed default actions and transitions
+      seedActionsAndTransitions(db, now);
+    });
+    tx();
+  }
+
+  // For existing projects: seed default actions if the actions table is empty
+  const actionCount = db.prepare('SELECT COUNT(*) as c FROM actions').get() as { c: number };
+  if (actionCount.c === 0 && laneCount.c > 0) {
+    const now = new Date().toISOString();
+    const tx = db.transaction(() => {
+      seedActionsAndTransitions(db, now);
+    });
+    tx();
   }
 }
 
@@ -270,25 +287,11 @@ function seedActionsAndTransitions(db: Database.Database, now: string): void {
     'INSERT INTO actions (id, name, type, config_json, created_at) VALUES (?, ?, ?, ?, ?)'
   );
 
-  // Planning agent: launches Claude in plan mode (--plan)
+  // Planning agent: launches Claude in plan mode
   const planActionId = uuidv4();
   insertAction.run(
     planActionId,
     'Start Planning Agent',
-    'spawn_agent',
-    JSON.stringify({
-      agent: 'claude',
-      promptTemplate: 'Task: {{title}}\n\n{{description}}{{attachments}}',
-      permissionMode: 'project-settings',
-    }),
-    now,
-  );
-
-  // Running agent: launches Claude with project-settings permissions (default)
-  const runActionId = uuidv4();
-  insertAction.run(
-    runActionId,
-    'Start Running Agent',
     'spawn_agent',
     JSON.stringify({
       agent: 'claude',
@@ -309,11 +312,6 @@ function seedActionsAndTransitions(db: Database.Database, now: string): void {
   if (byRole.planning) {
     insertTransition.run(uuidv4(), '*', byRole.planning, killActionId, 0);
     insertTransition.run(uuidv4(), '*', byRole.planning, planActionId, 1);
-  }
-  // * → Running: kill any existing session, then spawn running agent
-  if (byRole.running) {
-    insertTransition.run(uuidv4(), '*', byRole.running, killActionId, 0);
-    insertTransition.run(uuidv4(), '*', byRole.running, runActionId, 1);
   }
   // * → Done: kill session
   if (byRole.done) {

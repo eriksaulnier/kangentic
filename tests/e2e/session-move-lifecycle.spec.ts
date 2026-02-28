@@ -2,9 +2,9 @@
  * E2E tests for session lifecycle across column moves.
  *
  * Covers scenarios introduced by the priority-ordered TASK_MOVE handler:
- *  1. Backlog → non-agent column (Review) spawns a fresh session
- *  2. Active session survives moves between non-kill columns (Review → PR)
- *  3. Done → unarchive to non-agent column (Review) resumes suspended session
+ *  1. Backlog → non-agent column (Code Review) spawns a fresh session
+ *  2. Active session survives moves between non-kill columns (Code Review → Tests)
+ *  3. Done → unarchive to non-agent column (Code Review) resumes suspended session
  *
  * Uses the mock Claude CLI (tests/fixtures/mock-claude) which outputs
  * distinct markers:
@@ -46,7 +46,7 @@ function writeTestConfig(dataDir: string): void {
     JSON.stringify({
       claude: {
         cliPath: mockClaudePath(),
-        permissionMode: 'project-settings',
+        permissionMode: 'default',
         maxConcurrentSessions: 5,
         queueOverflow: 'queue',
       },
@@ -170,14 +170,14 @@ test.describe('Claude Agent — Session Move Lifecycle', () => {
     cleanupTestDataDir(TEST_NAME);
   });
 
-  test('Backlog → Review spawns a fresh session (non-agent column)', async () => {
+  test('Backlog → Code Review spawns a fresh session (non-agent column)', async () => {
     const title = `Backlog Review ${runId}`;
     await createTask(page, title, 'Test fresh spawn on non-agent column');
 
     const taskId = await getTaskId(page, title);
 
-    // Move directly from Backlog → Review (skipping agent columns)
-    await moveTask(page, taskId, lanes['Review']);
+    // Move directly from Backlog → Code Review (skipping agent columns)
+    await moveTask(page, taskId, lanes['Code Review']);
 
     // Wait for a session to start
     await waitForRunningSession(page);
@@ -198,7 +198,7 @@ test.describe('Claude Agent — Session Move Lifecycle', () => {
     expect(taskSession).toBeTruthy();
   });
 
-  test('active session survives move between non-kill columns (Planning → Review → Running)', async () => {
+  test('active session survives move between non-kill columns (Planning → Code Review → Tests)', async () => {
     const title = `Survive Move ${runId}`;
     await createTask(page, title, 'Test session survives non-kill move');
 
@@ -217,8 +217,8 @@ test.describe('Claude Agent — Session Move Lifecycle', () => {
     expect(sessionBefore).toBeTruthy();
     const sessionIdBefore = sessionBefore.id;
 
-    // Move to Review → session should stay alive (Priority 3: keep alive)
-    await moveTask(page, taskId, lanes['Review']);
+    // Move to Code Review → session should stay alive (Priority 3: keep alive)
+    await moveTask(page, taskId, lanes['Code Review']);
     await page.waitForTimeout(1000);
 
     // Verify the same PTY session is still running
@@ -229,8 +229,8 @@ test.describe('Claude Agent — Session Move Lifecycle', () => {
     expect(sessionAfterReview).toBeTruthy();
     expect(sessionAfterReview.id).toBe(sessionIdBefore);
 
-    // Move to Running → session still alive
-    await moveTask(page, taskId, lanes['Running']);
+    // Move to Tests → session still alive
+    await moveTask(page, taskId, lanes['Tests']);
     await page.waitForTimeout(1000);
 
     const sessionAfterRunning = await page.evaluate(async (tid) => {
@@ -241,7 +241,7 @@ test.describe('Claude Agent — Session Move Lifecycle', () => {
     expect(sessionAfterRunning.id).toBe(sessionIdBefore);
   });
 
-  test('Done suspends + archives, unarchive to Review resumes session', async () => {
+  test('Done suspends + archives, unarchive to Code Review resumes session', async () => {
     const title = `Done Unarchive ${runId}`;
     await createTask(page, title, 'Test Done/unarchive resume to non-agent column');
 
@@ -278,10 +278,10 @@ test.describe('Claude Agent — Session Move Lifecycle', () => {
     }, taskId);
     expect(isArchived).toBe(true);
 
-    // Unarchive to Review (non-agent column) → should RESUME
+    // Unarchive to Code Review (non-agent column) → should RESUME
     await page.evaluate(async ({ taskId, swimlaneId }) => {
       await window.electronAPI.tasks.unarchive({ id: taskId, targetSwimlaneId: swimlaneId });
-    }, { taskId, swimlaneId: lanes['Review'] });
+    }, { taskId, swimlaneId: lanes['Code Review'] });
 
     // Wait for session to resume
     await waitForRunningSession(page);
@@ -295,7 +295,7 @@ test.describe('Claude Agent — Session Move Lifecycle', () => {
     expect(resumedSessionId).toBe(originalSessionId);
   });
 
-  test('Backlog → Done → Unarchive to Review spawns fresh agent (no prior session)', async () => {
+  test('Backlog → Done → Unarchive to Code Review spawns fresh agent (no prior session)', async () => {
     const title = `No Prior Session ${runId}`;
     await createTask(page, title, 'Test fresh spawn when no prior session exists');
 
@@ -312,10 +312,10 @@ test.describe('Claude Agent — Session Move Lifecycle', () => {
     }, taskId);
     expect(isArchived).toBe(true);
 
-    // Unarchive to Review → should spawn a FRESH session
+    // Unarchive to Code Review → should spawn a FRESH session
     await page.evaluate(async ({ taskId, swimlaneId }) => {
       await window.electronAPI.tasks.unarchive({ id: taskId, targetSwimlaneId: swimlaneId });
-    }, { taskId, swimlaneId: lanes['Review'] });
+    }, { taskId, swimlaneId: lanes['Code Review'] });
 
     await waitForRunningSession(page);
 
@@ -361,10 +361,10 @@ test.describe('Claude Agent — Session Move Lifecycle', () => {
     }, taskId);
     expect(isArchived).toBe(true);
 
-    // Unarchive to Review → should RESUME the previous session
+    // Unarchive to Code Review → should RESUME the previous session
     await page.evaluate(async ({ taskId, swimlaneId }) => {
       await window.electronAPI.tasks.unarchive({ id: taskId, targetSwimlaneId: swimlaneId });
-    }, { taskId, swimlaneId: lanes['Review'] });
+    }, { taskId, swimlaneId: lanes['Code Review'] });
 
     await waitForRunningSession(page);
 

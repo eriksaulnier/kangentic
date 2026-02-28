@@ -19,9 +19,10 @@ export class ConfigManager {
       this.config = { ...DEFAULT_CONFIG };
     }
 
-    // One-time migration: dangerously-skip → project-settings as new default
-    if (this.config.claude.permissionMode === 'dangerously-skip') {
-      this.config.claude.permissionMode = 'project-settings';
+    // One-time migration: legacy permission mode values → new names
+    const pm = this.config.claude.permissionMode as string;
+    if (pm === 'dangerously-skip' || pm === 'project-settings') {
+      this.config.claude.permissionMode = pm === 'dangerously-skip' ? 'bypass-permissions' : 'default';
       this.save(this.config);
     }
 

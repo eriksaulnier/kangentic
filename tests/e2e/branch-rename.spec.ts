@@ -161,7 +161,7 @@ test.describe('Branch Rename on Title Edit', () => {
       JSON.stringify({
         claude: {
           cliPath: mockClaudePath(),
-          permissionMode: 'project-settings',
+          permissionMode: 'default',
           maxConcurrentSessions: 5,
           queueOverflow: 'queue',
         },
@@ -280,7 +280,7 @@ test.describe('Prune Orphaned Worktree Tasks', () => {
       JSON.stringify({
         claude: {
           cliPath: mockClaudePath(),
-          permissionMode: 'project-settings',
+          permissionMode: 'default',
           maxConcurrentSessions: 5,
           queueOverflow: 'queue',
         },

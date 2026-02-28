@@ -63,6 +63,8 @@ function makePreConfig(opts: { sessionStatus: string; activity: string; withUsag
           color: s.color,
           icon: s.icon,
           is_terminal: s.is_terminal,
+          permission_strategy: s.permission_strategy ?? null,
+          auto_spawn: s.auto_spawn ?? false,
           position: i,
           created_at: ts,
         });
