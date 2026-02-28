@@ -7,7 +7,7 @@ Merge the current worktree branch back into the source branch via rebase and dir
 1. Verify the current working directory is inside a Kangentic worktree (path contains `.kangentic/worktrees/`). If not, warn the user and stop.
 2. Get the current branch name: `git rev-parse --abbrev-ref HEAD`
 3. Determine the project root by walking up from the worktree path — the project root is two directories above `.kangentic/worktrees/<slug>/` (i.e., strip `.kangentic/worktrees/<slug>` from the worktree path).
-4. Determine the source branch using Bash (not the Read tool — the config file is outside the worktree and triggers a permission prompt): run `cat <projectRoot>/.kangentic/config.json 2>/dev/null` and parse `git.defaultBaseBranch` from the JSON output. If the file doesn't exist or the field is missing, default to `main`.
+4. Determine the source branch: run `git config kangentic.baseBranch`. This returns the base branch stored in the worktree's local git config at creation time. If the key is not set (e.g., manually-created worktree), default to `main`.
 5. Run `git status --porcelain` to check for uncommitted changes.
 
 Report the branch name, source branch, and working tree status before proceeding.
@@ -78,6 +78,6 @@ If this fails (e.g., non-fast-forward divergence), report the warning but do not
 
 ## Allowed Tools
 
-Use `Read`, `Glob`, `Grep`, `Bash` (for `git` commands and reading config files outside the worktree via `cat`), `Edit` (for conflict resolution), and `AskUserQuestion`. Do not use `Write`. Do not use `Read` for files outside the worktree (e.g., project root config) — use `Bash` with `cat` instead to avoid permission prompts.
+Use `Read`, `Glob`, `Grep`, `Bash` (for `git` commands), `Edit` (for conflict resolution), and `AskUserQuestion`. Do not use `Write`.
 
 **CRITICAL: No chained commands.** Every Bash call must contain exactly ONE command. Never use `&&`, `||`, `|`, or `;`. For git commands in the worktree, use `git -C <worktreePath>` — never `cd <path> && git ...`.

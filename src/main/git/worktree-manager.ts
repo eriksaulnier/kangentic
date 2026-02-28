@@ -70,6 +70,16 @@ export class WorktreeManager {
     // Create worktree with a new branch
     await this.git.raw(['worktree', 'add', '-b', branchName, worktreePath, startPoint]);
 
+    // Store the base branch in git config so agents can read it via
+    // `git config kangentic.baseBranch` without accessing files outside the worktree.
+    // Custom kangentic.* keys have no side effects on any git operation.
+    const wtGit = simpleGit(worktreePath);
+    try {
+      await wtGit.raw(['config', 'kangentic.baseBranch', baseBranch]);
+    } catch {
+      // Non-fatal — merge-back falls back to 'main'
+    }
+
     // Claude Code discovers commands and skills by walking up from cwd,
     // so the worktree copies produce duplicates in the autocomplete list.
     // Setting skip-worktree before deleting prevents git status from
