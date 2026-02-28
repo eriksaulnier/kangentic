@@ -27,7 +27,7 @@ Review the current git changes (staged and unstaged) for quality, correctness, a
 - Premature abstractions or over-engineering
 
 ### Best Practices
-- TypeScript strict mode compliance (no `any` unless justified)
+- TypeScript strict mode compliance — **no `any` in new code**. Use proper types from `src/shared/types.ts`, `unknown` with type guards, or generic constraints. Flag any new `any` or `as any` cast as a finding.
 - Security: injection risks, unsanitized input
 - Proper error handling at system boundaries
 
