@@ -27,6 +27,11 @@ function buildClaudeCommand(options: {
 }): string {
   const parts = [quoteArg(options.claudePath)];
 
+  // Permission mode (e.g., 'plan')
+  if (options.permissionMode && options.permissionMode !== 'default') {
+    parts.push('--permission-mode', options.permissionMode);
+  }
+
   if (options.sessionId) {
     const flag = options.resume ? '--resume' : '--session-id';
     parts.push(flag, quoteArg(options.sessionId));
@@ -263,6 +268,49 @@ describe('Prompt Delivery (Claude Agent)', () => {
     expect(cmd).not.toContain('--session-id');
     expect(cmd).not.toContain('Task:');
     expect(cmd).not.toContain('Continue working');
+  });
+
+  it('plan permission mode adds --permission-mode plan', () => {
+    const cmd = buildClaudeCommand({
+      claudePath: '/usr/bin/claude',
+      permissionMode: 'plan',
+      prompt: 'Task: Design auth\n\nPlan the architecture',
+    });
+
+    expect(cmd).toContain('--permission-mode');
+    expect(cmd).toContain('plan');
+    expect(cmd).toContain('Design auth');
+  });
+
+  it('default permission mode omits --permission-mode flag', () => {
+    const cmd = buildClaudeCommand({
+      claudePath: '/usr/bin/claude',
+      permissionMode: 'default',
+      prompt: 'Task: Build feature',
+    });
+
+    expect(cmd).not.toContain('--permission-mode');
+  });
+
+  it('no permission mode omits --permission-mode flag', () => {
+    const cmd = buildClaudeCommand({
+      claudePath: '/usr/bin/claude',
+      prompt: 'Task: Build feature',
+    });
+
+    expect(cmd).not.toContain('--permission-mode');
+  });
+
+  it('acceptEdits permission mode adds --permission-mode acceptEdits', () => {
+    const cmd = buildClaudeCommand({
+      claudePath: '/usr/bin/claude',
+      permissionMode: 'acceptEdits',
+      prompt: 'Task: Refactor module',
+    });
+
+    expect(cmd).toContain('--permission-mode');
+    expect(cmd).toContain('acceptEdits');
+    expect(cmd).toContain('Refactor module');
   });
 });
 

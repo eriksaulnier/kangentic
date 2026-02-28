@@ -55,9 +55,9 @@ test.describe('Settings Panel', () => {
     await page.locator('button:has-text("Terminal")').click();
     await expect(page.locator('text=Font Size')).toBeVisible();
 
-    // Switch to Agent — Permission Mode visible
+    // Switch to Agent — Permissions visible
     await page.locator('button:has-text("Agent")').click();
-    await expect(page.locator('text=Permission Mode')).toBeVisible();
+    await expect(page.getByText('Permissions', { exact: true })).toBeVisible();
 
     // Switch to Git — Enable Worktrees visible
     await page.locator('button:has-text("Git")').click();
@@ -70,7 +70,7 @@ test.describe('Settings Panel', () => {
     await closeSettings();
   });
 
-  test('permission mode dropdown has correct options (no Plan Mode)', async () => {
+  test('permission strategy dropdown has correct options (no Plan Mode)', async () => {
     await openSettings();
     await page.locator('button:has-text("Agent")').click();
 
@@ -78,13 +78,13 @@ test.describe('Settings Panel', () => {
     const options = select.locator('option');
     const texts = await options.allTextContents();
 
-    expect(texts).toContain('Project Settings (default)');
-    expect(texts).toContain('Skip Permissions');
-    expect(texts).toContain('Manual Approval');
+    expect(texts).toContain('Allowlist (default)');
+    expect(texts).toContain('Bypass Permissions');
+    expect(texts).not.toContain('Manual Approval');
     expect(texts).not.toContain('Plan Mode');
     // Verify old labels are gone too
-    expect(texts.join()).not.toContain('Autonomous');
-    expect(texts.join()).not.toContain('Manual (interactive)');
+    expect(texts.join()).not.toContain('Project Settings');
+    expect(texts.join()).not.toContain('Skip Permissions');
 
     await closeSettings();
   });

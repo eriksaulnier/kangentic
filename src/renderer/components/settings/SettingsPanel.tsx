@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Bot, Check, ChevronDown, CircleAlert, GitBranch, Palette, SlidersHorizontal, Terminal, X } from 'lucide-react';
 import { useConfigStore } from '../../stores/config-store';
-import type { PermissionMode, ThemeMode } from '../../../shared/types';
+import type { PermissionStrategy, ThemeMode } from '../../../shared/types';
 import { NAMED_THEMES } from '../../../shared/types';
 
 type Phase = 'entering' | 'visible' | 'exiting';
@@ -177,14 +177,13 @@ export function SettingsPanel() {
 
             {activeTab === 'agent' && (
               <>
-                <SettingRow label="Permission Mode" description="How Claude handles tool approvals">
+                <SettingRow label="Permissions" description="How Claude handles tool approvals">
                   <Select
-                    value={config.claude.permissionMode}
-                    onChange={(e) => updateConfig({ claude: { ...config.claude, permissionMode: e.target.value as PermissionMode } })}
+                    value={config.claude.permissionStrategy}
+                    onChange={(e) => updateConfig({ claude: { ...config.claude, permissionStrategy: e.target.value as PermissionStrategy } })}
                   >
-                    <option value="project-settings">Project Settings (default)</option>
-                    <option value="dangerously-skip">Skip Permissions</option>
-                    <option value="manual">Manual Approval</option>
+                    <option value="project-settings">Allowlist (default)</option>
+                    <option value="dangerously-skip">Bypass Permissions</option>
                   </Select>
                 </SettingRow>
                 <SettingRow label="Max Concurrent Sessions" description="Limit how many agents can run at the same time">
