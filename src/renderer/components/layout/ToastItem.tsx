@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import type { Toast } from '../../stores/toast-store';
 
 const variantStyles: Record<Toast['variant'], { border: string; accent: string }> = {
-  info: { border: 'border-blue-500/50', accent: 'bg-blue-500' },
+  info: { border: 'border-accent/50', accent: 'bg-accent' },
   success: { border: 'border-green-500/50', accent: 'bg-green-500' },
   warning: { border: 'border-yellow-500/50', accent: 'bg-yellow-500' },
   error: { border: 'border-red-500/50', accent: 'bg-red-500' },
@@ -60,7 +60,7 @@ export function ToastItem({ toast, onDismiss }: ToastItemProps) {
         {toast.action && (
           <button
             onClick={toast.action.onClick}
-            className="text-blue-400 underline underline-offset-2 hover:opacity-80 ml-1 flex-shrink-0"
+            className="text-accent-fg underline underline-offset-2 hover:opacity-80 ml-1 flex-shrink-0"
           >
             {toast.action.label}
           </button>

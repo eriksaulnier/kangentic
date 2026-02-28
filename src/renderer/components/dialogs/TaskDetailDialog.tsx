@@ -385,7 +385,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="bg-surface border border-edge-input rounded px-2 py-1 text-sm text-fg focus:outline-none focus:border-blue-500 flex-1 min-w-0"
+          className="bg-surface border border-edge-input rounded px-2 py-1 text-sm text-fg focus:outline-none focus:border-accent flex-1 min-w-0"
           autoFocus
         />
       ) : (
@@ -403,7 +403,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
           </button>
           <button
             onClick={handleSave}
-            className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors flex-shrink-0"
+            className="px-3 py-1.5 text-xs bg-accent-emphasis hover:bg-accent text-accent-on rounded transition-colors flex-shrink-0"
           >
             Save
           </button>
@@ -478,7 +478,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
               {/* Pause / Resume */}
               {canToggle && (
                 <button
-                  onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); handleToggle(new MouseEvent('click') as any); }}
+                  onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); handleToggle(); }}
                   disabled={toggling}
                   className="w-full text-left px-3 py-1.5 text-xs text-fg-tertiary hover:bg-surface-hover hover:text-fg transition-colors flex items-center gap-2 disabled:opacity-50"
                 >
@@ -550,7 +550,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
               type="checkbox"
               checked={dontAskAgain}
               onChange={(e) => setDontAskAgain(e.target.checked)}
-              className="rounded border-edge-input bg-surface accent-blue-500"
+              className="accent-accent rounded border-edge-input bg-surface"
             />
             <span className="text-xs text-fg-muted">Don't ask again</span>
           </label>
@@ -584,7 +584,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
                 onChange={(e) => setDescription(e.target.value)}
                 onPaste={handleAttachmentPaste}
                 rows={3}
-                className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg focus:outline-none focus:border-blue-500 resize-y min-h-[80px] max-h-[300px]"
+                className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent resize-y min-h-[80px] max-h-[300px]"
               />
               {!description && (
                 <div className="absolute inset-0 flex flex-col pointer-events-none px-3 py-2">
@@ -600,8 +600,8 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
             </div>
             {thumbnailStrip}
             {isDragOver && (
-              <div className="absolute inset-0 bg-blue-500/10 border-2 border-dashed border-blue-500 rounded-lg flex items-center justify-center z-10 pointer-events-none">
-                <span className="text-sm text-blue-400 font-medium">Drop images here</span>
+              <div className="absolute inset-0 bg-accent/10 border-2 border-dashed border-accent rounded-lg flex items-center justify-center z-10 pointer-events-none">
+                <span className="text-sm text-accent-fg font-medium">Drop images here</span>
               </div>
             )}
           </div>
@@ -626,7 +626,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
                 {task.worktree_path ? (
                   <button
                     onClick={() => window.electronAPI.shell.openPath(task.worktree_path!)}
-                    className="inline-flex items-center gap-1.5 text-fg-secondary hover:text-blue-400 transition-colors"
+                    className="inline-flex items-center gap-1.5 text-fg-secondary hover:text-accent-fg transition-colors"
                     title="Open worktree directory"
                   >
                     {task.branch_name}
@@ -638,7 +638,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
               </span>
             )}
             {task.pr_url && (
-              <span className="text-fg-muted">PR: <span className="text-blue-400">#{task.pr_number}</span></span>
+              <span className="text-fg-muted">PR: <span className="text-accent-fg">#{task.pr_number}</span></span>
             )}
           </div>
         )}
@@ -662,7 +662,7 @@ export function TaskDetailDialog({ task, onClose }: TaskDetailDialogProps) {
             <button
               onClick={handleToggle}
               disabled={toggling}
-              className="flex items-center gap-2.5 px-6 py-3 rounded-lg bg-blue-500/20 border border-blue-500/40 text-base text-blue-400 hover:bg-blue-500/30 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2.5 px-6 py-3 rounded-lg bg-accent/20 border border-accent/40 text-base text-accent-fg hover:bg-accent/30 transition-colors disabled:opacity-50"
             >
               {toggling ? (
                 <Loader2 size={14} className="animate-spin" />

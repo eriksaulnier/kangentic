@@ -193,7 +193,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors"
+                className="px-4 py-1.5 text-xs bg-accent-emphasis hover:bg-accent text-accent-on rounded transition-colors"
               >
                 Create
               </button>
@@ -212,7 +212,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
               placeholder="Task title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-blue-500"
+              className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-accent"
             />
             <div className="relative">
               <textarea
@@ -223,7 +223,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
                 onPaste={handlePaste}
                 onFocus={() => setTextareaFocused(true)}
                 onBlur={() => setTextareaFocused(false)}
-                className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg focus:outline-none focus:border-blue-500 min-h-[200px] max-h-[800px] resize-y overflow-y-auto"
+                className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg focus:outline-none focus:border-accent min-h-[200px] max-h-[800px] resize-y overflow-y-auto"
               />
               {/* Custom visual placeholder — vanishes when user types */}
               {!description && (
@@ -289,15 +289,15 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
                   placeholder={defaultBaseBranch || 'main'}
                   value={baseBranch}
                   onChange={(e) => setBaseBranch(e.target.value)}
-                  className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-blue-500"
+                  className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-accent"
                 />
               </div>
             )}
 
             {/* Drag overlay */}
             {isDragOver && (
-              <div className="absolute inset-0 bg-blue-500/10 border-2 border-dashed border-blue-500 rounded-lg flex items-center justify-center z-10 pointer-events-none">
-                <span className="text-sm text-blue-400 font-medium">Drop images here</span>
+              <div className="absolute inset-0 bg-accent/10 border-2 border-dashed border-accent rounded-lg flex items-center justify-center z-10 pointer-events-none">
+                <span className="text-sm text-accent-fg font-medium">Drop images here</span>
               </div>
             )}
           </div>

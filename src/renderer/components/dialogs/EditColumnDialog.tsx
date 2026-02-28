@@ -124,7 +124,7 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
                 type="button"
                 onClick={handleSave}
                 disabled={!name.trim()}
-                className="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors disabled:opacity-50"
+                className="px-4 py-1.5 text-xs bg-accent-emphasis hover:bg-accent text-accent-on rounded transition-colors disabled:opacity-50"
               >
                 Save
               </button>
@@ -143,7 +143,7 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
-              className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-blue-500"
+              className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-accent"
             />
           </div>
 
@@ -239,7 +239,7 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
                   onBlur={() => {
                     if (!/^#[0-9a-fA-F]{6}$/.test(hexInput)) setHexInput(color);
                   }}
-                  className="w-full bg-surface border border-edge-input rounded px-3 py-1.5 text-sm text-fg font-mono focus:outline-none focus:border-blue-500"
+                  className="w-full bg-surface border border-edge-input rounded px-3 py-1.5 text-sm text-fg font-mono focus:outline-none focus:border-accent"
                   placeholder="#000000"
                   maxLength={7}
                 />

@@ -10,7 +10,7 @@
       (function() {
         try {
           var t = localStorage.getItem('kng-resolved-theme');
-          if (t === 'light') document.documentElement.classList.add('theme-light');
+          if (t && t !== 'dark') document.documentElement.classList.add('theme-' + t);
         } catch(e) {}
       })();
     </script>

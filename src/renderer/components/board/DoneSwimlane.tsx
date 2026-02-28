@@ -219,7 +219,7 @@ export function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
                 type="checkbox"
                 checked={dontAskAgain}
                 onChange={(e) => setDontAskAgain(e.target.checked)}
-                className="rounded border-edge-input bg-surface accent-blue-500"
+                className="accent-accent rounded border-edge-input bg-surface"
               />
               <span className="text-xs text-fg-muted">Don't ask again</span>
             </label>

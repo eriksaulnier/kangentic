@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Bot, Check, ChevronDown, CircleAlert, GitBranch, Palette, SlidersHorizontal, Terminal, X } from 'lucide-react';
 import { useConfigStore } from '../../stores/config-store';
 import type { PermissionMode, ThemeMode } from '../../../shared/types';
+import { NAMED_THEMES } from '../../../shared/types';
 
 type Phase = 'entering' | 'visible' | 'exiting';
 type SettingsTab = 'appearance' | 'terminal' | 'agent' | 'git' | 'behavior';
@@ -59,7 +60,7 @@ export function SettingsPanel() {
       ? 'settings-panel-out 150ms ease-in forwards'
       : 'none';
 
-  const inputClass = 'bg-surface-hover border border-edge-input rounded px-3 py-1.5 text-sm text-fg w-full focus:outline-none focus:border-blue-500';
+  const inputClass = 'bg-surface-hover border border-edge-input rounded px-3 py-1.5 text-sm text-fg w-full focus:outline-none focus:border-accent';
 
   return (
     <div
@@ -121,9 +122,20 @@ export function SettingsPanel() {
                     value={config.theme}
                     onChange={(e) => updateConfig({ theme: e.target.value as ThemeMode })}
                   >
-                    <option value="dark">Dark</option>
-                    <option value="light">Light</option>
-                    <option value="system">System</option>
+                    <optgroup label="Standard">
+                      <option value="dark">Dark</option>
+                      <option value="light">Light</option>
+                    </optgroup>
+                    <optgroup label="Dark Palette">
+                      {NAMED_THEMES.filter(t => t.base === 'dark').map(t => (
+                        <option key={t.id} value={t.id}>{t.label}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Light Palette">
+                      {NAMED_THEMES.filter(t => t.base === 'light').map(t => (
+                        <option key={t.id} value={t.id}>{t.label}</option>
+                      ))}
+                    </optgroup>
                   </Select>
                 </SettingRow>
               </>
@@ -200,7 +212,7 @@ export function SettingsPanel() {
                       type="text"
                       value={config.claude.cliPath || ''}
                       onChange={(e) => updateConfig({ claude: { ...config.claude, cliPath: e.target.value || null } })}
-                      placeholder={claudeInfo?.found ? claudeInfo.path : 'Not found — enter path manually'}
+                      placeholder={claudeInfo?.found ? (claudeInfo.path ?? undefined) : 'Not found — enter path manually'}
                       className={`${inputClass} pr-8 ${claudeInfo?.found ? 'placeholder-fg-muted' : 'placeholder-red-400/70'}`}
                     />
                     {claudeInfo && (
@@ -307,7 +319,7 @@ function Select({ children, ...props }: React.SelectHTMLAttributes<HTMLSelectEle
     <div className="relative">
       <select
         {...props}
-        className="appearance-none bg-surface-hover border border-edge-input rounded pl-3 pr-10 py-1.5 text-sm text-fg w-full focus:outline-none focus:border-blue-500"
+        className="appearance-none bg-surface-hover border border-edge-input rounded pl-3 pr-10 py-1.5 text-sm text-fg w-full focus:outline-none focus:border-accent"
       >
         {children}
       </select>
@@ -325,7 +337,7 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: b
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-        checked ? 'bg-blue-500' : 'bg-edge-input'
+        checked ? 'bg-accent' : 'bg-edge-input'
       }`}
     >
       <span

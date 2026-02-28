@@ -88,7 +88,7 @@ export function ProjectSidebar({ onToggleSidebar }: ProjectSidebarProps) {
           </div>
           <button
             onClick={handleNewProject}
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-blue-500/40 text-xs text-blue-400 hover:bg-blue-500/15 hover:text-blue-300 transition-colors"
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-accent/40 text-xs text-accent-fg hover:bg-accent/15 transition-colors"
             title="Open folder as project"
           >
             <Plus size={12} />
@@ -109,13 +109,13 @@ export function ProjectSidebar({ onToggleSidebar }: ProjectSidebarProps) {
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') openProject(project.id); }}
               className={`group w-full text-left px-3 py-2 text-sm transition-colors border-l-2 cursor-pointer ${
                 isActive
-                  ? 'border-blue-500 bg-surface-hover text-fg'
+                  ? 'border-accent bg-surface-hover text-fg'
                   : 'border-transparent text-fg-muted hover:bg-surface-hover/50 hover:text-fg-secondary'
               }`}
             >
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <Folder size={14} className={`flex-shrink-0 ${isActive ? 'text-blue-400' : 'text-fg-faint'}`} />
+                  <Folder size={14} className={`flex-shrink-0 ${isActive ? 'text-accent-fg' : 'text-fg-faint'}`} />
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">{project.name}</div>
                     <div

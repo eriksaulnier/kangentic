@@ -527,7 +527,7 @@ export async function reconcileSessions(
           command,
           cwd,
           permission_mode: permissionMode,
-          prompt,
+          prompt: prompt ?? null,
           status: 'running',
           exit_code: null,
           started_at: new Date().toISOString(),

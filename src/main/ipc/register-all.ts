@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { ipcMain, BrowserWindow, dialog, nativeTheme, shell } from 'electron';
+import { ipcMain, BrowserWindow, dialog, shell } from 'electron';
 import { IPC } from '../../shared/ipc-channels';
 import type Database from 'better-sqlite3';
 import { ProjectRepository } from '../db/repositories/project-repository';
@@ -930,18 +930,6 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
     });
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths[0];
-  });
-
-  // === Theme ===
-  ipcMain.handle(IPC.THEME_GET_SYSTEM, () => {
-    return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
-  });
-
-  nativeTheme.on('updated', () => {
-    if (!mainWindow.isDestroyed()) {
-      const theme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
-      mainWindow.webContents.send(IPC.THEME_CHANGED, theme);
-    }
   });
 
   // === Window ===

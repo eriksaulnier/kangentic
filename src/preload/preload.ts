@@ -116,15 +116,6 @@ const api: ElectronAPI = {
     selectFolder: () => ipcRenderer.invoke(IPC.DIALOG_SELECT_FOLDER),
   },
 
-  theme: {
-    getSystem: () => ipcRenderer.invoke(IPC.THEME_GET_SYSTEM),
-    onSystemChange: (callback: (theme: 'dark' | 'light') => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, theme: 'dark' | 'light') => callback(theme);
-      ipcRenderer.on(IPC.THEME_CHANGED, handler);
-      return () => ipcRenderer.removeListener(IPC.THEME_CHANGED, handler);
-    },
-  },
-
   window: {
     minimize: () => ipcRenderer.send(IPC.WINDOW_MINIMIZE),
     maximize: () => ipcRenderer.send(IPC.WINDOW_MAXIMIZE),

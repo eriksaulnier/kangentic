@@ -10,7 +10,7 @@ export function useValuePulse<T>(value: T, className = 'animate-value-update', d
   const prevRef = useRef<T>(value);
   const mountedRef = useRef(false);
   const rafRef = useRef<number>(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     if (!mountedRef.current) {

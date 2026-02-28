@@ -18,7 +18,6 @@
 
   let config = {
     theme: 'dark',
-    accentColor: '#3b82f6',
     sidebarVisible: true,
     boardLayout: 'horizontal',
     terminal: {
@@ -544,11 +543,6 @@
         }
         return '/mock/path/test-project';
       },
-    },
-
-    theme: {
-      getSystem: async function () { return 'dark'; },
-      onSystemChange: function () { return noop; },
     },
 
     window: {

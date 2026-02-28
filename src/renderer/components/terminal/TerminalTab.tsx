@@ -9,12 +9,10 @@ interface TerminalTabProps {
 
 export function TerminalTab({ sessionId, active }: TerminalTabProps) {
   const config = useConfigStore((s) => s.config);
-  const resolvedTheme = useConfigStore((s) => s.resolvedTheme);
   const { terminalRef, initTerminal, fit, focus, scrollbackPending } = useTerminal({
     sessionId,
     fontFamily: config.terminal.fontFamily,
     fontSize: config.terminal.fontSize,
-    resolvedTheme,
   });
   const initialized = useRef(false);
   const draggingRef = useRef(false);

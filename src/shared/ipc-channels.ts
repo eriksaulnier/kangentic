@@ -79,10 +79,6 @@ export const IPC = {
   // Dialog
   DIALOG_SELECT_FOLDER: 'dialog:selectFolder',
 
-  // Theme
-  THEME_GET_SYSTEM: 'theme:getSystem',
-  THEME_CHANGED: 'theme:changed',
-
   // Window
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_MAXIMIZE: 'window:maximize',

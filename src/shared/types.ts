@@ -173,11 +173,31 @@ export interface SessionUsage {
 
 export type PermissionMode = 'dangerously-skip' | 'project-settings' | 'manual';
 
-export type ThemeMode = 'dark' | 'light' | 'system';
+export type ThemeMode = 'dark' | 'light'
+  | 'moon' | 'forest' | 'ocean' | 'ember'
+  | 'sand' | 'mint' | 'sky' | 'peach';
+
+/** Background colors for BrowserWindow (prevents flash on launch). */
+export const THEME_BACKGROUNDS: Record<ThemeMode, string> = {
+  dark: '#18181b', light: '#f5f5f4',
+  moon: '#1a1d2e', forest: '#1a2318', ocean: '#0f1923', ember: '#1f1a17',
+  sand: '#f5f0e8', mint: '#eef5f0', sky: '#edf3f8', peach: '#f8f0ec',
+};
+
+/** UI metadata for the settings dropdown. */
+export const NAMED_THEMES: { id: ThemeMode; label: string; base: 'dark' | 'light' }[] = [
+  { id: 'moon', label: 'Moon', base: 'dark' },
+  { id: 'forest', label: 'Forest', base: 'dark' },
+  { id: 'ocean', label: 'Ocean', base: 'dark' },
+  { id: 'ember', label: 'Ember', base: 'dark' },
+  { id: 'sand', label: 'Sand', base: 'light' },
+  { id: 'mint', label: 'Mint', base: 'light' },
+  { id: 'sky', label: 'Sky', base: 'light' },
+  { id: 'peach', label: 'Peach', base: 'light' },
+];
 
 export interface AppConfig {
   theme: ThemeMode;
-  accentColor: string;
   sidebarVisible: boolean;
   boardLayout: 'horizontal' | 'vertical';
 
@@ -213,7 +233,6 @@ export interface AppConfig {
 
 export const DEFAULT_CONFIG: AppConfig = {
   theme: 'dark',
-  accentColor: '#3b82f6',
   sidebarVisible: true,
   boardLayout: 'horizontal',
   terminal: {
@@ -428,12 +447,6 @@ export interface ElectronAPI {
   // Dialog
   dialog: {
     selectFolder: () => Promise<string | null>;
-  };
-
-  // Theme
-  theme: {
-    getSystem: () => Promise<'dark' | 'light'>;
-    onSystemChange: (callback: (theme: 'dark' | 'light') => void) => () => void;
   };
 
   // Window controls

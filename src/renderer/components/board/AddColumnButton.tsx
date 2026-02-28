@@ -47,7 +47,7 @@ export function AddColumnButton() {
           onChange={(e) => setName(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={handleSubmit}
-          className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-blue-500"
+          className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-accent"
         />
       </div>
     );

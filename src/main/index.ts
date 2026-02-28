@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, nativeTheme, session } from 'electron';
+import { app, BrowserWindow, Menu, session } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -7,6 +7,7 @@ import { closeAll, getProjectDb } from './db/database';
 import { SessionRepository } from './db/repositories/session-repository';
 import { ConfigManager } from './config/config-manager';
 import { IPC } from '../shared/ipc-channels';
+import { THEME_BACKGROUNDS } from '../shared/types';
 
 // Global error handlers — keep the app running through transient IPC/PTY errors
 process.on('uncaughtException', (err) => {
@@ -57,9 +58,7 @@ function resolveBackgroundColor(): string {
   try {
     const cm = new ConfigManager();
     const config = cm.load();
-    const theme = config.theme;
-    const isDark = theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors);
-    return isDark ? '#18181b' : '#ffffff';
+    return THEME_BACKGROUNDS[config.theme] ?? '#18181b';
   } catch {
     return '#18181b';
   }

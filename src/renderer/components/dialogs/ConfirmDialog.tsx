@@ -38,13 +38,13 @@ export function ConfirmDialog({
   const confirmStyles = {
     danger: 'bg-red-600 hover:bg-red-500 text-white',
     warning: 'bg-yellow-600 hover:bg-yellow-500 text-white',
-    default: 'bg-blue-600 hover:bg-blue-500 text-white',
+    default: 'bg-accent-emphasis hover:bg-accent text-accent-on',
   };
 
   const iconStyles = {
     danger: 'text-red-400',
     warning: 'text-yellow-400',
-    default: 'text-blue-400',
+    default: 'text-accent-fg',
   };
 
   return (
