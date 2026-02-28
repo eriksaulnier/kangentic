@@ -1,6 +1,7 @@
 # Claude Code
 
 # Per-project data (runtime databases, sessions, worktrees)
+.kangentic/
 
 # Build output
 dist/

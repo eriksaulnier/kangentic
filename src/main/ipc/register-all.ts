@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ipcMain, BrowserWindow, dialog, shell } from 'electron';
@@ -56,14 +57,27 @@ function ensureGitignore(projectPath: string): void {
       fs.writeFileSync(gitignorePath, content);
     }
 
-    // 2. Ensure .claude/settings.local.json is ignored
+    // 2. Ensure .claude/settings.local.json is ignored — but only if the project
+    //    hasn't intentionally committed it (e.g. to accumulate permission allowlists).
     const linesAfter = content.split('\n');
     const settingsIgnored = linesAfter.some(
       (l) => l.trim() === '.claude/settings.local.json',
     );
     if (!settingsIgnored) {
-      const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
-      fs.writeFileSync(gitignorePath, content + separator + '.claude/settings.local.json\n');
+      const settingsTracked = (() => {
+        try {
+          execSync('git ls-files --error-unmatch .claude/settings.local.json', {
+            cwd: projectPath, stdio: 'ignore',
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      })();
+      if (!settingsTracked) {
+        const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
+        fs.writeFileSync(gitignorePath, content + separator + '.claude/settings.local.json\n');
+      }
     }
   } catch (err) {
     // Non-fatal: log and continue. Project may be read-only or on a network drive.
