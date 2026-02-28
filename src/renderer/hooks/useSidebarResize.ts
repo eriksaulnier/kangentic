@@ -17,7 +17,7 @@ export interface SidebarResizeState {
 }
 
 export function useSidebarResize(config: AppConfig): SidebarResizeState {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(config.sidebarVisible !== false);
   const [width, setWidth] = useState(config.sidebar?.width ?? DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const [ready, setReady] = useState(false);
@@ -48,6 +48,7 @@ export function useSidebarResize(config: AppConfig): SidebarResizeState {
         latestWidthRef.current = restored;
         collapsedByDragRef.current = false;
       }
+      window.electronAPI.config.set({ sidebarVisible: !prev });
       return !prev;
     });
   }, []);
@@ -107,6 +108,7 @@ export function useSidebarResize(config: AppConfig): SidebarResizeState {
 
       if (didCollapse) {
         collapsedByDragRef.current = true;
+        window.electronAPI.config.set({ sidebarVisible: false });
         // Animate closed: transition is now active, so setting width to 0
         // triggers the CSS transition from MIN_WIDTH → 0
         requestAnimationFrame(() => {
@@ -117,6 +119,7 @@ export function useSidebarResize(config: AppConfig): SidebarResizeState {
         setOpen(true);
         window.electronAPI.config.set({
           sidebar: { width: latestWidthRef.current },
+          sidebarVisible: true,
         });
       }
       window.dispatchEvent(new CustomEvent('terminal-panel-drag-end'));
