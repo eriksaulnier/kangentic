@@ -268,31 +268,40 @@ export async function cleanupProject(projectId: string, projectPath: string): Pr
   // 5. Close the project DB connection before deleting files
   closeProjectDb(projectId);
 
+  // Steps 6–7 modify the project's .gitignore and .kangentic/ directory.
+  // Skip for worktrees — their .gitignore is inherited from the parent branch
+  // and should not be modified by ephemeral cleanup.
+  const isWorktree = WorktreeManager.isInsideWorktree(projectPath);
+
   // 6. Remove our `.kangentic/` entry from .gitignore (delete file if it becomes empty)
-  try {
-    const gitignorePath = path.join(projectPath, '.gitignore');
-    if (fs.existsSync(gitignorePath)) {
-      const content = fs.readFileSync(gitignorePath, 'utf-8');
-      const filtered = content.split('\n').filter(
-        (l) => l.trim() !== '.kangentic' && l.trim() !== '.kangentic/'
-          && l.trim() !== '.claude/settings.local.json',
-      );
-      const newContent = filtered.join('\n');
-      if (newContent.replace(/\s/g, '').length === 0) {
-        fs.unlinkSync(gitignorePath);
-      } else {
-        fs.writeFileSync(gitignorePath, newContent);
+  if (!isWorktree) {
+    try {
+      const gitignorePath = path.join(projectPath, '.gitignore');
+      if (fs.existsSync(gitignorePath)) {
+        const content = fs.readFileSync(gitignorePath, 'utf-8');
+        const filtered = content.split('\n').filter(
+          (l) => l.trim() !== '.kangentic' && l.trim() !== '.kangentic/'
+            && l.trim() !== '.claude/settings.local.json',
+        );
+        const newContent = filtered.join('\n');
+        if (newContent.replace(/\s/g, '').length === 0) {
+          fs.unlinkSync(gitignorePath);
+        } else {
+          fs.writeFileSync(gitignorePath, newContent);
+        }
       }
-    }
-  } catch { /* non-fatal */ }
+    } catch { /* non-fatal */ }
+  }
 
   // 7. Remove .kangentic/ directory (ours entirely)
-  const kangenticDir = path.join(projectPath, '.kangentic');
-  if (fs.existsSync(kangenticDir)) {
-    try {
-      fs.rmSync(kangenticDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
-    } catch (err) {
-      console.error(`[PROJECT_DELETE] Failed to remove ${kangenticDir}:`, err);
+  if (!isWorktree) {
+    const kangenticDir = path.join(projectPath, '.kangentic');
+    if (fs.existsSync(kangenticDir)) {
+      try {
+        fs.rmSync(kangenticDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+      } catch (err) {
+        console.error(`[PROJECT_DELETE] Failed to remove ${kangenticDir}:`, err);
+      }
     }
   }
 

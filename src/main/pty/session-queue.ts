@@ -50,12 +50,14 @@ export class SessionQueue {
     this.queue.push({ input, sessionId });
   }
 
-  /** Remove a specific session from the queue (e.g. on kill/suspend). */
-  remove(sessionId: string): void {
+  /** Remove a specific session from the queue (e.g. on kill/suspend). Returns true if found. */
+  remove(sessionId: string): boolean {
     const idx = this.queue.findIndex((q) => q.sessionId === sessionId);
     if (idx >= 0) {
       this.queue.splice(idx, 1);
+      return true;
     }
+    return false;
   }
 
   /** Signal that a slot may have opened (session exited/suspended/killed). */

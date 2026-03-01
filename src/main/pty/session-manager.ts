@@ -356,9 +356,7 @@ export class SessionManager extends EventEmitter {
       ptyRef.kill();
     }
     // Remove from queue if queued, and mark as exited
-    const wasQueued = this.sessionQueue.length;
-    this.sessionQueue.remove(sessionId);
-    if (this.sessionQueue.length < wasQueued && session) {
+    if (this.sessionQueue.remove(sessionId) && session) {
       session.status = 'exited';
       session.exitCode = -1;
     }

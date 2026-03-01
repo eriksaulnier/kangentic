@@ -25,7 +25,7 @@ export function SettingsPanel() {
   const [shells, setShells] = useState<Array<{ name: string; path: string }>>([]);
   const [phase, setPhase] = useState<Phase>('entering');
   const [activeTab, setActiveTab] = useState<SettingsTab>(
-    (settingsInitialTab as SettingsTab) || 'appearance',
+    tabs.some((t) => t.id === settingsInitialTab) ? settingsInitialTab as SettingsTab : 'appearance',
   );
   const backdropMouseDown = useRef(false);
 

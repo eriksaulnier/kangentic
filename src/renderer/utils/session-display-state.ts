@@ -1,5 +1,5 @@
 import { useSessionStore } from '../stores/session-store';
-import type { Task, Session, SessionUsage, ActivityState, SessionEvent, SessionDisplayState } from '../../shared/types';
+import type { Task, Session, SessionUsage, ActivityState, SessionDisplayState } from '../../shared/types';
 
 /**
  * Pure derivation of display state from raw session data.
@@ -22,7 +22,6 @@ export function getSessionDisplayState(
   taskSession: Session | undefined,
   usage: SessionUsage | undefined,
   activity: ActivityState | undefined,
-  _events: SessionEvent[] | undefined,
 ): SessionDisplayState {
   if (!taskSession) return { kind: 'none' };
 
@@ -58,11 +57,10 @@ export function useSessionDisplayState(task: Task): SessionDisplayState {
   const sessions = useSessionStore((s) => s.sessions);
   const usage = useSessionStore((s) => task.session_id ? s.sessionUsage[task.session_id] : undefined);
   const activity = useSessionStore((s) => task.session_id ? s.sessionActivity[task.session_id] : undefined);
-  const events = useSessionStore((s) => task.session_id ? s.sessionEvents[task.session_id] : undefined);
 
   // Find session by taskId (more robust than by session_id — catches
   // sessions not yet linked back to the task record, e.g. during resume)
   const taskSession = sessions.find((s) => s.taskId === task.id);
 
-  return getSessionDisplayState(taskSession, usage, activity, events);
+  return getSessionDisplayState(taskSession, usage, activity);
 }

@@ -32,20 +32,9 @@ interface TaskDetailDialogProps {
 }
 
 function QueuedPlaceholder({ sessionId }: { sessionId: string | null }) {
-  const sessions = useSessionStore((s) => s.sessions);
   const maxConcurrent = useConfigStore((s) => s.config.claude.maxConcurrentSessions);
-
-  const { queuePos, runningCount } = React.useMemo(() => {
-    const running = sessions.filter((s) => s.status === 'running').length;
-    const queued = sessions
-      .filter((s) => s.status === 'queued')
-      .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
-    const idx = sessionId ? queued.findIndex((s) => s.id === sessionId) : -1;
-    return {
-      queuePos: idx >= 0 ? { position: idx + 1, total: queued.length } : null,
-      runningCount: running,
-    };
-  }, [sessions, sessionId]);
+  const runningCount = useSessionStore((s) => s.getRunningCount());
+  const queuePos = useSessionStore((s) => sessionId ? s.getQueuePosition(sessionId) : null);
 
   const openSettingsTab = useConfigStore((s) => s.openSettingsTab);
 
@@ -282,6 +271,11 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
 
   // Use large dialog when there's an active session OR a suspended one
   const hasSessionContext = (displayState.kind !== 'none' && displayState.kind !== 'exited') || toggling;
+  const dialogSizeClass = hasSessionContext && !isQueued
+    ? 'w-[90vw] h-[85vh]'
+    : isQueued
+      ? 'w-[520px] h-[320px]'
+      : 'w-[640px] max-h-[80vh]';
 
   // Auto-expand textarea for no-session edit mode
   useEffect(() => {
@@ -647,7 +641,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
         onClose={onClose}
         header={customHeader}
         rawBody
-        className={hasSessionContext && !isQueued ? 'w-[90vw] h-[85vh]' : isQueued ? 'w-[520px] h-[320px]' : 'w-[640px] max-h-[80vh]'}
+        className={dialogSizeClass}
         backdropClassName="p-6"
         testId="task-detail-dialog"
       >

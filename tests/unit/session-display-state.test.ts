@@ -1,11 +1,11 @@
 /**
  * Unit tests for getSessionDisplayState — the pure function that derives
- * the discriminated-union display state from raw session, usage, activity,
- * and event data.  Covers all 6 state kinds plus edge cases.
+ * the discriminated-union display state from raw session, usage, and
+ * activity data.  Covers all 6 state kinds plus edge cases.
  */
 import { describe, it, expect } from 'vitest';
 import { getSessionDisplayState } from '../../src/renderer/utils/session-display-state';
-import type { Session, SessionUsage, ActivityState, SessionEvent } from '../../src/shared/types';
+import type { Session, SessionUsage, ActivityState } from '../../src/shared/types';
 
 /** Minimal session factory — only fields that matter for the function. */
 function makeSession(overrides: Partial<Session> = {}): Session {
@@ -33,82 +33,63 @@ const MOCK_USAGE: SessionUsage = {
   model: { id: 'claude-sonnet', displayName: 'Claude Sonnet' },
 };
 
-const MOCK_EVENT: SessionEvent = {
-  ts: Date.now(),
-  type: 'tool_start',
-  tool: 'Read',
-  detail: '/some/file.ts',
-};
-
 describe('getSessionDisplayState', () => {
   it('returns { kind: "none" } when taskSession is undefined', () => {
-    expect(getSessionDisplayState(undefined, undefined, undefined, undefined))
+    expect(getSessionDisplayState(undefined, undefined, undefined))
       .toEqual({ kind: 'none' });
   });
 
   it('returns { kind: "exited" } with explicit exitCode', () => {
     const session = makeSession({ status: 'exited', exitCode: 1 });
-    expect(getSessionDisplayState(session, undefined, undefined, undefined))
+    expect(getSessionDisplayState(session, undefined, undefined))
       .toEqual({ kind: 'exited', exitCode: 1 });
   });
 
   it('returns { kind: "exited", exitCode: 0 } when exitCode is null', () => {
     const session = makeSession({ status: 'exited', exitCode: null });
-    expect(getSessionDisplayState(session, undefined, undefined, undefined))
+    expect(getSessionDisplayState(session, undefined, undefined))
       .toEqual({ kind: 'exited', exitCode: 0 });
   });
 
   it('returns { kind: "suspended" }', () => {
     const session = makeSession({ status: 'suspended' });
-    expect(getSessionDisplayState(session, undefined, undefined, undefined))
+    expect(getSessionDisplayState(session, undefined, undefined))
       .toEqual({ kind: 'suspended' });
   });
 
   it('returns { kind: "queued" }', () => {
     const session = makeSession({ status: 'queued' });
-    expect(getSessionDisplayState(session, undefined, undefined, undefined))
+    expect(getSessionDisplayState(session, undefined, undefined))
       .toEqual({ kind: 'queued' });
   });
 
-  it('returns { kind: "initializing" } when running with no usage and no events', () => {
+  it('returns { kind: "initializing" } when running with no usage', () => {
     const session = makeSession({ status: 'running' });
-    expect(getSessionDisplayState(session, undefined, undefined, undefined))
+    expect(getSessionDisplayState(session, undefined, undefined))
       .toEqual({ kind: 'initializing' });
   });
 
-  it('returns { kind: "initializing" } when running with empty events array', () => {
+  it('returns { kind: "initializing" } when running with activity but no usage', () => {
     const session = makeSession({ status: 'running' });
-    expect(getSessionDisplayState(session, undefined, undefined, []))
+    expect(getSessionDisplayState(session, undefined, 'idle' as ActivityState))
       .toEqual({ kind: 'initializing' });
   });
 
-  it('returns { kind: "running" } when running with events but no usage', () => {
+  it('returns { kind: "running" } when running with usage', () => {
     const session = makeSession({ status: 'running' });
-    const result = getSessionDisplayState(session, undefined, 'idle' as ActivityState, [MOCK_EVENT]);
-    expect(result).toEqual({ kind: 'running', activity: 'idle', usage: null });
-  });
-
-  it('returns { kind: "running" } when running with usage but no events', () => {
-    const session = makeSession({ status: 'running' });
-    const result = getSessionDisplayState(session, MOCK_USAGE, 'thinking' as ActivityState, undefined);
+    const result = getSessionDisplayState(session, MOCK_USAGE, 'thinking' as ActivityState);
     expect(result).toEqual({ kind: 'running', activity: 'thinking', usage: MOCK_USAGE });
   });
 
-  it('returns { kind: "running" } when running with both usage and events', () => {
+  it('defaults activity to "thinking" when activity is undefined', () => {
     const session = makeSession({ status: 'running' });
-    const result = getSessionDisplayState(session, MOCK_USAGE, 'thinking' as ActivityState, [MOCK_EVENT]);
-    expect(result).toEqual({ kind: 'running', activity: 'thinking', usage: MOCK_USAGE });
-  });
-
-  it('defaults activity to "thinking" when activity is undefined but has events', () => {
-    const session = makeSession({ status: 'running' });
-    const result = getSessionDisplayState(session, MOCK_USAGE, undefined, [MOCK_EVENT]);
+    const result = getSessionDisplayState(session, MOCK_USAGE, undefined);
     expect(result).toEqual({ kind: 'running', activity: 'thinking', usage: MOCK_USAGE });
   });
 
   it('preserves activity "idle" when explicitly set', () => {
     const session = makeSession({ status: 'running' });
-    const result = getSessionDisplayState(session, MOCK_USAGE, 'idle' as ActivityState, [MOCK_EVENT]);
+    const result = getSessionDisplayState(session, MOCK_USAGE, 'idle' as ActivityState);
     expect(result).toEqual({ kind: 'running', activity: 'idle', usage: MOCK_USAGE });
   });
 });
