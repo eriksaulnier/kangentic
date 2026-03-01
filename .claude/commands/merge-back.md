@@ -1,6 +1,6 @@
 # Merge Back
 
-Merge the current worktree branch back into the source branch via rebase and direct push.
+Safely commit, rebase, and push changes. Works from both worktrees and the main repo.
 
 **Usage:** `/merge-back [commit message]`
 
@@ -11,17 +11,22 @@ Merge the current worktree branch back into the source branch via rebase and dir
 
 All git commands below run from the **current working directory** — never use `cd <path> && git ...` (triggers an unbypasable security prompt). The only exception is Step 6 which uses `git -C <projectRoot>` to target the main repo.
 
-1. Verify the current working directory is inside a Kangentic worktree (path contains `.kangentic/worktrees/`). If not, warn the user and stop.
+1. **Detect mode:**
+   - If CWD contains `.kangentic/worktrees/` → **worktree mode**
+   - Otherwise → **main repo mode**
 2. Get the current branch name: `git rev-parse --abbrev-ref HEAD`
-3. Determine the project root by walking up from the worktree path — the project root is two directories above `.kangentic/worktrees/<slug>/` (i.e., strip `.kangentic/worktrees/<slug>` from the worktree path).
-4. Determine the source branch: run `git config kangentic.baseBranch`. This returns the base branch stored in the worktree's local git config at creation time. If the key is not set (e.g., manually-created worktree), default to `main`.
+   - If `HEAD` (detached) → warn the user and stop.
+3. **Worktree mode only:** Derive the project root by walking up from the worktree path — the project root is two directories above `.kangentic/worktrees/<slug>/` (i.e., strip `.kangentic/worktrees/<slug>` from the worktree path).
+4. Determine the source branch:
+   - **Worktree mode:** `git config kangentic.baseBranch` (fallback: `main`)
+   - **Main repo mode:** same as the current branch (push to own remote tracking branch)
 5. Run `git status --porcelain` to check for uncommitted changes.
 
-Report the branch name, source branch, and working tree status before proceeding.
+Report the mode, branch name, source branch, and working tree status before proceeding.
 
 ## Step 0 — Type Check
 
-Run `npm run typecheck` in the worktree. If it fails, report the type errors and stop — do not proceed with the merge. Type errors must be fixed before merging back.
+Run `npm run typecheck`. If it fails, report the type errors and stop — do not proceed with the merge. Type errors must be fixed before merging back.
 
 ## Step 1 — Commit Changes
 
@@ -55,9 +60,11 @@ Run: `git rebase origin/<sourceBranch>`
    - **Abort entirely** — `git rebase --abort` and stop the merge-back process
 3. If resolving conflicts: read each conflicting file, use `Edit` to resolve the conflict markers, stage the file, and continue the rebase. Repeat until all conflicts are resolved.
 
-**After rebase (or merge) completes:** Rebase can restore `.claude/commands/` and `.claude/skills/` directories that sparse-checkout excludes. Delete them to prevent duplicate command/skill discovery:
+**After rebase (or merge) completes — worktree mode only:** Rebase can restore `.claude/commands/` and `.claude/skills/` directories that sparse-checkout excludes. Delete them to prevent duplicate command/skill discovery:
 - `rm -rf <worktreePath>/.claude/commands`
 - `rm -rf <worktreePath>/.claude/skills`
+
+Skip this cleanup in main repo mode.
 
 ## Step 4 — Push to Source Branch
 
@@ -74,12 +81,15 @@ This pushes the rebased commits directly to the remote source branch. After a su
 ## Step 5 — Report
 
 Summarize:
+- Mode (worktree or main repo)
 - Branch name that was merged
 - Source branch that received the changes
 - Number of commits landed (from `git log origin/<sourceBranch>@{1}..origin/<sourceBranch> --oneline` or similar)
-- Remind the user they can clean up the worktree by moving the task to Done on the board (which triggers `cleanup_worktree`) or manually
+- **Worktree mode only:** Remind the user they can clean up the worktree by moving the task to Done on the board (which triggers `cleanup_worktree`) or manually
 
-## Step 6 — Update Local Source Branch
+## Step 6 — Update Local Source Branch (worktree mode only)
+
+**Skip this step entirely in main repo mode** — you're already on the branch.
 
 The project root (determined in pre-flight step 3) always has the source branch checked out. Run `git -C <projectRoot> pull --ff-only` to fast-forward it to match the remote.
 
@@ -89,4 +99,4 @@ If this fails (e.g., non-fast-forward divergence), report the warning but do not
 
 Use `Read`, `Glob`, `Grep`, `Bash` (for `git` and `npm` commands), `Write` (for commit message temp files), `Edit` (for conflict resolution), and `AskUserQuestion`.
 
-**CRITICAL: No chained commands.** Every Bash call must contain exactly ONE command. Never use `&&`, `||`, `|`, or `;`. For git commands in the worktree, use `git -C <worktreePath>` — never `cd <path> && git ...`.
+**CRITICAL: No chained commands.** Every Bash call must contain exactly ONE command. Never use `&&`, `||`, `|`, or `;`. For git commands in another directory, use `git -C <path>` — never `cd <path> && git ...`.
