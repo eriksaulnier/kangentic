@@ -651,7 +651,7 @@ describe('Merged Settings — Local Settings Merge', () => {
     expect(merged.permissions.allow).toHaveLength(7); // no duplicates
   });
 
-  it('does not write to .claude/settings.local.json in cwd', () => {
+  it('writes hooks to worktree .claude/settings.local.json when cwd differs from projectRoot', () => {
     // Set up a "worktree" cwd separate from projectRoot
     const worktreeDir = path.join(tmpDir, 'worktree');
     fs.mkdirSync(worktreeDir, { recursive: true });
@@ -659,7 +659,9 @@ describe('Merged Settings — Local Settings Merge', () => {
     // Project root has settings
     const claudeDir = path.join(tmpDir, '.claude');
     fs.mkdirSync(claudeDir, { recursive: true });
-    fs.writeFileSync(path.join(claudeDir, 'settings.json'), JSON.stringify({}));
+    fs.writeFileSync(path.join(claudeDir, 'settings.json'), JSON.stringify({
+      permissions: { allow: ['Read'] },
+    }));
 
     const builder = new CommandBuilder();
 
@@ -678,8 +680,103 @@ describe('Merged Settings — Local Settings Merge', () => {
       eventsOutputPath: path.join(tmpDir, '.kangentic', 'sessions', 'test-sess', 'events.jsonl'),
     });
 
-    // .claude/settings.local.json should NOT be created in the worktree cwd
-    expect(fs.existsSync(path.join(worktreeDir, '.claude', 'settings.local.json'))).toBe(false);
+    // .claude/settings.local.json SHOULD be created in the worktree cwd
+    const wtLocalPath = path.join(worktreeDir, '.claude', 'settings.local.json');
+    expect(fs.existsSync(wtLocalPath)).toBe(true);
+
+    // Verify it contains hooks but NOT project permissions (Claude reads
+    // settings.json from the worktree's .claude/ directly via sparse-checkout)
+    const wtLocal = JSON.parse(fs.readFileSync(wtLocalPath, 'utf-8'));
+    expect(wtLocal.statusLine).toBeDefined();
+    expect(wtLocal.statusLine.type).toBe('command');
+    expect(wtLocal.permissions).toBeUndefined();
+  });
+
+  it('does not include --settings flag for worktree scenarios', () => {
+    const worktreeDir = path.join(tmpDir, 'worktree');
+    fs.mkdirSync(worktreeDir, { recursive: true });
+
+    const claudeDir = path.join(tmpDir, '.claude');
+    fs.mkdirSync(claudeDir, { recursive: true });
+    fs.writeFileSync(path.join(claudeDir, 'settings.json'), JSON.stringify({}));
+
+    const builder = new CommandBuilder();
+
+    const statusOutput = path.join(tmpDir, '.kangentic', 'sessions', 'wt-sess', 'status.json');
+    fs.mkdirSync(path.dirname(statusOutput), { recursive: true });
+
+    const cmd = builder.buildClaudeCommand({
+      claudePath: '/usr/bin/claude',
+      taskId: 'test-task-id',
+      cwd: worktreeDir,
+      projectRoot: tmpDir,
+      permissionMode: 'default',
+      sessionId: 'wt-sess',
+      statusOutputPath: statusOutput,
+    });
+
+    // No --settings flag — Claude resolves from worktree's .claude/ naturally
+    expect(cmd).not.toContain('--settings');
+  });
+
+  it('still writes to session directory and uses --settings for main repo', () => {
+    const claudeDir = path.join(tmpDir, '.claude');
+    fs.mkdirSync(claudeDir, { recursive: true });
+    fs.writeFileSync(path.join(claudeDir, 'settings.json'), JSON.stringify({}));
+
+    const builder = new CommandBuilder();
+
+    const statusOutput = path.join(tmpDir, '.kangentic', 'sessions', 'main-sess', 'status.json');
+    fs.mkdirSync(path.dirname(statusOutput), { recursive: true });
+
+    const cmd = builder.buildClaudeCommand({
+      claudePath: '/usr/bin/claude',
+      taskId: 'test-task-id',
+      cwd: tmpDir,
+      // no projectRoot — cwd IS the project root
+      permissionMode: 'default',
+      sessionId: 'main-sess',
+      statusOutputPath: statusOutput,
+    });
+
+    // --settings flag should be present for main repo
+    expect(cmd).toContain('--settings');
+
+    // Session settings file should exist
+    const mergedPath = path.join(tmpDir, '.kangentic', 'sessions', 'main-sess', 'settings.json');
+    expect(fs.existsSync(mergedPath)).toBe(true);
+
+    // No settings.local.json in the project root's .claude/ (not a worktree)
+    expect(fs.existsSync(path.join(tmpDir, '.claude', 'settings.local.json'))).toBe(false);
+  });
+
+  it('creates .claude/ directory in worktree if needed', () => {
+    const worktreeDir = path.join(tmpDir, 'worktree-no-claude');
+    fs.mkdirSync(worktreeDir, { recursive: true });
+    // No .claude/ dir in worktree
+
+    const claudeDir = path.join(tmpDir, '.claude');
+    fs.mkdirSync(claudeDir, { recursive: true });
+    fs.writeFileSync(path.join(claudeDir, 'settings.json'), JSON.stringify({}));
+
+    const builder = new CommandBuilder();
+
+    const statusOutput = path.join(tmpDir, '.kangentic', 'sessions', 'mkdir-sess', 'status.json');
+    fs.mkdirSync(path.dirname(statusOutput), { recursive: true });
+
+    builder.buildClaudeCommand({
+      claudePath: '/usr/bin/claude',
+      taskId: 'test-task-id',
+      cwd: worktreeDir,
+      projectRoot: tmpDir,
+      permissionMode: 'default',
+      sessionId: 'mkdir-sess',
+      statusOutputPath: statusOutput,
+    });
+
+    // .claude/ directory should have been created
+    expect(fs.existsSync(path.join(worktreeDir, '.claude'))).toBe(true);
+    expect(fs.existsSync(path.join(worktreeDir, '.claude', 'settings.local.json'))).toBe(true);
   });
 });
 

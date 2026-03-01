@@ -41,14 +41,14 @@ The chosen base branch is stored in the worktree's git config as `kangentic.base
 
 ## Sparse-Checkout
 
-Worktrees exclude `.claude/` from checkout using sparse-checkout in `--no-cone` mode:
+Worktrees exclude `.claude/commands/` from checkout using sparse-checkout in `--no-cone` mode:
 
 ```
 git sparse-checkout init --no-cone
-git sparse-checkout set '/*' '!/.claude/'
+git sparse-checkout set '/*' '!/.claude/commands/'
 ```
 
-This means worktrees get all files except `.claude/`. Settings delivery happens via the `--settings` flag instead.
+This means worktrees get all files including `.claude/settings.json` (so Claude resolves permissions naturally), but exclude `.claude/commands/` to prevent duplicate slash commands. `.claude/settings.local.json` is untracked (gitignored), so it's not present in worktrees from checkout — writes to it (from Kangentic hooks or Claude's "always allow") are invisible to git.
 
 Sparse-checkout was chosen over `skip-worktree` because skip-worktree flags get lost during rebase and merge operations. Sparse-checkout survives all git operations.
 
@@ -76,10 +76,11 @@ For each session, a merged settings file is built at `.kangentic/sessions/<sessi
 2. Read `.claude/settings.local.json` (gitignored, personal)
 3. Deep-merge hooks from both layers
 4. Inject bridge commands into appropriate hook points
-5. Write merged file
-6. Pass to CLI: `claude --settings <mergedSettingsPath> ...`
+5. Write merged file to session directory
 
-This approach delivers hooks without modifying the user's actual settings files. The `--settings` flag also handles worktree settings resolution — since `.claude/` is excluded from worktrees via sparse-checkout, explicit `--settings` ensures Claude reads the right config.
+**Main repo sessions:** pass `--settings <mergedSettingsPath>` to the CLI.
+
+**Worktree sessions:** write the merged settings to `<worktree>/.claude/settings.local.json` instead. Claude resolves `settings.json` from the worktree's `.claude/` directory (present via sparse-checkout) and picks up hooks from `settings.local.json` naturally. No `--settings` flag needed. When users hit "always allow" on a permission prompt, Claude writes to `settings.local.json` in the worktree — this file is properly gitignored and does not leak into `git status`.
 
 ### Hook Identification
 
@@ -166,7 +167,7 @@ App reopened
 
 ## Safety
 
-- **No git contamination** — `.claude/` excluded from worktrees via sparse-checkout. Settings delivered via `--settings` flag.
+- **No git contamination** — `.claude/commands/` excluded from worktrees via sparse-checkout. `.claude/settings.json` is present (from git). `settings.local.json` is untracked and gitignored, so hook injection and "always allow" writes are invisible to git. Hooks delivered via worktree's `settings.local.json` (worktrees) or `--settings` flag (main repo).
 - **Hook identification** — two-marker pattern (`.kangentic` + bridge name) prevents touching user hooks.
 - **Backup on strip** — `stripActivityHooks()` backs up settings before modification, restores on failure.
 - **Orphan dedup** — on session resume, old PTY is killed and its file paths nulled before new PTY spawns. Prevents stale `onExit` handlers from deleting files the new session needs.
@@ -191,8 +192,8 @@ Uses real temp files with mocked `os.homedir()`.
 
 ### Worktree Manager (`worktree-manager.test.ts`)
 
-**Sparse-checkout** (`.claude/` exclusion):
-- Initializes sparse-checkout with `--no-cone` and excludes `.claude/`
+**Sparse-checkout** (`.claude/commands/` exclusion):
+- Initializes sparse-checkout with `--no-cone` and excludes `.claude/commands/`
 - Sparse-checkout runs before `copyFiles`
 - Skips `.claude/` entries in `copyFiles`
 - No `skip-worktree` or `update-index` calls

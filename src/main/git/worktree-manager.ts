@@ -73,15 +73,16 @@ export class WorktreeManager {
       // Non-fatal — merge-back falls back to 'main'
     }
 
-    // Exclude .claude/ from worktree via sparse-checkout.
-    // Unlike skip-worktree, this survives rebase/merge/checkout —
-    // no git contamination risk regardless of user's merge strategy.
+    // Exclude .claude/commands/ from worktree via sparse-checkout.
+    // This prevents duplicate slash commands while keeping .claude/settings.json
+    // (so Claude resolves permissions naturally) and allowing settings.local.json
+    // writes to be properly gitignored.
     await wtGit.raw(['sparse-checkout', 'init', '--no-cone']);
-    await wtGit.raw(['sparse-checkout', 'set', '/*', '!/.claude/']);
+    await wtGit.raw(['sparse-checkout', 'set', '/*', '!/.claude/commands/']);
 
     // Copy specified files into the worktree (skip .claude/ entries —
-    // sparse-checkout excludes the directory, and all settings/hooks
-    // are delivered via --settings flag)
+    // sparse-checkout keeps .claude/ but excludes commands/, and hooks
+    // are delivered via settings.local.json in the worktree)
     for (const file of copyFiles) {
       if (file.startsWith('.claude/') || file.startsWith('.claude\\')) continue;
       const src = path.join(this.projectPath, file);
