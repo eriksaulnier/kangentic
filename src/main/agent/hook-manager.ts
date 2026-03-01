@@ -14,13 +14,6 @@ function isKangenticHook(h: any): boolean {
   );
 }
 
-/** Check if a hook entry is specifically an activity-bridge entry. */
-function isActivityBridgeHook(h: any): boolean {
-  return typeof h.command === 'string'
-    && h.command.includes('activity-bridge')
-    && h.command.includes('.kangentic');
-}
-
 /** Check if a hook entry is specifically an event-bridge entry. */
 function isEventBridgeHook(h: any): boolean {
   return typeof h.command === 'string'
@@ -39,18 +32,8 @@ function filterOurHooks(entries: any[] | undefined): any[] {
 }
 
 /**
- * Filter out only activity-bridge entries from a hook event array.
- * Preserves event-bridge entries and user-defined hooks.
- */
-function filterActivityHooks(entries: any[] | undefined): any[] {
-  return (entries || []).filter(
-    (e: any) => !e?.hooks?.some?.(isActivityBridgeHook),
-  );
-}
-
-/**
  * Filter out only event-bridge entries from a hook event array.
- * Preserves activity-bridge entries and user-defined hooks.
+ * Preserves user-defined hooks.
  */
 function filterEventHooks(entries: any[] | undefined): any[] {
   return (entries || []).filter(
@@ -66,81 +49,11 @@ function settingsLocalPath(dir: string): string {
 }
 
 /**
- * Read and parse `.claude/settings.local.json`. Returns `null` if the
- * file doesn't exist or can't be parsed.
- */
-function readSettingsLocal(dir: string): Record<string, any> | null {
-  const p = settingsLocalPath(dir);
-  try {
-    return JSON.parse(fs.readFileSync(p, 'utf-8'));
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Inject Kangentic activity hooks into `<cwd>/.claude/settings.local.json`.
- * Replaces any stale activity-bridge entries from previous sessions while
- * preserving event-bridge hooks and all user-defined hooks/settings.
- */
-export function injectActivityHooks(
-  cwd: string,
-  activityBridge: string,
-  activityPath: string,
-): void {
-  const localSettingsDir = path.join(cwd, '.claude');
-  fs.mkdirSync(localSettingsDir, { recursive: true });
-  const p = settingsLocalPath(cwd);
-
-  let settings: Record<string, any> = {};
-  try {
-    const raw = fs.readFileSync(p, 'utf-8');
-    settings = JSON.parse(raw);
-  } catch {
-    // Doesn't exist or malformed — start fresh
-  }
-
-  const existingHooks = settings.hooks || {};
-
-  settings.hooks = {
-    ...existingHooks,
-    PreToolUse: [
-      ...filterActivityHooks(existingHooks.PreToolUse),
-      { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" idle` }] },
-    ],
-    UserPromptSubmit: [
-      ...filterActivityHooks(existingHooks.UserPromptSubmit),
-      { matcher: '', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" thinking` }] },
-    ],
-    Stop: [
-      ...filterActivityHooks(existingHooks.Stop),
-      { matcher: '', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" idle` }] },
-    ],
-    PermissionRequest: [
-      ...filterActivityHooks(existingHooks.PermissionRequest),
-      { matcher: '', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" idle` }] },
-    ],
-    PostToolUse: [
-      ...filterActivityHooks(existingHooks.PostToolUse),
-      { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" thinking` }] },
-      { matcher: 'ExitPlanMode', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" thinking` }] },
-    ],
-    PostToolUseFailure: [
-      ...filterActivityHooks(existingHooks.PostToolUseFailure),
-      { matcher: '', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" idle` }] },
-    ],
-  };
-
-  fs.writeFileSync(p, JSON.stringify(settings, null, 2));
-}
-
-/**
  * Inject Kangentic event-bridge hooks into `<cwd>/.claude/settings.local.json`.
  * Adds hooks for all tracked Claude Code lifecycle events (PreToolUse,
  * PostToolUse, PostToolUseFailure, UserPromptSubmit, Stop, PermissionRequest).
- * Replaces any stale event-bridge entries
- * from previous sessions while preserving activity-bridge hooks and all
- * user-defined hooks/settings.
+ * Replaces any stale event-bridge entries from previous sessions while
+ * preserving all user-defined hooks/settings.
  */
 export function injectEventHooks(
   cwd: string,

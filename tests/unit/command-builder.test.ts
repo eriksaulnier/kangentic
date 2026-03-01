@@ -674,7 +674,7 @@ describe('Merged Settings — Local Settings Merge', () => {
       permissionMode: 'default',
       sessionId: 'test-sess',
       statusOutputPath: statusOutput,
-      activityOutputPath: path.join(tmpDir, '.kangentic', 'sessions', 'test-sess', 'activity.json'),
+      eventsOutputPath: path.join(tmpDir, '.kangentic', 'sessions', 'test-sess', 'events.jsonl'),
     });
 
     // Read the merged settings file
@@ -764,7 +764,6 @@ describe('Merged Settings — Local Settings Merge', () => {
       permissionMode: 'default',
       sessionId: 'test-sess',
       statusOutputPath: statusOutput,
-      activityOutputPath: path.join(tmpDir, '.kangentic', 'sessions', 'test-sess', 'activity.json'),
       eventsOutputPath: path.join(tmpDir, '.kangentic', 'sessions', 'test-sess', 'events.jsonl'),
     });
 

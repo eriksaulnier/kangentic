@@ -26,7 +26,6 @@ interface ManagedSession {
   statusOutputPath: string | null;
   statusWatcher: fs.FSWatcher | null;
   activityOutputPath: string | null;
-  activityWatcher: fs.FSWatcher | null;
   eventsOutputPath: string | null;
   eventsWatcher: fs.FSWatcher | null;
   eventsFileOffset: number;
@@ -91,7 +90,6 @@ export class SessionManager extends EventEmitter {
         statusOutputPath: input.statusOutputPath || null,
         statusWatcher: null,
         activityOutputPath: input.activityOutputPath || null,
-        activityWatcher: null,
         eventsOutputPath: input.eventsOutputPath || null,
         eventsWatcher: null,
         eventsFileOffset: 0,
@@ -123,10 +121,6 @@ export class SessionManager extends EventEmitter {
     if (existing?.statusWatcher) {
       existing.statusWatcher.close();
       existing.statusWatcher = null;
-    }
-    if (existing?.activityWatcher) {
-      existing.activityWatcher.close();
-      existing.activityWatcher = null;
     }
     if (existing?.eventsWatcher) {
       existing.eventsWatcher.close();
@@ -201,7 +195,6 @@ export class SessionManager extends EventEmitter {
         statusOutputPath: input.statusOutputPath || null,
         statusWatcher: null,
         activityOutputPath: input.activityOutputPath || null,
-        activityWatcher: null,
         eventsOutputPath: input.eventsOutputPath || null,
         eventsWatcher: null,
         eventsFileOffset: 0,
@@ -236,7 +229,6 @@ export class SessionManager extends EventEmitter {
       statusOutputPath: input.statusOutputPath || null,
       statusWatcher: null,
       activityOutputPath: input.activityOutputPath || null,
-      activityWatcher: null,
       eventsOutputPath: input.eventsOutputPath || null,
       eventsWatcher: null,
       eventsFileOffset: 0,
@@ -248,11 +240,6 @@ export class SessionManager extends EventEmitter {
     // Start watching the status output file for usage data
     if (input.statusOutputPath) {
       this.startUsageWatcher(session);
-    }
-
-    // Start watching the activity output file for thinking/idle state
-    if (input.activityOutputPath) {
-      this.startActivityWatcher(session);
     }
 
     // Start watching the events JSONL file for activity log
@@ -380,10 +367,6 @@ export class SessionManager extends EventEmitter {
     if (session.statusWatcher) {
       session.statusWatcher.close();
       session.statusWatcher = null;
-    }
-    if (session.activityWatcher) {
-      session.activityWatcher.close();
-      session.activityWatcher = null;
     }
     if (session.eventsWatcher) {
       session.eventsWatcher.close();
@@ -543,57 +526,6 @@ export class SessionManager extends EventEmitter {
   }
 
   /**
-   * Start watching a session's activity output file for thinking/idle state.
-   * Claude Code hooks write JSON to this file via our activity bridge script.
-   */
-  private startActivityWatcher(session: ManagedSession): void {
-    if (!session.activityOutputPath) return;
-
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const readAndEmit = () => {
-      try {
-        const raw = fs.readFileSync(session.activityOutputPath!, 'utf-8');
-        const state = ClaudeStatusParser.parseActivity(raw);
-        if (state) {
-          this.activityCache.set(session.id, state);
-          this.emit('activity', session.id, state);
-        }
-      } catch {
-        // File may not exist yet — ignore
-      }
-    };
-
-    try {
-      const watcher = fs.watch(session.activityOutputPath, () => {
-        if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(readAndEmit, 50);
-      });
-
-      watcher.on('error', () => {});
-      session.activityWatcher = watcher;
-    } catch {
-      // File may not exist yet; try polling on the directory instead
-      const dir = session.activityOutputPath.replace(/[/\\][^/\\]+$/, '');
-      try {
-        const watcher = fs.watch(dir, (eventType, filename) => {
-          if (!filename) return;
-          const expected = session.activityOutputPath!.replace(/^.*[/\\]/, '');
-          if (filename === expected) {
-            if (debounceTimer) clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(readAndEmit, 50);
-          }
-        });
-
-        watcher.on('error', () => {});
-        session.activityWatcher = watcher;
-      } catch {
-        // Can't watch — no activity data for this session
-      }
-    }
-  }
-
-  /**
    * Start watching a session's events JSONL file for activity log events.
    * Claude Code hooks write JSON lines to this file via our event bridge script.
    * Only reads new bytes appended since the last read (offset tracking).
@@ -638,9 +570,7 @@ export class SessionManager extends EventEmitter {
             events.push(event);
             this.emit('event', session.id, event);
 
-            // Derive activity state from events — more reliable than
-            // the separate activity-bridge because the event-bridge
-            // fires for ALL tools (blank PreToolUse matcher).
+            // Derive activity state from event types.
             if (event.type === 'tool_start' || event.type === 'prompt') {
               this.activityCache.set(session.id, 'thinking');
               this.emit('activity', session.id, 'thinking');
@@ -697,10 +627,6 @@ export class SessionManager extends EventEmitter {
     if (session.statusWatcher) {
       session.statusWatcher.close();
       session.statusWatcher = null;
-    }
-    if (session.activityWatcher) {
-      session.activityWatcher.close();
-      session.activityWatcher = null;
     }
     if (session.eventsWatcher) {
       session.eventsWatcher.close();
@@ -783,10 +709,6 @@ export class SessionManager extends EventEmitter {
       if (session.statusWatcher) {
         session.statusWatcher.close();
         session.statusWatcher = null;
-      }
-      if (session.activityWatcher) {
-        session.activityWatcher.close();
-        session.activityWatcher = null;
       }
       if (session.eventsWatcher) {
         session.eventsWatcher.close();

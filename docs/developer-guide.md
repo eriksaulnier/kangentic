@@ -28,8 +28,7 @@ src/
       hook-manager.ts      # Injects/strips Kangentic hooks from Claude settings
       trust-manager.ts     # Pre-populates ~/.claude.json trust entries for worktrees
       status-bridge.js     # Hook script: writes usage data to status.json
-      activity-bridge.js   # Hook script: writes thinking/idle to activity.json
-      event-bridge.js      # Hook script: appends tool events to events.jsonl
+      event-bridge.js      # Hook script: appends tool events + activity state to events.jsonl
     config/
       config-manager.ts    # Three-tier config: global → project overrides → effective
     db/                    # SQLite database layer
@@ -104,7 +103,7 @@ Flags:
 1. `tsc --noEmit` (type check)
 2. Vite builds renderer → `.vite/build/renderer/main_window/`
 3. esbuild bundles main + preload (minified)
-4. Copies bridge scripts (`status-bridge.js`, `activity-bridge.js`, `event-bridge.js`) to `.vite/build/`
+4. Copies bridge scripts (`status-bridge.js`, `event-bridge.js`) to `.vite/build/`
 
 ### Worktree Dev
 

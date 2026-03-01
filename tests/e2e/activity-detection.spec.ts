@@ -2,15 +2,13 @@
  * E2E tests for Claude Code activity detection (thinking vs idle).
  *
  * Verifies:
- * - Activity bridge script writes correct JSON when invoked
- * - Merged settings file contains hooks for UserPromptSubmit and Stop events
- * - Activity file watcher emits state changes to the renderer
+ * - Merged settings file contains event-bridge hooks for lifecycle events
+ * - Event watcher emits activity state changes to the renderer
  * - Task card shows Loader2 spinner when thinking, static dot when idle
- * - Task detail dialog shows spinner when thinking, static dot when idle
- * - Activity state defaults to 'thinking' for newly spawned sessions
+ * - Activity state defaults to 'idle' for newly spawned sessions
  *
  * Uses mock Claude CLI. Since mock Claude doesn't invoke hooks,
- * tests write activity files directly to simulate Claude Code's behavior.
+ * tests write events.jsonl directly to simulate Claude Code's behavior.
  */
 import { test, expect } from '@playwright/test';
 import {
@@ -25,7 +23,6 @@ import {
 import type { ElectronApplication, Page } from '@playwright/test';
 import path from 'node:path';
 import fs from 'node:fs';
-import { execSync } from 'node:child_process';
 
 const TEST_NAME = 'activity-detection';
 const runId = Date.now();
@@ -169,88 +166,16 @@ function findMergedSettings(): Record<string, any> | null {
 }
 
 /**
- * Extract the activity output path from the merged settings hooks.
+ * Extract the events JSONL output path from the merged settings hooks.
  */
-function findActivityOutputPath(): string | null {
+function findEventsOutputPath(): string | null {
   const settings = findMergedSettings();
   if (!settings?.hooks?.Stop?.[0]?.hooks?.[0]?.command) return null;
   const cmd: string = settings.hooks.Stop[0].hooks[0].command;
   // Extract the path from: node "bridge" "path" idle
-  const match = cmd.match(/"([^"]+activity\.json)"/);
+  const match = cmd.match(/"([^"]+events\.jsonl)"/);
   return match ? match[1].replace(/\//g, path.sep) : null;
 }
-
-test.describe('Activity Bridge Script', () => {
-  test('activity-bridge.js writes correct JSON for thinking state', async () => {
-    const bridgePath = path.join(__dirname, '..', '..', 'src', 'main', 'agent', 'activity-bridge.js');
-    const outFile = path.join(tmpDir, 'test-thinking.json');
-
-    execSync(`echo {} | node "${bridgePath}" "${outFile}" thinking`, {
-      encoding: 'utf-8',
-      timeout: 5000,
-    });
-
-    const data = JSON.parse(fs.readFileSync(outFile, 'utf-8'));
-    expect(data.state).toBe('thinking');
-    expect(data.timestamp).toBeTruthy();
-    expect(new Date(data.timestamp).getTime()).toBeGreaterThan(0);
-
-    fs.unlinkSync(outFile);
-  });
-
-  test('activity-bridge.js writes correct JSON for idle state', async () => {
-    const bridgePath = path.join(__dirname, '..', '..', 'src', 'main', 'agent', 'activity-bridge.js');
-    const outFile = path.join(tmpDir, 'test-idle.json');
-
-    execSync(`echo {} | node "${bridgePath}" "${outFile}" idle`, {
-      encoding: 'utf-8',
-      timeout: 5000,
-    });
-
-    const data = JSON.parse(fs.readFileSync(outFile, 'utf-8'));
-    expect(data.state).toBe('idle');
-    expect(data.timestamp).toBeTruthy();
-
-    fs.unlinkSync(outFile);
-  });
-
-  test('activity-bridge.js defaults to thinking when no state arg', async () => {
-    const bridgePath = path.join(__dirname, '..', '..', 'src', 'main', 'agent', 'activity-bridge.js');
-    const outFile = path.join(tmpDir, 'test-default.json');
-
-    execSync(`echo {} | node "${bridgePath}" "${outFile}"`, {
-      encoding: 'utf-8',
-      timeout: 5000,
-    });
-
-    const data = JSON.parse(fs.readFileSync(outFile, 'utf-8'));
-    expect(data.state).toBe('thinking');
-
-    fs.unlinkSync(outFile);
-  });
-
-  test('activity-bridge.js handles piped JSON (large stdin)', async () => {
-    const bridgePath = path.join(__dirname, '..', '..', 'src', 'main', 'agent', 'activity-bridge.js');
-    const outFile = path.join(tmpDir, 'test-large-stdin.json');
-    const stdinFile = path.join(tmpDir, 'test-large-stdin-input.json');
-
-    // Write a large payload to a temp file and pipe it via file redirect
-    // (avoids Windows command-line length limit)
-    const largePayload = JSON.stringify({ event: 'Stop', data: { x: 'y'.repeat(10000) } });
-    fs.writeFileSync(stdinFile, largePayload);
-
-    execSync(`node "${bridgePath}" "${outFile}" idle < "${stdinFile}"`, {
-      encoding: 'utf-8',
-      timeout: 5000,
-    });
-
-    const data = JSON.parse(fs.readFileSync(outFile, 'utf-8'));
-    expect(data.state).toBe('idle');
-
-    fs.unlinkSync(outFile);
-    fs.unlinkSync(stdinFile);
-  });
-});
 
 test.describe('Merged Settings Hooks', () => {
   test.beforeEach(async () => {
@@ -268,30 +193,42 @@ test.describe('Merged Settings Hooks', () => {
     expect(settings).toBeTruthy();
     expect(settings!.hooks).toBeTruthy();
 
-    // UserPromptSubmit hook
+    // UserPromptSubmit hook (event-bridge → prompt)
     expect(settings!.hooks.UserPromptSubmit).toBeInstanceOf(Array);
     expect(settings!.hooks.UserPromptSubmit.length).toBeGreaterThanOrEqual(1);
     const upsHook = settings!.hooks.UserPromptSubmit[0];
     expect(upsHook.hooks[0].type).toBe('command');
-    expect(upsHook.hooks[0].command).toContain('activity-bridge');
-    expect(upsHook.hooks[0].command).toContain('thinking');
+    expect(upsHook.hooks[0].command).toContain('event-bridge');
+    expect(upsHook.hooks[0].command).toContain('prompt');
 
-    // Stop hook
+    // Stop hook (event-bridge → idle)
     expect(settings!.hooks.Stop).toBeInstanceOf(Array);
     expect(settings!.hooks.Stop.length).toBeGreaterThanOrEqual(1);
     const stopHook = settings!.hooks.Stop[0];
     expect(stopHook.hooks[0].type).toBe('command');
-    expect(stopHook.hooks[0].command).toContain('activity-bridge');
+    expect(stopHook.hooks[0].command).toContain('event-bridge');
     expect(stopHook.hooks[0].command).toContain('idle');
+
+    // PostToolUse should include AskUserQuestion and ExitPlanMode prompt matchers
+    expect(settings!.hooks.PostToolUse).toBeInstanceOf(Array);
+    const postToolUseMatchers = settings!.hooks.PostToolUse.map((e: Record<string, unknown>) => e.matcher);
+    expect(postToolUseMatchers).toContain('AskUserQuestion');
+    expect(postToolUseMatchers).toContain('ExitPlanMode');
+
+    // PostToolUseFailure should exist with event-bridge
+    expect(settings!.hooks.PostToolUseFailure).toBeInstanceOf(Array);
+    expect(settings!.hooks.PostToolUseFailure.length).toBeGreaterThanOrEqual(1);
+    expect(settings!.hooks.PostToolUseFailure[0].hooks[0].command).toContain('event-bridge');
+    expect(settings!.hooks.PostToolUseFailure[0].hooks[0].command).toContain('tool_failure');
   });
 
-  test('hooks reference activity file in status directory', async () => {
+  test('hooks reference events file in session directory', async () => {
     const settings = findMergedSettings();
     expect(settings).toBeTruthy();
 
     const stopCmd: string = settings!.hooks.Stop[0].hooks[0].command;
-    // Activity file should be in .kangentic/sessions/<id>/activity.json
-    expect(stopCmd).toMatch(/\.kangentic[/\\]sessions[/\\].*activity\.json/);
+    // Events file should be in .kangentic/sessions/<id>/events.jsonl
+    expect(stopCmd).toMatch(/\.kangentic[/\\]sessions[/\\].*events\.jsonl/);
   });
 });
 
@@ -317,19 +254,17 @@ test.describe('Activity State via IPC', () => {
     expect(states).toContain('idle');
   });
 
-  test('writing activity file transitions state to idle', async () => {
-    // Find the activity output path from the merged settings
-    const activityPath = findActivityOutputPath();
-    expect(activityPath).toBeTruthy();
+  test('writing events JSONL transitions state to idle', async () => {
+    // Find the events output path from the merged settings
+    const eventsPath = findEventsOutputPath();
+    expect(eventsPath).toBeTruthy();
 
     // Ensure directory exists
-    fs.mkdirSync(path.dirname(activityPath!), { recursive: true });
+    fs.mkdirSync(path.dirname(eventsPath!), { recursive: true });
 
-    // Write idle state to the activity file (simulating Stop hook)
-    fs.writeFileSync(activityPath!, JSON.stringify({
-      state: 'idle',
-      timestamp: new Date().toISOString(),
-    }));
+    // Write idle event to the events file (simulating Stop hook)
+    const idleEvent = JSON.stringify({ ts: Date.now(), type: 'idle' });
+    fs.appendFileSync(eventsPath!, idleEvent + '\n');
 
     // Wait for the file watcher to pick it up and emit to the renderer
     await page.waitForTimeout(500);
@@ -342,15 +277,13 @@ test.describe('Activity State via IPC', () => {
     expect(states).toContain('idle');
   });
 
-  test('writing activity file transitions state back to thinking', async () => {
-    const activityPath = findActivityOutputPath();
-    expect(activityPath).toBeTruthy();
+  test('writing events JSONL transitions state back to thinking', async () => {
+    const eventsPath = findEventsOutputPath();
+    expect(eventsPath).toBeTruthy();
 
-    // Write thinking state (simulating UserPromptSubmit hook)
-    fs.writeFileSync(activityPath!, JSON.stringify({
-      state: 'thinking',
-      timestamp: new Date().toISOString(),
-    }));
+    // Write tool_start event (simulating PreToolUse hook → thinking)
+    const toolEvent = JSON.stringify({ ts: Date.now(), type: 'tool_start', tool: 'Read', detail: '/some/file.ts' });
+    fs.appendFileSync(eventsPath!, toolEvent + '\n');
 
     await page.waitForTimeout(500);
 
@@ -391,15 +324,13 @@ test.describe('Task Card Spinner', () => {
   });
 
   test('task card shows static dot when session is idle', async () => {
-    // Find activity path and write idle state
-    const activityPath = findActivityOutputPath();
-    expect(activityPath).toBeTruthy();
+    // Find events path and write idle event
+    const eventsPath = findEventsOutputPath();
+    expect(eventsPath).toBeTruthy();
 
-    fs.mkdirSync(path.dirname(activityPath!), { recursive: true });
-    fs.writeFileSync(activityPath!, JSON.stringify({
-      state: 'idle',
-      timestamp: new Date().toISOString(),
-    }));
+    fs.mkdirSync(path.dirname(eventsPath!), { recursive: true });
+    const idleEvent = JSON.stringify({ ts: Date.now(), type: 'idle' });
+    fs.appendFileSync(eventsPath!, idleEvent + '\n');
 
     await page.waitForTimeout(500);
 

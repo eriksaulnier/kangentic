@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {
-  injectActivityHooks,
   injectEventHooks,
   stripActivityHooks,
 } from '../../src/main/agent/hook-manager';
@@ -32,37 +31,6 @@ afterEach(() => {
 });
 
 describe('hook-manager', () => {
-  it('injectActivityHooks creates settings file with correct hooks', () => {
-    injectActivityHooks(tmpDir, ACTIVITY_BRIDGE, ACTIVITY_PATH);
-
-    const settings = readSettings();
-    expect(settings.hooks.PreToolUse).toHaveLength(1);
-    expect(settings.hooks.UserPromptSubmit).toHaveLength(1);
-    expect(settings.hooks.Stop).toHaveLength(1);
-    expect(settings.hooks.PermissionRequest).toHaveLength(1);
-    expect(settings.hooks.PostToolUse).toHaveLength(2);
-    expect(settings.hooks.PreToolUse[0].matcher).toBe('AskUserQuestion');
-    expect(settings.hooks.PreToolUse[0].hooks[0].command).toContain('activity-bridge');
-    expect(settings.hooks.PreToolUse[0].hooks[0].command).toContain('idle');
-    expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toContain('activity-bridge');
-    expect(settings.hooks.Stop[0].hooks[0].command).toContain('activity-bridge');
-    expect(settings.hooks.PermissionRequest[0].matcher).toBe('');
-    expect(settings.hooks.PermissionRequest[0].hooks[0].command).toContain('activity-bridge');
-    expect(settings.hooks.PermissionRequest[0].hooks[0].command).toContain('idle');
-    // PostToolUse: AskUserQuestion + ExitPlanMode → thinking
-    expect(settings.hooks.PostToolUse[0].matcher).toBe('AskUserQuestion');
-    expect(settings.hooks.PostToolUse[0].hooks[0].command).toContain('activity-bridge');
-    expect(settings.hooks.PostToolUse[0].hooks[0].command).toContain('thinking');
-    expect(settings.hooks.PostToolUse[1].matcher).toBe('ExitPlanMode');
-    expect(settings.hooks.PostToolUse[1].hooks[0].command).toContain('activity-bridge');
-    expect(settings.hooks.PostToolUse[1].hooks[0].command).toContain('thinking');
-    // PostToolUseFailure: catch-all → idle
-    expect(settings.hooks.PostToolUseFailure).toHaveLength(1);
-    expect(settings.hooks.PostToolUseFailure[0].matcher).toBe('');
-    expect(settings.hooks.PostToolUseFailure[0].hooks[0].command).toContain('activity-bridge');
-    expect(settings.hooks.PostToolUseFailure[0].hooks[0].command).toContain('idle');
-  });
-
   it('injectEventHooks creates settings file with correct hooks', () => {
     injectEventHooks(tmpDir, EVENT_BRIDGE, EVENTS_PATH);
 
@@ -100,127 +68,6 @@ describe('hook-manager', () => {
     expect(settings.hooks.PostToolUseFailure[0].matcher).toBe('');
     expect(settings.hooks.PostToolUseFailure[0].hooks[0].command).toContain('event-bridge');
     expect(settings.hooks.PostToolUseFailure[0].hooks[0].command).toContain('tool_failure');
-  });
-
-  it('injectActivityHooks preserves event-bridge hooks', () => {
-    // First inject event hooks
-    injectEventHooks(tmpDir, EVENT_BRIDGE, EVENTS_PATH);
-    // Then inject activity hooks
-    injectActivityHooks(tmpDir, ACTIVITY_BRIDGE, ACTIVITY_PATH);
-
-    const settings = readSettings();
-    // UserPromptSubmit should have both event-bridge and activity-bridge entries
-    expect(settings.hooks.UserPromptSubmit).toHaveLength(2);
-    const upsCommands = settings.hooks.UserPromptSubmit.map(
-      (e: any) => e.hooks[0].command,
-    );
-    expect(upsCommands.some((c: string) => c.includes('event-bridge'))).toBe(true);
-    expect(upsCommands.some((c: string) => c.includes('activity-bridge'))).toBe(true);
-
-    // PreToolUse should have event-bridge entries (3) + activity-bridge AskUserQuestion (1)
-    expect(settings.hooks.PreToolUse).toHaveLength(4);
-    const ptuCommands = settings.hooks.PreToolUse.map(
-      (e: any) => e.hooks[0].command,
-    );
-    expect(ptuCommands.filter((c: string) => c.includes('event-bridge'))).toHaveLength(3);
-    expect(ptuCommands.filter((c: string) => c.includes('activity-bridge'))).toHaveLength(1);
-
-    // PermissionRequest should have both bridge types
-    expect(settings.hooks.PermissionRequest).toHaveLength(2);
-    const prCommands = settings.hooks.PermissionRequest.map(
-      (e: any) => e.hooks[0].command,
-    );
-    expect(prCommands.some((c: string) => c.includes('event-bridge'))).toBe(true);
-    expect(prCommands.some((c: string) => c.includes('activity-bridge'))).toBe(true);
-
-    // PostToolUse should have event-bridge entries (3) + activity-bridge entries (2)
-    expect(settings.hooks.PostToolUse).toHaveLength(5);
-    const ptuPostCommands = settings.hooks.PostToolUse.map(
-      (e: any) => e.hooks[0].command,
-    );
-    expect(ptuPostCommands.filter((c: string) => c.includes('event-bridge'))).toHaveLength(3);
-    expect(ptuPostCommands.filter((c: string) => c.includes('activity-bridge'))).toHaveLength(2);
-
-    // PostToolUseFailure should have event-bridge (1) + activity-bridge (1)
-    expect(settings.hooks.PostToolUseFailure).toHaveLength(2);
-    const ptufCommands = settings.hooks.PostToolUseFailure.map(
-      (e: any) => e.hooks[0].command,
-    );
-    expect(ptufCommands.some((c: string) => c.includes('event-bridge'))).toBe(true);
-    expect(ptufCommands.some((c: string) => c.includes('activity-bridge'))).toBe(true);
-  });
-
-  it('injectEventHooks preserves activity-bridge hooks', () => {
-    injectActivityHooks(tmpDir, ACTIVITY_BRIDGE, ACTIVITY_PATH);
-    injectEventHooks(tmpDir, EVENT_BRIDGE, EVENTS_PATH);
-
-    const settings = readSettings();
-    // Stop should have both bridge types
-    expect(settings.hooks.Stop).toHaveLength(2);
-    const stopCommands = settings.hooks.Stop.map(
-      (e: any) => e.hooks[0].command,
-    );
-    expect(stopCommands.some((c: string) => c.includes('activity-bridge'))).toBe(true);
-    expect(stopCommands.some((c: string) => c.includes('event-bridge'))).toBe(true);
-
-    // PreToolUse should have activity-bridge AskUserQuestion (1) + event-bridge entries (3)
-    expect(settings.hooks.PreToolUse).toHaveLength(4);
-    const ptuCommands = settings.hooks.PreToolUse.map(
-      (e: any) => e.hooks[0].command,
-    );
-    expect(ptuCommands.filter((c: string) => c.includes('activity-bridge'))).toHaveLength(1);
-    expect(ptuCommands.filter((c: string) => c.includes('event-bridge'))).toHaveLength(3);
-
-    // PermissionRequest should have both bridge types
-    expect(settings.hooks.PermissionRequest).toHaveLength(2);
-    const prCommands = settings.hooks.PermissionRequest.map(
-      (e: any) => e.hooks[0].command,
-    );
-    expect(prCommands.some((c: string) => c.includes('activity-bridge'))).toBe(true);
-    expect(prCommands.some((c: string) => c.includes('event-bridge'))).toBe(true);
-
-    // PostToolUse should have activity-bridge entries (2) + event-bridge entries (3)
-    expect(settings.hooks.PostToolUse).toHaveLength(5);
-    const ptuPostCommands = settings.hooks.PostToolUse.map(
-      (e: any) => e.hooks[0].command,
-    );
-    expect(ptuPostCommands.filter((c: string) => c.includes('activity-bridge'))).toHaveLength(2);
-    expect(ptuPostCommands.filter((c: string) => c.includes('event-bridge'))).toHaveLength(3);
-
-    // PostToolUseFailure should have activity-bridge (1) + event-bridge (1)
-    expect(settings.hooks.PostToolUseFailure).toHaveLength(2);
-    const ptufCommands = settings.hooks.PostToolUseFailure.map(
-      (e: any) => e.hooks[0].command,
-    );
-    expect(ptufCommands.some((c: string) => c.includes('activity-bridge'))).toBe(true);
-    expect(ptufCommands.some((c: string) => c.includes('event-bridge'))).toBe(true);
-  });
-
-  it('injectActivityHooks preserves user hooks', () => {
-    // Pre-create settings with a user hook
-    const claudeDir = path.join(tmpDir, '.claude');
-    fs.mkdirSync(claudeDir, { recursive: true });
-    const userSettings = {
-      hooks: {
-        UserPromptSubmit: [
-          { matcher: '', hooks: [{ type: 'command', command: 'echo user-hook' }] },
-        ],
-      },
-    };
-    fs.writeFileSync(
-      path.join(claudeDir, 'settings.local.json'),
-      JSON.stringify(userSettings, null, 2),
-    );
-
-    injectActivityHooks(tmpDir, ACTIVITY_BRIDGE, ACTIVITY_PATH);
-
-    const settings = readSettings();
-    expect(settings.hooks.UserPromptSubmit).toHaveLength(2);
-    const commands = settings.hooks.UserPromptSubmit.map(
-      (e: any) => e.hooks[0].command,
-    );
-    expect(commands).toContain('echo user-hook');
-    expect(commands.some((c: string) => c.includes('activity-bridge'))).toBe(true);
   });
 
   it('stripActivityHooks removes ALL kangentic hooks, preserves user hooks', () => {

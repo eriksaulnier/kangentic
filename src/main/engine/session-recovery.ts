@@ -410,7 +410,6 @@ export async function recoverSessions(
         sessionId: claudeSessionId,
         resume: canResume,
         statusOutputPath,
-        activityOutputPath,
         eventsOutputPath,
       });
 
@@ -613,7 +612,6 @@ export async function reconcileSessions(
           projectRoot: projectPath,
           sessionId: claudeSessionId,
           statusOutputPath,
-          activityOutputPath,
           eventsOutputPath,
         });
 

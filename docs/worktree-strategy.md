@@ -54,7 +54,7 @@ Sparse-checkout was chosen over `skip-worktree` because skip-worktree flags get 
 
 ## Hook Delivery
 
-Three bridge scripts integrate Claude Code's hook system with Kangentic's UI.
+Two bridge scripts integrate Claude Code's hook system with Kangentic's UI.
 
 ### Bridge Scripts
 
@@ -63,10 +63,11 @@ All in `src/main/agent/`:
 | Script | Output File | Hook Points | Data |
 |--------|-------------|-------------|------|
 | `status-bridge.js` | `status.json` | statusLine | Token usage, cost, model, context % |
-| `activity-bridge.js` | `activity.json` | PreToolUse, PostToolUse, UserPromptSubmit, Stop, PermissionRequest | `thinking` or `idle` state |
-| `event-bridge.js` | `events.jsonl` | PreToolUse, PostToolUse, PostToolUseFailure, UserPromptSubmit, Stop | Tool calls, prompts, interrupts (JSONL) |
+| `event-bridge.js` | `events.jsonl` | PreToolUse, PostToolUse, PostToolUseFailure, UserPromptSubmit, Stop, PermissionRequest | Tool calls, prompts, idle state, interrupts (JSONL) |
 
 Each bridge reads JSON from stdin (piped by Claude Code), writes to its output file, and exits. All writes are try/catch wrapped for non-fatal failures.
+
+Activity state (thinking/idle) is derived from event types in the events pipeline. See [Activity Detection](activity-detection.md) for the full design.
 
 ### Settings Merge
 
@@ -86,7 +87,7 @@ For each session, a merged settings file is built at `.kangentic/sessions/<sessi
 
 Kangentic hooks are identified by two markers in the command string:
 - Contains `.kangentic` (path component)
-- Contains the bridge name (`activity-bridge`, `event-bridge`, or `status-bridge`)
+- Contains a known bridge name (`event-bridge` or `status-bridge`)
 
 Both must match. This prevents false positives on user-defined hooks with similar names.
 
@@ -98,11 +99,10 @@ Each Claude Code session gets a directory at `<project>/.kangentic/sessions/<cla
 .kangentic/sessions/<uuid>/
   settings.json    # Merged settings passed via --settings
   status.json      # Usage data (written by status-bridge, watched by SessionManager)
-  activity.json    # Thinking/idle state (written by activity-bridge)
-  events.jsonl     # Structured event log (appended by event-bridge)
+  events.jsonl     # Structured event log + activity state (appended by event-bridge)
 ```
 
-The SessionManager watches these files with debounced `fs.watch` and emits IPC events to the renderer.
+The SessionManager watches these files with debounced `fs.watch` and emits IPC events to the renderer. Activity state (thinking/idle) is derived from event types — see [Activity Detection](activity-detection.md).
 
 ## Session Lifecycle
 
@@ -220,9 +220,7 @@ Uses vi.mock for `simple-git` and `node:fs`.
 
 ### Hook Manager (`hook-manager.test.ts`)
 
-- Inject activity hooks creates correct hook entries
 - Inject event hooks creates correct hook entries
-- Activity hooks preserve event-bridge hooks (and vice versa)
 - Hooks preserve user-defined hooks
 - Strip removes all Kangentic hooks, preserves user hooks
 - Strip cleans up empty settings file

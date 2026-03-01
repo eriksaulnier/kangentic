@@ -193,7 +193,7 @@ Template variables available: `{{title}}`, `{{description}}`, `{{taskId}}`, `{{w
 2. Kill any existing PTY for the same task (orphan dedup)
 3. Resolve shell and arguments (platform-specific)
 4. Spawn PTY via node-pty
-5. Start three file watchers (status, activity, events)
+5. Start two file watchers (status, events)
 6. Set up output handler (16ms batched flush)
 7. After 100ms delay, write the CLI command to PTY stdin
 
@@ -205,15 +205,14 @@ Template variables available: `{{title}}`, `{{description}}`, `{{taskId}}`, `{{w
 
 ### File Watchers
 
-Three watchers per session, reading files written by bridge scripts:
+Two watchers per session, reading files written by bridge scripts:
 
 | Watcher | File | Debounce | Emits |
 |---------|------|----------|-------|
 | Status | `status.json` | 100ms | `session:usage` — tokens, cost, model |
-| Activity | `activity.json` | 50ms | `session:activity` — thinking/idle |
-| Events | `events.jsonl` | 50ms | `session:event` — tool_start/end, prompt, idle |
+| Events | `events.jsonl` | 50ms | `session:event` — tool_start/end, prompt, idle; `session:activity` — thinking/idle (derived) |
 
-Events watcher uses byte offset tracking to only read new lines (no full re-read).
+Events watcher uses byte offset tracking to only read new lines (no full re-read). Activity state (thinking/idle) is derived from event types — see [Activity Detection](activity-detection.md).
 
 ### Shell Resolution
 
@@ -240,8 +239,7 @@ Shell-specific adaptations:
 | MAX_EVENTS | 500 | Activity log cap per session |
 | Flush interval | 16 ms | Output batching (~60fps) |
 | Status debounce | 100 ms | Usage file watch |
-| Activity debounce | 50 ms | Thinking/idle watch |
-| Event debounce | 50 ms | Event log watch |
+| Event debounce | 50 ms | Event log + activity state watch |
 | Graceful shutdown | 2000 ms | Max wait for `/exit` on app close |
 
 ## Session Queue

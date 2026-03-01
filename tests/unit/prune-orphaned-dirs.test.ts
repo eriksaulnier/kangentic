@@ -63,7 +63,6 @@ vi.mock('../../src/main/agent/trust-manager', () => ({
   ensureWorktreeTrust: vi.fn(),
 }));
 vi.mock('../../src/main/agent/hook-manager', () => ({
-  injectActivityHooks: vi.fn(),
   injectEventHooks: vi.fn(),
 }));
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));

@@ -182,7 +182,6 @@ export class TransitionEngine {
       resume: !!canResume,
       nonInteractive: config.nonInteractive ?? false,
       statusOutputPath,
-      activityOutputPath,
       eventsOutputPath,
     });
 

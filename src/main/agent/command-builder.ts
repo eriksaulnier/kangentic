@@ -27,7 +27,6 @@ interface CommandOptions {
   resume?: boolean; // true = --resume (existing session), false = --session-id (new session)
   nonInteractive?: boolean;
   statusOutputPath?: string; // path where the status bridge writes JSON
-  activityOutputPath?: string; // path where the activity bridge writes JSON
   eventsOutputPath?: string; // path where the event bridge appends JSONL
 }
 
@@ -223,15 +222,6 @@ export class CommandBuilder {
     const bridgePath = toForwardSlash(bridgeScript);
     const statusPath = toForwardSlash(options.statusOutputPath!);
 
-    // Resolve activity bridge (same candidate pattern as status bridge)
-    const activityCandidates = [
-      path.join(__dirname, 'activity-bridge.js'),
-      path.resolve(__dirname, '..', '..', 'src', 'main', 'agent', 'activity-bridge.js'),
-      path.resolve(process.cwd(), 'src', 'main', 'agent', 'activity-bridge.js'),
-    ];
-    const activityBridge = toForwardSlash(activityCandidates.find(p => fs.existsSync(p)) || activityCandidates[0]);
-    const activityPath = options.activityOutputPath ? toForwardSlash(options.activityOutputPath) : null;
-
     const merged: ClaudeSettings = {
       ...baseSettings,
       statusLine: {
@@ -240,7 +230,7 @@ export class CommandBuilder {
       },
     };
 
-    // Resolve event bridge (same candidate pattern as status/activity bridge)
+    // Resolve event bridge (same candidate pattern as status bridge)
     const eventCandidates = [
       path.join(__dirname, 'event-bridge.js'),
       path.resolve(__dirname, '..', '..', 'src', 'main', 'agent', 'event-bridge.js'),
@@ -249,55 +239,40 @@ export class CommandBuilder {
     const eventBridge = toForwardSlash(eventCandidates.find(p => fs.existsSync(p)) || eventCandidates[0]);
     const eventsPath = options.eventsOutputPath ? toForwardSlash(options.eventsOutputPath) : null;
 
-    // Deep-merge hooks for activity tracking + event logging (preserve existing user hooks)
-    if (activityPath || eventsPath) {
+    // Deep-merge hooks for event logging (preserve existing user hooks)
+    if (eventsPath) {
       const existingHooks = baseSettings.hooks || {};
       merged.hooks = { ...existingHooks };
 
-      if (activityPath) {
-        merged.hooks.PreToolUse = [
-          ...(existingHooks.PreToolUse || []),
-          { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" idle` }] },
-        ];
-        merged.hooks.UserPromptSubmit = [
-          ...(existingHooks.UserPromptSubmit || []),
-          { matcher: '', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" thinking` }] },
-        ];
-        merged.hooks.Stop = [
-          ...(existingHooks.Stop || []),
-          { matcher: '', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" idle` }] },
-        ];
-        merged.hooks.PermissionRequest = [
-          ...(existingHooks.PermissionRequest || []),
-          { matcher: '', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" idle` }] },
-        ];
-      }
-
-      if (eventsPath) {
-        // Append event-bridge hooks for all four hook points
-        merged.hooks.PreToolUse = [
-          ...(merged.hooks.PreToolUse || existingHooks.PreToolUse || []),
-          { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_start` }] },
-          { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
-          { matcher: 'ExitPlanMode', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
-        ];
-        merged.hooks.PostToolUse = [
-          ...(merged.hooks.PostToolUse || existingHooks.PostToolUse || []),
-          { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_end` }] },
-        ];
-        merged.hooks.UserPromptSubmit = [
-          ...(merged.hooks.UserPromptSubmit || existingHooks.UserPromptSubmit || []),
-          { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" prompt` }] },
-        ];
-        merged.hooks.Stop = [
-          ...(merged.hooks.Stop || existingHooks.Stop || []),
-          { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
-        ];
-        merged.hooks.PermissionRequest = [
-          ...(merged.hooks.PermissionRequest || existingHooks.PermissionRequest || []),
-          { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
-        ];
-      }
+      // Append event-bridge hooks for all lifecycle events
+      merged.hooks.PreToolUse = [
+        ...(existingHooks.PreToolUse || []),
+        { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_start` }] },
+        { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
+        { matcher: 'ExitPlanMode', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
+      ];
+      merged.hooks.PostToolUse = [
+        ...(existingHooks.PostToolUse || []),
+        { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_end` }] },
+        { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" prompt` }] },
+        { matcher: 'ExitPlanMode', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" prompt` }] },
+      ];
+      merged.hooks.PostToolUseFailure = [
+        ...(existingHooks.PostToolUseFailure || []),
+        { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_failure` }] },
+      ];
+      merged.hooks.UserPromptSubmit = [
+        ...(existingHooks.UserPromptSubmit || []),
+        { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" prompt` }] },
+      ];
+      merged.hooks.Stop = [
+        ...(existingHooks.Stop || []),
+        { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
+      ];
+      merged.hooks.PermissionRequest = [
+        ...(existingHooks.PermissionRequest || []),
+        { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
+      ];
     }
 
     // Write to .kangentic/sessions/<sessionId>/settings.json (for session recovery reference)
