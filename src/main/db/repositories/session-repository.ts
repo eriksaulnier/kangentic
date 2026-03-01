@@ -102,4 +102,12 @@ export class SessionRepository {
       `SELECT * FROM sessions WHERE task_id = ? ORDER BY started_at DESC LIMIT 1`
     ).get(taskId) as SessionRecord | undefined;
   }
+
+  /** Get all distinct Claude session IDs (for stale directory cleanup). */
+  listAllClaudeSessionIds(): string[] {
+    const rows = this.db.prepare(
+      `SELECT DISTINCT claude_session_id FROM sessions WHERE claude_session_id IS NOT NULL`
+    ).all() as Array<{ claude_session_id: string }>;
+    return rows.map(r => r.claude_session_id);
+  }
 }

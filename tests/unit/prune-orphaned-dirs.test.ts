@@ -1,35 +1,38 @@
 /**
- * Unit tests for the orphaned worktree directory cleanup in
- * pruneOrphanedWorktrees (second pass — stale directories on disk
- * not referenced by any task).
+ * Unit tests for pruneStaleResources — background async cleanup of
+ * orphaned worktree, session, and task directories under .kangentic/.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 
 // ── Hoisted mocks ─────────────────────────────────────────────────────────
 
 const mockExistsSync = vi.fn((): boolean => true);
-const mockReaddirSync = vi.fn((): { name: string; isDirectory: () => boolean }[] => []);
-const mockRmSync = vi.fn();
+const mockReaddir = vi.fn((): Promise<{ name: string; isDirectory: () => boolean }[]> => Promise.resolve([]));
+const mockRm = vi.fn((): Promise<void> => Promise.resolve());
 
 vi.mock('node:fs', () => ({
   default: {
     existsSync: (...args: unknown[]) => mockExistsSync(...args),
-    readdirSync: (...args: unknown[]) => mockReaddirSync(...args),
-    rmSync: (...args: unknown[]) => mockRmSync(...args),
+    readdirSync: vi.fn(() => []),
+    rmSync: vi.fn(),
     readFileSync: vi.fn(),
     writeFileSync: vi.fn(),
     mkdirSync: vi.fn(),
+    promises: {
+      readdir: (...args: unknown[]) => mockReaddir(...args),
+      rm: (...args: unknown[]) => mockRm(...args),
+    },
   },
 }));
 
 vi.mock('node:crypto', () => ({ randomUUID: vi.fn(() => 'mock-uuid') }));
 vi.mock('../../src/main/db/database', () => ({ getProjectDb: vi.fn() }));
 vi.mock('../../src/main/db/repositories/session-repository', () => ({
-  SessionRepository: class { getLatestForTask = vi.fn(); updateStatus = vi.fn(); deleteByTaskId = vi.fn(); },
+  SessionRepository: class { getLatestForTask = vi.fn(); updateStatus = vi.fn(); deleteByTaskId = vi.fn(); listAllClaudeSessionIds = vi.fn(() => []); },
 }));
 vi.mock('../../src/main/db/repositories/task-repository', () => ({
-  TaskRepository: class { list = vi.fn(() => []); delete = vi.fn(); },
+  TaskRepository: class { list = vi.fn(() => []); listArchived = vi.fn(() => []); delete = vi.fn(); },
 }));
 vi.mock('../../src/main/db/repositories/action-repository', () => ({
   ActionRepository: class { getTransitionsFor = vi.fn(() => []); },
@@ -72,16 +75,26 @@ import { pruneOrphanedWorktrees } from '../../src/main/engine/session-recovery';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-function makeMockTaskRepo(tasks: { id: string; worktree_path: string | null }[]) {
+const PROJECT = '/dev/project';
+const WORKTREES_DIR = path.join(PROJECT, '.kangentic', 'worktrees');
+const SESSIONS_DIR = path.join(PROJECT, '.kangentic', 'sessions');
+const TASKS_DIR = path.join(PROJECT, '.kangentic', 'tasks');
+
+function makeMockTaskRepo(
+  tasks: { id: string; worktree_path: string | null; session_id?: string | null }[],
+  archived: { id: string; worktree_path: string | null; session_id?: string | null }[] = [],
+) {
   return {
     list: vi.fn(() => tasks),
+    listArchived: vi.fn(() => archived),
     delete: vi.fn(),
   } as unknown as import('../../src/main/db/repositories/task-repository').TaskRepository;
 }
 
-function makeMockSessionRepo() {
+function makeMockSessionRepo(claudeSessionIds: string[] = []) {
   return {
     deleteByTaskId: vi.fn(),
+    listAllClaudeSessionIds: vi.fn(() => claudeSessionIds),
   } as unknown as import('../../src/main/db/repositories/session-repository').SessionRepository;
 }
 
@@ -92,93 +105,190 @@ function makeMockSessionManager() {
   return mgr as unknown as import('../../src/main/pty/session-manager').SessionManager;
 }
 
+function dirEntry(name: string): { name: string; isDirectory: () => boolean } {
+  return { name, isDirectory: () => true };
+}
+
+/** Configure readdir to return specific entries per directory path. */
+function setupReaddir(map: Record<string, { name: string; isDirectory: () => boolean }[]>) {
+  mockReaddir.mockImplementation((dir: string) => {
+    return Promise.resolve(map[dir] || []);
+  });
+}
+
+async function runWithTimers<T>(promise: Promise<T> | void): Promise<void> {
+  // Flush microtasks + advance timers through retry delays
+  for (let i = 0; i < 20; i++) {
+    await vi.advanceTimersByTimeAsync(500);
+  }
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────
 
-describe('pruneOrphanedWorktrees — stale directory cleanup', () => {
-  const projectPath = '/dev/project';
-  const worktreesDir = path.join(projectPath, '.kangentic', 'worktrees');
-
+describe('pruneStaleResources — async background cleanup', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
     mockExistsSync.mockReturnValue(true);
-    mockReaddirSync.mockReturnValue([]);
+    mockReaddir.mockResolvedValue([]);
+    mockRm.mockResolvedValue(undefined);
   });
 
-  it('removes directories not referenced by any task', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('removes orphaned worktree directories', async () => {
     const taskRepo = makeMockTaskRepo([]);
     const sessionRepo = makeMockSessionRepo();
     const sessionMgr = makeMockSessionManager();
 
-    mockReaddirSync.mockReturnValue([
-      { name: 'stale-dir-abcd1234', isDirectory: () => true },
-    ]);
-
-    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    pruneOrphanedWorktrees(projectPath, taskRepo, sessionRepo, sessionMgr);
-
-    expect(mockRmSync).toHaveBeenCalledWith(
-      path.join(worktreesDir, 'stale-dir-abcd1234'),
-      { recursive: true, force: true },
-    );
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Removing orphaned worktree directory: stale-dir-abcd1234'),
-    );
-    consoleSpy.mockRestore();
-  });
-
-  it('skips directories still referenced by a task', () => {
-    const referencedPath = path.join(worktreesDir, 'active-task-1234abcd');
-    const taskRepo = makeMockTaskRepo([
-      { id: 'task-1', worktree_path: referencedPath },
-    ]);
-    const sessionRepo = makeMockSessionRepo();
-    const sessionMgr = makeMockSessionManager();
-
-    mockReaddirSync.mockReturnValue([
-      { name: 'active-task-1234abcd', isDirectory: () => true },
-    ]);
-
-    pruneOrphanedWorktrees(projectPath, taskRepo, sessionRepo, sessionMgr);
-
-    expect(mockRmSync).not.toHaveBeenCalled();
-  });
-
-  it('skips non-directory entries', () => {
-    const taskRepo = makeMockTaskRepo([]);
-    const sessionRepo = makeMockSessionRepo();
-    const sessionMgr = makeMockSessionManager();
-
-    mockReaddirSync.mockReturnValue([
-      { name: '.gitkeep', isDirectory: () => false },
-    ]);
-
-    pruneOrphanedWorktrees(projectPath, taskRepo, sessionRepo, sessionMgr);
-
-    expect(mockRmSync).not.toHaveBeenCalled();
-  });
-
-  it('logs warning when rmSync fails on stale directory', () => {
-    const taskRepo = makeMockTaskRepo([]);
-    const sessionRepo = makeMockSessionRepo();
-    const sessionMgr = makeMockSessionManager();
-
-    mockReaddirSync.mockReturnValue([
-      { name: 'locked-dir-abcd1234', isDirectory: () => true },
-    ]);
-    mockRmSync.mockImplementation(() => {
-      throw new Error('EPERM: still locked');
+    setupReaddir({
+      [WORKTREES_DIR]: [dirEntry('stale-abcd1234')],
     });
 
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    pruneOrphanedWorktrees(PROJECT, taskRepo, sessionRepo, sessionMgr);
+    await runWithTimers();
 
-    pruneOrphanedWorktrees(projectPath, taskRepo, sessionRepo, sessionMgr);
+    expect(mockRm).toHaveBeenCalledWith(
+      path.join(WORKTREES_DIR, 'stale-abcd1234'),
+      { recursive: true, force: true },
+    );
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Removing orphaned worktree directory: stale-abcd1234'),
+    );
+    logSpy.mockRestore();
+  });
+
+  it('removes orphaned session directories', async () => {
+    const taskRepo = makeMockTaskRepo([]);
+    const sessionRepo = makeMockSessionRepo();
+    const sessionMgr = makeMockSessionManager();
+
+    setupReaddir({
+      [SESSIONS_DIR]: [dirEntry('dead-session-uuid')],
+    });
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    pruneOrphanedWorktrees(PROJECT, taskRepo, sessionRepo, sessionMgr);
+    await runWithTimers();
+
+    expect(mockRm).toHaveBeenCalledWith(
+      path.join(SESSIONS_DIR, 'dead-session-uuid'),
+      { recursive: true, force: true },
+    );
+    logSpy.mockRestore();
+  });
+
+  it('removes orphaned task directories', async () => {
+    const taskRepo = makeMockTaskRepo([]);
+    const sessionRepo = makeMockSessionRepo();
+    const sessionMgr = makeMockSessionManager();
+
+    setupReaddir({
+      [TASKS_DIR]: [dirEntry('dead-task-uuid')],
+    });
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    pruneOrphanedWorktrees(PROJECT, taskRepo, sessionRepo, sessionMgr);
+    await runWithTimers();
+
+    expect(mockRm).toHaveBeenCalledWith(
+      path.join(TASKS_DIR, 'dead-task-uuid'),
+      { recursive: true, force: true },
+    );
+    logSpy.mockRestore();
+  });
+
+  it('preserves directories referenced by active tasks', async () => {
+    const wtPath = path.join(WORKTREES_DIR, 'my-task-abcd1234');
+    const taskRepo = makeMockTaskRepo([
+      { id: 'task-uuid-1', worktree_path: wtPath, session_id: 'pty-session-1' },
+    ]);
+    const sessionRepo = makeMockSessionRepo(['claude-session-uuid']);
+    const sessionMgr = makeMockSessionManager();
+
+    setupReaddir({
+      [WORKTREES_DIR]: [dirEntry('my-task-abcd1234')],
+      [SESSIONS_DIR]: [dirEntry('task-uuid-1'), dirEntry('claude-session-uuid')],
+      [TASKS_DIR]: [dirEntry('task-uuid-1')],
+    });
+
+    pruneOrphanedWorktrees(PROJECT, taskRepo, sessionRepo, sessionMgr);
+    await runWithTimers();
+
+    // None should be removed — all referenced
+    expect(mockRm).not.toHaveBeenCalled();
+  });
+
+  it('preserves directories referenced by archived tasks', async () => {
+    const taskRepo = makeMockTaskRepo(
+      [], // no active tasks
+      [{ id: 'archived-uuid', worktree_path: path.join(WORKTREES_DIR, 'archived-task'), session_id: null }],
+    );
+    const sessionRepo = makeMockSessionRepo();
+    const sessionMgr = makeMockSessionManager();
+
+    setupReaddir({
+      [WORKTREES_DIR]: [dirEntry('archived-task')],
+      [TASKS_DIR]: [dirEntry('archived-uuid')],
+    });
+
+    pruneOrphanedWorktrees(PROJECT, taskRepo, sessionRepo, sessionMgr);
+    await runWithTimers();
+
+    expect(mockRm).not.toHaveBeenCalled();
+  });
+
+  it('retries rm on EPERM then succeeds', async () => {
+    const taskRepo = makeMockTaskRepo([]);
+    const sessionRepo = makeMockSessionRepo();
+    const sessionMgr = makeMockSessionManager();
+
+    setupReaddir({
+      [WORKTREES_DIR]: [dirEntry('eperm-dir')],
+    });
+
+    let rmCount = 0;
+    mockRm.mockImplementation(() => {
+      rmCount++;
+      if (rmCount < 2) return Promise.reject(new Error('EPERM'));
+      return Promise.resolve();
+    });
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    pruneOrphanedWorktrees(PROJECT, taskRepo, sessionRepo, sessionMgr);
+    await runWithTimers();
+
+    expect(mockRm).toHaveBeenCalledTimes(2);
+    expect(warnSpy).not.toHaveBeenCalled();
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it('logs warning when all retries fail', async () => {
+    const taskRepo = makeMockTaskRepo([]);
+    const sessionRepo = makeMockSessionRepo();
+    const sessionMgr = makeMockSessionManager();
+
+    setupReaddir({
+      [WORKTREES_DIR]: [dirEntry('locked-dir')],
+    });
+    mockRm.mockRejectedValue(new Error('EPERM'));
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    pruneOrphanedWorktrees(PROJECT, taskRepo, sessionRepo, sessionMgr);
+    await runWithTimers();
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Could not remove orphaned worktree directory locked-dir-abcd1234'),
-      'EPERM: still locked',
+      expect.stringContaining('Could not remove orphaned worktree directory locked-dir'),
     );
-    warnSpy.mockRestore();
     logSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 });

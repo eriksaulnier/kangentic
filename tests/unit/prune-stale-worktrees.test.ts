@@ -71,7 +71,7 @@ vi.mock('../../src/main/db/repositories/action-repository', () => ({
   ActionRepository: class { list = vi.fn(() => []); create = vi.fn(); update = vi.fn(); delete = vi.fn(); listTransitions = vi.fn(() => []); setTransitions = vi.fn(); getTransitionsFor = vi.fn(() => []); },
 }));
 vi.mock('../../src/main/db/repositories/session-repository', () => ({
-  SessionRepository: class { getLatestForTask = vi.fn(); updateStatus = vi.fn(); deleteByTaskId = vi.fn(); },
+  SessionRepository: class { getLatestForTask = vi.fn(); updateStatus = vi.fn(); deleteByTaskId = vi.fn(); listAllClaudeSessionIds = vi.fn(() => []); },
 }));
 vi.mock('../../src/main/db/repositories/attachment-repository', () => ({
   AttachmentRepository: class { list = vi.fn(() => []); add = vi.fn(); remove = vi.fn(); getDataUrl = vi.fn(); deleteByTaskId = vi.fn(); },
