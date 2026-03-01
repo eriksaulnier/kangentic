@@ -203,6 +203,20 @@ function EventLine({ event, label, colorClass, showLabel }: EventLineProps) {
       // Only render if there's no tool_start context (e.g., tool name only).
       return null;
 
+    case 'interrupted':
+      return (
+        <div className="flex items-baseline gap-1.5 min-w-0">
+          <span className="text-zinc-600 shrink-0">{formatTime(event.ts)}</span>
+          {showLabel && <span className={`${colorClass} font-semibold shrink-0`}>[{label}]</span>}
+          <span className="bg-amber-900/30 text-amber-400 px-1.5 py-0.5 rounded text-[11px] font-medium shrink-0">
+            {event.tool || 'Tool'} interrupted
+          </span>
+          {event.detail && (
+            <span className="text-fg-faint truncate min-w-0">{event.detail}</span>
+          )}
+        </div>
+      );
+
     case 'idle':
       return (
         <div className="flex items-baseline gap-1.5">

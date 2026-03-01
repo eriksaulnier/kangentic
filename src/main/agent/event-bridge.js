@@ -3,16 +3,18 @@
  * Event Bridge for Claude Code hooks → Kangentic Activity Log
  *
  * Claude Code invokes this script via hooks (PreToolUse, PostToolUse,
- * UserPromptSubmit, Stop). Appends a single JSON line to the events log.
+ * PostToolUseFailure, UserPromptSubmit, Stop). Appends a single JSON line
+ * to the events log.
  *
  * Usage:
  *   node event-bridge.js <events-file-path> <event-type>
  *
  * Event types:
- *   tool_start — from PreToolUse hook (reads tool name + input from stdin)
- *   tool_end   — from PostToolUse hook (reads tool name from stdin)
- *   prompt     — from UserPromptSubmit hook
- *   idle       — from Stop hook
+ *   tool_start   — from PreToolUse hook (reads tool name + input from stdin)
+ *   tool_end     — from PostToolUse hook (reads tool name from stdin)
+ *   tool_failure — from PostToolUseFailure hook (reads tool name + is_interrupt from stdin)
+ *   prompt       — from UserPromptSubmit hook
+ *   idle         — from Stop hook
  *
  * Stdin: Claude Code pipes hook context as JSON. We parse it to extract
  * the tool name and first argument for tool_start/tool_end events.
@@ -29,8 +31,19 @@ process.stdin.on('end', () => {
 
   const event = { ts: Date.now(), type: eventType };
 
-  // Parse stdin JSON to extract tool info for tool_start/tool_end
-  if (eventType === 'tool_start' || eventType === 'tool_end') {
+  // Parse stdin JSON to extract tool info
+  if (eventType === 'tool_failure') {
+    try {
+      const ctx = JSON.parse(input);
+      event.type = ctx.is_interrupt ? 'interrupted' : 'tool_end';
+      if (ctx.tool_name) event.tool = ctx.tool_name;
+      if (event.type === 'interrupted' && ctx.error) {
+        event.detail = String(ctx.error).slice(0, 200);
+      }
+    } catch {
+      event.type = 'tool_end';
+    }
+  } else if (eventType === 'tool_start' || eventType === 'tool_end') {
     try {
       const ctx = JSON.parse(input);
       // Claude Code hook context has tool_name at top level

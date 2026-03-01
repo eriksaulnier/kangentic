@@ -125,6 +125,10 @@ export function injectActivityHooks(
       { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" thinking` }] },
       { matcher: 'ExitPlanMode', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" thinking` }] },
     ],
+    PostToolUseFailure: [
+      ...filterActivityHooks(existingHooks.PostToolUseFailure),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${activityBridge}" "${activityPath}" idle` }] },
+    ],
   };
 
   fs.writeFileSync(p, JSON.stringify(settings, null, 2));
@@ -132,8 +136,9 @@ export function injectActivityHooks(
 
 /**
  * Inject Kangentic event-bridge hooks into `<cwd>/.claude/settings.local.json`.
- * Adds PreToolUse, PostToolUse, UserPromptSubmit, and Stop hooks for the
- * event log (activity log stream). Replaces any stale event-bridge entries
+ * Adds hooks for all tracked Claude Code lifecycle events (PreToolUse,
+ * PostToolUse, PostToolUseFailure, UserPromptSubmit, Stop, PermissionRequest).
+ * Replaces any stale event-bridge entries
  * from previous sessions while preserving activity-bridge hooks and all
  * user-defined hooks/settings.
  */
@@ -181,6 +186,10 @@ export function injectEventHooks(
     PermissionRequest: [
       ...filterEventHooks(existingHooks.PermissionRequest),
       { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
+    ],
+    PostToolUseFailure: [
+      ...filterEventHooks(existingHooks.PostToolUseFailure),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_failure` }] },
     ],
   };
 

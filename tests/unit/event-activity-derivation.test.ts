@@ -7,10 +7,11 @@
  * activity-bridge pipeline because the event-bridge fires for ALL tools.
  *
  * Mapping:
- *   tool_start → thinking
- *   prompt     → thinking
- *   idle       → idle
- *   tool_end   → no change
+ *   tool_start   → thinking
+ *   prompt       → thinking
+ *   idle         → idle
+ *   interrupted  → idle
+ *   tool_end     → no change
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
@@ -231,6 +232,43 @@ describe('Event-derived activity state', () => {
     // 3. User approves → tool_end + new tool_start → thinking
     appendEvent(eventsPath, { ts: Date.now(), type: 'tool_end', tool: 'Bash' });
     appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Read' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    expect(states).toEqual(['thinking', 'idle', 'thinking']);
+  });
+
+  it('interrupted event emits idle activity', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+
+    // First set thinking so we can verify transition to idle
+    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Bash' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // Now write interrupted event (user pressed Escape)
+    appendEvent(eventsPath, { ts: Date.now(), type: 'interrupted', tool: 'Bash' });
+    await waitForWatcher();
+
+    expect(manager.getActivityCache()[session.id]).toBe('idle');
+  });
+
+  it('tool_start → interrupted → prompt: full interrupt-resume cycle', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    // 1. Bash tool starts → thinking
+    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Bash' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 2. User presses Escape → interrupted → idle
+    appendEvent(eventsPath, { ts: Date.now(), type: 'interrupted', tool: 'Bash' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('idle');
+
+    // 3. Claude resumes with a prompt → thinking
+    appendEvent(eventsPath, { ts: Date.now(), type: 'prompt' });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
 

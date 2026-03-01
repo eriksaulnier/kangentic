@@ -108,6 +108,42 @@ describe('event-bridge', () => {
     expect(JSON.parse(lines[1]).type).toBe('prompt');
   });
 
+  it('tool_failure with is_interrupt emits interrupted event', () => {
+    const stdin = JSON.stringify({
+      tool_name: 'Bash',
+      is_interrupt: true,
+      error: 'User cancelled the tool',
+    });
+    runBridge(stdin, [outputFile, 'tool_failure']);
+
+    const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
+    expect(line.type).toBe('interrupted');
+    expect(line.tool).toBe('Bash');
+    expect(line.detail).toBe('User cancelled the tool');
+    expect(typeof line.ts).toBe('number');
+  });
+
+  it('tool_failure without is_interrupt emits tool_end event', () => {
+    const stdin = JSON.stringify({
+      tool_name: 'Read',
+      is_interrupt: false,
+    });
+    runBridge(stdin, [outputFile, 'tool_failure']);
+
+    const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
+    expect(line.type).toBe('tool_end');
+    expect(line.tool).toBe('Read');
+    expect(line.detail).toBeUndefined();
+  });
+
+  it('tool_failure with malformed JSON defaults to tool_end', () => {
+    runBridge('not json', [outputFile, 'tool_failure']);
+
+    const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
+    expect(line.type).toBe('tool_end');
+    expect(line.tool).toBeUndefined();
+  });
+
   it('no output path does not crash', () => {
     // No args at all — should exit 0 without creating any file
     runBridge('{}', []);

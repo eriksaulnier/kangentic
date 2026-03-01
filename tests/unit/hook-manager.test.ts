@@ -56,6 +56,11 @@ describe('hook-manager', () => {
     expect(settings.hooks.PostToolUse[1].matcher).toBe('ExitPlanMode');
     expect(settings.hooks.PostToolUse[1].hooks[0].command).toContain('activity-bridge');
     expect(settings.hooks.PostToolUse[1].hooks[0].command).toContain('thinking');
+    // PostToolUseFailure: catch-all → idle
+    expect(settings.hooks.PostToolUseFailure).toHaveLength(1);
+    expect(settings.hooks.PostToolUseFailure[0].matcher).toBe('');
+    expect(settings.hooks.PostToolUseFailure[0].hooks[0].command).toContain('activity-bridge');
+    expect(settings.hooks.PostToolUseFailure[0].hooks[0].command).toContain('idle');
   });
 
   it('injectEventHooks creates settings file with correct hooks', () => {
@@ -90,6 +95,11 @@ describe('hook-manager', () => {
     expect(settings.hooks.PermissionRequest[0].matcher).toBe('');
     expect(settings.hooks.PermissionRequest[0].hooks[0].command).toContain('event-bridge');
     expect(settings.hooks.PermissionRequest[0].hooks[0].command).toContain('idle');
+    // PostToolUseFailure: catch-all → tool_failure
+    expect(settings.hooks.PostToolUseFailure).toHaveLength(1);
+    expect(settings.hooks.PostToolUseFailure[0].matcher).toBe('');
+    expect(settings.hooks.PostToolUseFailure[0].hooks[0].command).toContain('event-bridge');
+    expect(settings.hooks.PostToolUseFailure[0].hooks[0].command).toContain('tool_failure');
   });
 
   it('injectActivityHooks preserves event-bridge hooks', () => {
@@ -130,6 +140,14 @@ describe('hook-manager', () => {
     );
     expect(ptuPostCommands.filter((c: string) => c.includes('event-bridge'))).toHaveLength(3);
     expect(ptuPostCommands.filter((c: string) => c.includes('activity-bridge'))).toHaveLength(2);
+
+    // PostToolUseFailure should have event-bridge (1) + activity-bridge (1)
+    expect(settings.hooks.PostToolUseFailure).toHaveLength(2);
+    const ptufCommands = settings.hooks.PostToolUseFailure.map(
+      (e: any) => e.hooks[0].command,
+    );
+    expect(ptufCommands.some((c: string) => c.includes('event-bridge'))).toBe(true);
+    expect(ptufCommands.some((c: string) => c.includes('activity-bridge'))).toBe(true);
   });
 
   it('injectEventHooks preserves activity-bridge hooks', () => {
@@ -168,6 +186,14 @@ describe('hook-manager', () => {
     );
     expect(ptuPostCommands.filter((c: string) => c.includes('activity-bridge'))).toHaveLength(2);
     expect(ptuPostCommands.filter((c: string) => c.includes('event-bridge'))).toHaveLength(3);
+
+    // PostToolUseFailure should have activity-bridge (1) + event-bridge (1)
+    expect(settings.hooks.PostToolUseFailure).toHaveLength(2);
+    const ptufCommands = settings.hooks.PostToolUseFailure.map(
+      (e: any) => e.hooks[0].command,
+    );
+    expect(ptufCommands.some((c: string) => c.includes('activity-bridge'))).toBe(true);
+    expect(ptufCommands.some((c: string) => c.includes('event-bridge'))).toBe(true);
   });
 
   it('injectActivityHooks preserves user hooks', () => {
@@ -223,6 +249,10 @@ describe('hook-manager', () => {
           { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${ACTIVITY_BRIDGE}" "${ACTIVITY_PATH}" thinking` }] },
           { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${EVENT_BRIDGE}" "${EVENTS_PATH}" prompt` }] },
         ],
+        PostToolUseFailure: [
+          { matcher: '', hooks: [{ type: 'command', command: `node "${ACTIVITY_BRIDGE}" "${ACTIVITY_PATH}" idle` }] },
+          { matcher: '', hooks: [{ type: 'command', command: `node "${EVENT_BRIDGE}" "${EVENTS_PATH}" tool_failure` }] },
+        ],
       },
     };
     fs.writeFileSync(
@@ -241,6 +271,8 @@ describe('hook-manager', () => {
     expect(result.hooks.PermissionRequest).toBeUndefined();
     // PostToolUse had only kangentic hooks — key should be removed entirely
     expect(result.hooks.PostToolUse).toBeUndefined();
+    // PostToolUseFailure had only kangentic hooks — key should be removed entirely
+    expect(result.hooks.PostToolUseFailure).toBeUndefined();
   });
 
   it('stripActivityHooks cleans up empty settings file', () => {

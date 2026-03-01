@@ -670,7 +670,7 @@ export class SessionManager extends EventEmitter {
             if (event.type === 'tool_start' || event.type === 'prompt') {
               this.activityCache.set(session.id, 'thinking');
               this.emit('activity', session.id, 'thinking');
-            } else if (event.type === 'idle') {
+            } else if (event.type === 'idle' || event.type === 'interrupted') {
               this.activityCache.set(session.id, 'idle');
               this.emit('activity', session.id, 'idle');
             }

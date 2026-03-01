@@ -148,8 +148,8 @@ export type ActivityState = 'thinking' | 'idle';
 
 export interface SessionEvent {
   ts: number;
-  type: 'prompt' | 'tool_start' | 'tool_end' | 'idle';
-  tool?: string;    // for tool_start/tool_end
+  type: 'prompt' | 'tool_start' | 'tool_end' | 'idle' | 'interrupted';
+  tool?: string;    // for tool_start/tool_end/interrupted
   detail?: string;  // file path, command, etc.
 }
 
