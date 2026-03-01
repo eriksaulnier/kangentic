@@ -1,13 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { toForwardSlash, quoteArg } from '../../shared/paths';
+import { buildEventHooks } from './hook-manager';
+import type { ClaudeHookEntry } from './hook-manager';
 import type { PermissionMode, Task } from '../../shared/types';
-
-/** Hook entry in Claude Code's settings.json. */
-interface ClaudeHookEntry {
-  matcher: string;
-  hooks: Array<{ type: string; command: string }>;
-}
 
 /** Subset of Claude Code settings.json that we read/write. */
 interface ClaudeSettings {
@@ -69,6 +65,21 @@ function mergePermissions(
   const allow = [...new Set([...(base?.allow || []), ...(overlay?.allow || [])])];
   const deny = [...new Set([...(base?.deny || []), ...(overlay?.deny || [])])];
   return { allow, deny };
+}
+
+/**
+ * Resolve a bridge script path using the standard 3-candidate pattern:
+ * 1. Production build (next to main bundle)
+ * 2. Forge dev (.vite/build/ → project root)
+ * 3. Fallback from CWD
+ */
+function resolveBridgeScript(name: string): string {
+  const candidates = [
+    path.join(__dirname, `${name}.js`),
+    path.resolve(__dirname, '..', '..', 'src', 'main', 'agent', `${name}.js`),
+    path.resolve(process.cwd(), 'src', 'main', 'agent', `${name}.js`),
+  ];
+  return candidates.find(p => fs.existsSync(p)) || candidates[0];
 }
 
 export class CommandBuilder {
@@ -210,69 +221,26 @@ export class CommandBuilder {
       }
     }
 
-    // Build the bridge command. In production, status-bridge.js is copied
-    // next to the main bundle by scripts/build.js. In dev (Forge Vite plugin),
+    // Resolve bridge scripts. In production, bridge scripts are copied next
+    // to the main bundle by scripts/build.js. In dev (Forge Vite plugin),
     // __dirname is .vite/build/ so we fall back to the source tree.
-    const candidates = [
-      path.join(__dirname, 'status-bridge.js'),                                   // production build
-      path.resolve(__dirname, '..', '..', 'src', 'main', 'agent', 'status-bridge.js'), // Forge dev (.vite/build/ → project root)
-      path.resolve(process.cwd(), 'src', 'main', 'agent', 'status-bridge.js'),   // fallback from CWD
-    ];
-    const bridgeScript = candidates.find(p => fs.existsSync(p)) || candidates[0];
-    const bridgePath = toForwardSlash(bridgeScript);
+    const statusBridge = toForwardSlash(resolveBridgeScript('status-bridge'));
     const statusPath = toForwardSlash(options.statusOutputPath!);
 
     const merged: ClaudeSettings = {
       ...baseSettings,
       statusLine: {
         type: 'command',
-        command: `node "${bridgePath}" "${statusPath}"`,
+        command: `node "${statusBridge}" "${statusPath}"`,
       },
     };
 
-    // Resolve event bridge (same candidate pattern as status bridge)
-    const eventCandidates = [
-      path.join(__dirname, 'event-bridge.js'),
-      path.resolve(__dirname, '..', '..', 'src', 'main', 'agent', 'event-bridge.js'),
-      path.resolve(process.cwd(), 'src', 'main', 'agent', 'event-bridge.js'),
-    ];
-    const eventBridge = toForwardSlash(eventCandidates.find(p => fs.existsSync(p)) || eventCandidates[0]);
+    // Merge event-bridge hooks (preserve existing user hooks)
     const eventsPath = options.eventsOutputPath ? toForwardSlash(options.eventsOutputPath) : null;
-
-    // Deep-merge hooks for event logging (preserve existing user hooks)
     if (eventsPath) {
-      const existingHooks = baseSettings.hooks || {};
-      merged.hooks = { ...existingHooks };
+      const eventBridge = toForwardSlash(resolveBridgeScript('event-bridge'));
+      merged.hooks = buildEventHooks(eventBridge, eventsPath, baseSettings.hooks || {});
 
-      // Append event-bridge hooks for all lifecycle events
-      merged.hooks.PreToolUse = [
-        ...(existingHooks.PreToolUse || []),
-        { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_start` }] },
-        { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
-        { matcher: 'ExitPlanMode', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
-      ];
-      merged.hooks.PostToolUse = [
-        ...(existingHooks.PostToolUse || []),
-        { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_end` }] },
-        { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" prompt` }] },
-        { matcher: 'ExitPlanMode', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" prompt` }] },
-      ];
-      merged.hooks.PostToolUseFailure = [
-        ...(existingHooks.PostToolUseFailure || []),
-        { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_failure` }] },
-      ];
-      merged.hooks.UserPromptSubmit = [
-        ...(existingHooks.UserPromptSubmit || []),
-        { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" prompt` }] },
-      ];
-      merged.hooks.Stop = [
-        ...(existingHooks.Stop || []),
-        { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
-      ];
-      merged.hooks.PermissionRequest = [
-        ...(existingHooks.PermissionRequest || []),
-        { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
-      ];
     }
 
     // Write to .kangentic/sessions/<sessionId>/settings.json (for session recovery reference)

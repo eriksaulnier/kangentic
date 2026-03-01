@@ -25,6 +25,8 @@ function makeSession(overrides: Partial<Session> = {}): Session {
 const MOCK_USAGE: SessionUsage = {
   contextWindow: {
     usedPercentage: 42,
+    usedTokens: 1500,
+    cacheTokens: 0,
     totalInputTokens: 1000,
     totalOutputTokens: 500,
     contextWindowSize: 200000,

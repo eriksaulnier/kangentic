@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 
 // Mock node-pty before importing SessionManager
 vi.mock('node-pty', () => ({
@@ -52,10 +55,16 @@ function createMockPty() {
 
 describe('SessionManager suspend logic', () => {
   let manager: SessionManager;
+  let tmpDir: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    manager = new SessionManager();
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kgnt-suspend-'));
+    manager = new SessionManager(tmpDir);
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   async function spawnSession(taskId = 'task-1') {
@@ -112,7 +121,6 @@ describe('SessionManager suspend logic', () => {
       command: '',
       cwd: '/tmp/test',
       statusOutputPath: '/tmp/status.json',
-      activityOutputPath: '/tmp/activity.json',
       eventsOutputPath: '/tmp/events.jsonl',
     });
 

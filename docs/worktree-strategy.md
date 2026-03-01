@@ -63,7 +63,7 @@ All in `src/main/agent/`:
 | Script | Output File | Hook Points | Data |
 |--------|-------------|-------------|------|
 | `status-bridge.js` | `status.json` | statusLine | Token usage, cost, model, context % |
-| `event-bridge.js` | `events.jsonl` | PreToolUse, PostToolUse, PostToolUseFailure, UserPromptSubmit, Stop, PermissionRequest | Tool calls, prompts, idle state, interrupts (JSONL) |
+| `event-bridge.js` | `events.jsonl` | PreToolUse, PostToolUse, PostToolUseFailure, UserPromptSubmit, Stop, PermissionRequest | Tool calls, prompts, interrupts, activity state (JSONL) |
 
 Each bridge reads JSON from stdin (piped by Claude Code), writes to its output file, and exits. All writes are try/catch wrapped for non-fatal failures.
 
@@ -158,7 +158,7 @@ App reopened
 
 ### On Project Close/Delete
 
-- **`stripActivityHooks()`** — Removes all Kangentic hooks from `.claude/settings.local.json`. Backs up the file before modification, restores on error. Removes empty settings files and `.claude/` directories if they only contained our hooks.
+- **`stripKangenticHooks()`** — Removes all Kangentic hooks from `.claude/settings.local.json`. Backs up the file before modification, restores on error. Removes empty settings files and `.claude/` directories if they only contained our hooks.
 - **`cleanupProject()`** — Kills all PTYs, detaches worktrees, strips hooks, removes `.kangentic/` directory and DB files, removes `.kangentic/` from `.gitignore`.
 
 ### On Task Delete
@@ -169,7 +169,7 @@ App reopened
 
 - **No git contamination** — `.claude/commands/` and `.claude/skills/` excluded from worktrees via sparse-checkout. `.claude/settings.json` is present (from git). `settings.local.json` is untracked and gitignored, so hook injection and "always allow" writes are invisible to git. Hooks delivered via worktree's `settings.local.json` (worktrees) or `--settings` flag (main repo).
 - **Hook identification** — two-marker pattern (`.kangentic` + bridge name) prevents touching user hooks.
-- **Backup on strip** — `stripActivityHooks()` backs up settings before modification, restores on failure.
+- **Backup on strip** — `stripKangenticHooks()` backs up settings before modification, restores on failure.
 - **Orphan dedup** — on session resume, old PTY is killed and its file paths nulled before new PTY spawns. Prevents stale `onExit` handlers from deleting files the new session needs.
 - **Trust pre-population** — `ensureWorktreeTrust()` adds worktree paths to `~/.claude.json` so Claude Code doesn't prompt for trust on first run.
 - **Graceful shutdown** — Ctrl+C → `/exit` → 2s wait → force-kill. Files persist for recovery on next launch.

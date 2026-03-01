@@ -17,11 +17,12 @@ describe('ClaudeStatusParser', () => {
         context_window_size: 100_000,
         used_percentage: 50, // should be ignored when current_usage is available
       });
-      // (5000 + 3000 + 1000 + 1000) / 100000 * 100 = 10
-      expect(pct).toBe(10);
+      // Raw: (5000 + 3000 + 1000 + 1000) / 100000 * 100 = 10
+      // Scaled: 10 / 95 * 100 ≈ 10.53
+      expect(pct).toBeCloseTo(10.53, 1);
     });
 
-    it('caps at 100 when tokens exceed window size', () => {
+    it('caps at 100 when tokens exceed 95% of window', () => {
       const pct = ClaudeStatusParser.computeContextPercentage({
         current_usage: {
           input_tokens: 80_000,
@@ -39,7 +40,8 @@ describe('ClaudeStatusParser', () => {
         used_percentage: 42,
         context_window_size: 200_000,
       });
-      expect(pct).toBe(42);
+      // 42 / 95 * 100 ≈ 44.21
+      expect(pct).toBeCloseTo(44.21, 1);
     });
 
     it('falls back to used_percentage when current_usage is null', () => {
@@ -48,7 +50,8 @@ describe('ClaudeStatusParser', () => {
         used_percentage: 37,
         context_window_size: 200_000,
       });
-      expect(pct).toBe(37);
+      // 37 / 95 * 100 ≈ 38.95
+      expect(pct).toBeCloseTo(38.95, 1);
     });
 
     it('falls back to used_percentage when context_window_size is 0', () => {
@@ -60,7 +63,8 @@ describe('ClaudeStatusParser', () => {
         used_percentage: 60,
         context_window_size: 0,
       });
-      expect(pct).toBe(60);
+      // 60 / 95 * 100 ≈ 63.16
+      expect(pct).toBeCloseTo(63.16, 1);
     });
 
     it('returns 0 for null context_window', () => {
@@ -79,8 +83,8 @@ describe('ClaudeStatusParser', () => {
         },
         context_window_size: 100_000,
       });
-      // (10000 + 0 + 0 + 0) / 100000 * 100 = 10
-      expect(pct).toBe(10);
+      // Raw: 10000/100000*100 = 10, scaled: 10/95*100 ≈ 10.53
+      expect(pct).toBeCloseTo(10.53, 1);
     });
 
     it('computes higher than used_percentage when output tokens are significant', () => {
@@ -96,9 +100,51 @@ describe('ClaudeStatusParser', () => {
         used_percentage: 75, // Claude Code's input-only number
         context_window_size: 80_000,
       });
-      // (60000 + 15000) / 80000 * 100 = 93.75
-      expect(pct).toBeCloseTo(93.75);
-      expect(pct).toBeGreaterThan(75);
+      // Raw: (60000 + 15000) / 80000 * 100 = 93.75
+      // Scaled: 93.75 / 95 * 100 ≈ 98.68
+      expect(pct).toBeCloseTo(98.68, 1);
+    });
+
+    // --- 95% compaction threshold tests ---
+
+    it('shows 100% at exactly 95% raw usage (compaction imminent)', () => {
+      const pct = ClaudeStatusParser.computeContextPercentage({
+        used_percentage: 95,
+        context_window_size: 200_000,
+      });
+      expect(pct).toBe(100);
+    });
+
+    it('shows ~15.8% for 15% raw usage (fresh session)', () => {
+      const pct = ClaudeStatusParser.computeContextPercentage({
+        used_percentage: 15,
+        context_window_size: 200_000,
+      });
+      // 15 / 95 * 100 ≈ 15.79
+      expect(pct).toBeCloseTo(15.79, 1);
+    });
+
+    it('caps at 100% when raw usage exceeds 95%', () => {
+      const pct = ClaudeStatusParser.computeContextPercentage({
+        used_percentage: 98,
+        context_window_size: 200_000,
+      });
+      expect(pct).toBe(100);
+    });
+
+    it('scales current_usage-based calculation by 95% threshold', () => {
+      // 95% from token sum → 100%
+      const pct = ClaudeStatusParser.computeContextPercentage({
+        current_usage: {
+          input_tokens: 170_000,
+          output_tokens: 20_000,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+        },
+        context_window_size: 200_000,
+      });
+      // Raw: (170000+20000)/200000*100 = 95, scaled: 95/95*100 = 100
+      expect(pct).toBe(100);
     });
   });
 
@@ -131,8 +177,9 @@ describe('ClaudeStatusParser', () => {
       });
       const usage = ClaudeStatusParser.parseStatus(raw);
       expect(usage).not.toBeNull();
-      // (20000 + 5000 + 1000 + 4000) / 200000 * 100 = 15
-      expect(usage!.contextWindow.usedPercentage).toBe(15);
+      // Raw: (20000 + 5000 + 1000 + 4000) / 200000 * 100 = 15
+      // Scaled: 15 / 95 * 100 ≈ 15.79
+      expect(usage!.contextWindow.usedPercentage).toBeCloseTo(15.79, 1);
       expect(usage!.contextWindow.usedTokens).toBe(30_000); // 20000+5000+1000+4000
       expect(usage!.contextWindow.cacheTokens).toBe(5_000);  // 1000+4000
       expect(usage!.contextWindow.totalInputTokens).toBe(20_000);
@@ -166,7 +213,8 @@ describe('ClaudeStatusParser', () => {
       expect(usage!.contextWindow.usedTokens).toBe(28_000);
       // Without current_usage, all context is assumed to be cache
       expect(usage!.contextWindow.cacheTokens).toBe(28_000);
-      expect(usage!.contextWindow.usedPercentage).toBe(14);
+      // Scaled: 14 / 95 * 100 ≈ 14.74
+      expect(usage!.contextWindow.usedPercentage).toBeCloseTo(14.74, 1);
     });
 
     it('returns SessionUsage with zero defaults when context_window is missing', () => {
@@ -180,26 +228,22 @@ describe('ClaudeStatusParser', () => {
       expect(usage!.contextWindow.contextWindowSize).toBe(0);
       expect(usage!.model.id).toBe('');
     });
-  });
 
-  // -------------------------------------------------------------------------
-  // parseActivity
-  // -------------------------------------------------------------------------
-  describe('parseActivity', () => {
-    it('parses thinking state', () => {
-      expect(ClaudeStatusParser.parseActivity('{"state":"thinking"}')).toBe('thinking');
-    });
-
-    it('parses idle state', () => {
-      expect(ClaudeStatusParser.parseActivity('{"state":"idle"}')).toBe('idle');
-    });
-
-    it('returns null for invalid state value', () => {
-      expect(ClaudeStatusParser.parseActivity('{"state":"unknown"}')).toBeNull();
-    });
-
-    it('returns null for invalid JSON', () => {
-      expect(ClaudeStatusParser.parseActivity('bad json')).toBeNull();
+    it('real-world: 14% raw shows ~15% on bar (not 100%)', () => {
+      // This was the original bug — fresh session showed 100%
+      const raw = JSON.stringify({
+        context_window: {
+          used_percentage: 14,
+          context_window_size: 200_000,
+        },
+        cost: { total_cost_usd: 0 },
+        model: { id: 'claude-opus-4-6' },
+      });
+      const usage = ClaudeStatusParser.parseStatus(raw);
+      expect(usage).not.toBeNull();
+      // 14 / 95 * 100 ≈ 14.74 — should be ~15%, never 100%
+      expect(usage!.contextWindow.usedPercentage).toBeLessThan(20);
+      expect(usage!.contextWindow.usedPercentage).toBeGreaterThan(10);
     });
   });
 

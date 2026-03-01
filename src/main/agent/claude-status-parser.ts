@@ -1,12 +1,18 @@
-import type { SessionUsage, ActivityState, SessionEvent } from '../../shared/types';
+import type { SessionUsage, SessionEvent } from '../../shared/types';
 
 /**
- * Parses Claude Code status line, activity, and event bridge data.
+ * Parses Claude Code status line and event bridge data.
  *
  * Encapsulates all Claude-specific data parsing so it can be swapped
  * for other agent solutions without touching session-manager.ts.
  */
 export class ClaudeStatusParser {
+  /**
+   * Auto-compaction triggers at approximately 95% of the context window.
+   * The progress bar scales raw usage so that 95% raw = 100% displayed.
+   */
+  private static COMPACTION_THRESHOLD = 95;
+
   /**
    * Compute context window usage including output tokens.
    *
@@ -19,6 +25,9 @@ export class ClaudeStatusParser {
    * cache_read) and divides by the context window size for a more accurate
    * representation of context fullness. Falls back to `used_percentage`
    * when `current_usage` is unavailable.
+   *
+   * The result is scaled by the compaction threshold (95%) so the bar
+   * reaches 100% when compaction is imminent.
    */
   static computeContextPercentage(contextWindow: {
     current_usage?: {
@@ -35,6 +44,8 @@ export class ClaudeStatusParser {
     const usage = contextWindow.current_usage;
     const windowSize = contextWindow.context_window_size ?? 0;
 
+    let rawPct: number;
+
     // If we have current_usage and a valid window size, compute accurately
     if (usage && windowSize > 0) {
       const input = usage.input_tokens ?? 0;
@@ -42,11 +53,14 @@ export class ClaudeStatusParser {
       const cacheCreation = usage.cache_creation_input_tokens ?? 0;
       const cacheRead = usage.cache_read_input_tokens ?? 0;
       const total = input + output + cacheCreation + cacheRead;
-      return Math.min(100, (total / windowSize) * 100);
+      rawPct = Math.min(100, (total / windowSize) * 100);
+    } else {
+      // Fall back to Claude Code's used_percentage (input-only)
+      rawPct = contextWindow.used_percentage ?? 0;
     }
 
-    // Fall back to Claude Code's used_percentage (input-only)
-    return contextWindow.used_percentage ?? 0;
+    // Scale so compaction threshold (95%) shows as 100%
+    return Math.min(100, (rawPct / ClaudeStatusParser.COMPACTION_THRESHOLD) * 100);
   }
 
   /**
@@ -54,6 +68,16 @@ export class ClaudeStatusParser {
    * Returns null on parse errors or missing data.
    */
   static parseStatus(raw: string): SessionUsage | null {
+    const result = ClaudeStatusParser.parseStatusWithMeta(raw);
+    return result ? result.usage : null;
+  }
+
+  /**
+   * Parse raw status JSON and return both the SessionUsage and raw metadata
+   * (model ID, raw used_percentage) needed for logging/debugging.
+   * Avoids the caller having to re-parse the same JSON.
+   */
+  static parseStatusWithMeta(raw: string): { usage: SessionUsage; meta: { modelId: string; rawUsedPercentage: number } } | null {
     try {
       const data = JSON.parse(raw) as Record<string, unknown>;
       const cw = data.context_window as Record<string, unknown> | undefined;
@@ -81,43 +105,32 @@ export class ClaudeStatusParser {
         cacheTokens = usedTokens; // without current_usage, all context is system/cache
       }
 
-      return {
-        contextWindow: {
-          usedPercentage: ClaudeStatusParser.computeContextPercentage(
-            cw as Parameters<typeof ClaudeStatusParser.computeContextPercentage>[0],
-          ),
-          usedTokens,
-          cacheTokens,
-          totalInputTokens: (cw?.total_input_tokens as number) ?? 0,
-          totalOutputTokens: (cw?.total_output_tokens as number) ?? 0,
-          contextWindowSize: windowSize,
-        },
-        cost: {
-          totalCostUsd: (cost?.total_cost_usd as number) ?? 0,
-          totalDurationMs: (cost?.total_duration_ms as number) ?? 0,
-        },
-        model: {
-          id: (model?.id as string) ?? '',
-          displayName: (model?.display_name as string) ?? '',
-        },
-      };
-    } catch {
-      return null;
-    }
-  }
+      const modelId = (model?.id as string) ?? '';
+      const rawUsedPercentage = (cw?.used_percentage as number) ?? 0;
 
-  /**
-   * Parse raw activity JSON from Claude Code's activity bridge into ActivityState.
-   * Returns null on invalid data or parse errors.
-   */
-  static parseActivity(raw: string): ActivityState | null {
-    try {
-      const data = JSON.parse(raw) as Record<string, unknown>;
-      const state = data.state as string;
-      if (state === 'thinking' || state === 'idle') {
-        return state;
-      }
-      return null;
+      return {
+        usage: {
+          contextWindow: {
+            usedPercentage: ClaudeStatusParser.computeContextPercentage(
+              cw as Parameters<typeof ClaudeStatusParser.computeContextPercentage>[0],
+            ),
+            usedTokens,
+            cacheTokens,
+            totalInputTokens: (cw?.total_input_tokens as number) ?? 0,
+            totalOutputTokens: (cw?.total_output_tokens as number) ?? 0,
+            contextWindowSize: windowSize,
+          },
+          cost: {
+            totalCostUsd: (cost?.total_cost_usd as number) ?? 0,
+            totalDurationMs: (cost?.total_duration_ms as number) ?? 0,
+          },
+          model: {
+            id: modelId,
+            displayName: (model?.display_name as string) ?? '',
+          },
+        },
+        meta: { modelId, rawUsedPercentage },
+      };
     } catch {
       return null;
     }

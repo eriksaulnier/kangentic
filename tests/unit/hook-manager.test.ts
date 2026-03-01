@@ -3,17 +3,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {
-  injectEventHooks,
-  stripActivityHooks,
+  buildEventHooks,
+  stripKangenticHooks,
 } from '../../src/main/agent/hook-manager';
 
 let tmpDir: string;
-const ACTIVITY_BRIDGE = '/fake/.kangentic/activity-bridge.js';
 const EVENT_BRIDGE = '/fake/.kangentic/event-bridge.js';
-const ACTIVITY_PATH = '/fake/.kangentic/sessions/abc/activity.json';
 const EVENTS_PATH = '/fake/.kangentic/sessions/abc/events.jsonl';
 
-function readSettings(): any {
+function readSettings(): Record<string, unknown> {
   const p = path.join(tmpDir, '.claude', 'settings.local.json');
   return JSON.parse(fs.readFileSync(p, 'utf-8'));
 }
@@ -31,120 +29,149 @@ afterEach(() => {
 });
 
 describe('hook-manager', () => {
-  it('injectEventHooks creates settings file with correct hooks', () => {
-    injectEventHooks(tmpDir, EVENT_BRIDGE, EVENTS_PATH);
+  describe('buildEventHooks', () => {
+    it('produces correct hook entries for all event types', () => {
+      const hooks = buildEventHooks(EVENT_BRIDGE, EVENTS_PATH, {});
 
-    const settings = readSettings();
-    expect(settings.hooks.PreToolUse).toHaveLength(3);
-    expect(settings.hooks.PostToolUse).toHaveLength(3);
-    expect(settings.hooks.UserPromptSubmit).toHaveLength(1);
-    expect(settings.hooks.Stop).toHaveLength(1);
-    expect(settings.hooks.PermissionRequest).toHaveLength(1);
-    // First entry: catch-all tool_start
-    expect(settings.hooks.PreToolUse[0].matcher).toBe('');
-    expect(settings.hooks.PreToolUse[0].hooks[0].command).toContain('event-bridge');
-    expect(settings.hooks.PreToolUse[0].hooks[0].command).toContain('tool_start');
-    // Second entry: AskUserQuestion → idle
-    expect(settings.hooks.PreToolUse[1].matcher).toBe('AskUserQuestion');
-    expect(settings.hooks.PreToolUse[1].hooks[0].command).toContain('event-bridge');
-    expect(settings.hooks.PreToolUse[1].hooks[0].command).toContain('idle');
-    // Third entry: ExitPlanMode → idle
-    expect(settings.hooks.PreToolUse[2].matcher).toBe('ExitPlanMode');
-    expect(settings.hooks.PreToolUse[2].hooks[0].command).toContain('event-bridge');
-    expect(settings.hooks.PreToolUse[2].hooks[0].command).toContain('idle');
-    // PostToolUse: catch-all tool_end + AskUserQuestion/ExitPlanMode → prompt
-    expect(settings.hooks.PostToolUse[0].matcher).toBe('');
-    expect(settings.hooks.PostToolUse[0].hooks[0].command).toContain('tool_end');
-    expect(settings.hooks.PostToolUse[1].matcher).toBe('AskUserQuestion');
-    expect(settings.hooks.PostToolUse[1].hooks[0].command).toContain('prompt');
-    expect(settings.hooks.PostToolUse[2].matcher).toBe('ExitPlanMode');
-    expect(settings.hooks.PostToolUse[2].hooks[0].command).toContain('prompt');
-    // PermissionRequest → idle
-    expect(settings.hooks.PermissionRequest[0].matcher).toBe('');
-    expect(settings.hooks.PermissionRequest[0].hooks[0].command).toContain('event-bridge');
-    expect(settings.hooks.PermissionRequest[0].hooks[0].command).toContain('idle');
-    // PostToolUseFailure: catch-all → tool_failure
-    expect(settings.hooks.PostToolUseFailure).toHaveLength(1);
-    expect(settings.hooks.PostToolUseFailure[0].matcher).toBe('');
-    expect(settings.hooks.PostToolUseFailure[0].hooks[0].command).toContain('event-bridge');
-    expect(settings.hooks.PostToolUseFailure[0].hooks[0].command).toContain('tool_failure');
-  });
+      // PreToolUse: tool_start + AskUserQuestion idle + ExitPlanMode idle
+      expect(hooks.PreToolUse).toHaveLength(3);
+      expect(hooks.PreToolUse[0].matcher).toBe('');
+      expect(hooks.PreToolUse[0].hooks[0].command).toContain('event-bridge');
+      expect(hooks.PreToolUse[0].hooks[0].command).toContain('tool_start');
+      expect(hooks.PreToolUse[1].matcher).toBe('AskUserQuestion');
+      expect(hooks.PreToolUse[1].hooks[0].command).toContain('idle');
+      expect(hooks.PreToolUse[2].matcher).toBe('ExitPlanMode');
+      expect(hooks.PreToolUse[2].hooks[0].command).toContain('idle');
 
-  it('stripActivityHooks removes ALL kangentic hooks, preserves user hooks', () => {
-    // Set up: user hook + both kangentic bridge types across multiple hook events
-    const claudeDir = path.join(tmpDir, '.claude');
-    fs.mkdirSync(claudeDir, { recursive: true });
-    const settings = {
-      hooks: {
+      // PostToolUse: tool_end
+      expect(hooks.PostToolUse).toHaveLength(1);
+      expect(hooks.PostToolUse[0].matcher).toBe('');
+      expect(hooks.PostToolUse[0].hooks[0].command).toContain('tool_end');
+
+      // UserPromptSubmit: prompt
+      expect(hooks.UserPromptSubmit).toHaveLength(1);
+      expect(hooks.UserPromptSubmit[0].hooks[0].command).toContain('prompt');
+
+      // Stop: idle
+      expect(hooks.Stop).toHaveLength(1);
+      expect(hooks.Stop[0].hooks[0].command).toContain('idle');
+
+      // PermissionRequest: idle
+      expect(hooks.PermissionRequest).toHaveLength(1);
+      expect(hooks.PermissionRequest[0].hooks[0].command).toContain('idle');
+    });
+
+    it('preserves existing user hooks', () => {
+      const existing = {
         PreToolUse: [
-          { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${ACTIVITY_BRIDGE}" "${ACTIVITY_PATH}" idle` }] },
-          { matcher: '', hooks: [{ type: 'command', command: `node "${EVENT_BRIDGE}" "${EVENTS_PATH}" tool_start` }] },
-          { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${EVENT_BRIDGE}" "${EVENTS_PATH}" idle` }] },
           { matcher: '', hooks: [{ type: 'command', command: 'echo user-pretool' }] },
         ],
         UserPromptSubmit: [
           { matcher: '', hooks: [{ type: 'command', command: 'echo user-hook' }] },
-          { matcher: '', hooks: [{ type: 'command', command: `node "${ACTIVITY_BRIDGE}" "${ACTIVITY_PATH}" thinking` }] },
-          { matcher: '', hooks: [{ type: 'command', command: `node "${EVENT_BRIDGE}" "${EVENTS_PATH}" prompt` }] },
         ],
-        PermissionRequest: [
-          { matcher: '', hooks: [{ type: 'command', command: `node "${ACTIVITY_BRIDGE}" "${ACTIVITY_PATH}" idle` }] },
-          { matcher: '', hooks: [{ type: 'command', command: `node "${EVENT_BRIDGE}" "${EVENTS_PATH}" idle` }] },
-        ],
-        PostToolUse: [
-          { matcher: '', hooks: [{ type: 'command', command: `node "${EVENT_BRIDGE}" "${EVENTS_PATH}" tool_end` }] },
-          { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${ACTIVITY_BRIDGE}" "${ACTIVITY_PATH}" thinking` }] },
-          { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${EVENT_BRIDGE}" "${EVENTS_PATH}" prompt` }] },
-        ],
-        PostToolUseFailure: [
-          { matcher: '', hooks: [{ type: 'command', command: `node "${ACTIVITY_BRIDGE}" "${ACTIVITY_PATH}" idle` }] },
-          { matcher: '', hooks: [{ type: 'command', command: `node "${EVENT_BRIDGE}" "${EVENTS_PATH}" tool_failure` }] },
-        ],
-      },
-    };
-    fs.writeFileSync(
-      path.join(claudeDir, 'settings.local.json'),
-      JSON.stringify(settings, null, 2),
-    );
+      };
 
-    stripActivityHooks(tmpDir);
+      const hooks = buildEventHooks(EVENT_BRIDGE, EVENTS_PATH, existing);
 
-    const result = readSettings();
-    expect(result.hooks.UserPromptSubmit).toHaveLength(1);
-    expect(result.hooks.UserPromptSubmit[0].hooks[0].command).toBe('echo user-hook');
-    expect(result.hooks.PreToolUse).toHaveLength(1);
-    expect(result.hooks.PreToolUse[0].hooks[0].command).toBe('echo user-pretool');
-    // PermissionRequest had only kangentic hooks — key should be removed entirely
-    expect(result.hooks.PermissionRequest).toBeUndefined();
-    // PostToolUse had only kangentic hooks — key should be removed entirely
-    expect(result.hooks.PostToolUse).toBeUndefined();
-    // PostToolUseFailure had only kangentic hooks — key should be removed entirely
-    expect(result.hooks.PostToolUseFailure).toBeUndefined();
+      // PreToolUse: 1 user + 3 event-bridge
+      expect(hooks.PreToolUse).toHaveLength(4);
+      expect(hooks.PreToolUse[0].hooks[0].command).toBe('echo user-pretool');
+
+      // UserPromptSubmit: 1 user + 1 event-bridge
+      expect(hooks.UserPromptSubmit).toHaveLength(2);
+      expect(hooks.UserPromptSubmit[0].hooks[0].command).toBe('echo user-hook');
+    });
   });
 
-  it('stripActivityHooks cleans up empty settings file', () => {
-    // Create settings with only kangentic hooks
-    const claudeDir = path.join(tmpDir, '.claude');
-    fs.mkdirSync(claudeDir, { recursive: true });
-    const settings = {
-      hooks: {
-        UserPromptSubmit: [
-          { matcher: '', hooks: [{ type: 'command', command: `node "${ACTIVITY_BRIDGE}" "${ACTIVITY_PATH}" thinking` }] },
-        ],
-      },
-    };
-    fs.writeFileSync(
-      path.join(claudeDir, 'settings.local.json'),
-      JSON.stringify(settings, null, 2),
-    );
+  describe('stripKangenticHooks', () => {
+    it('removes ALL kangentic hooks, preserves user hooks', () => {
+      const claudeDir = path.join(tmpDir, '.claude');
+      fs.mkdirSync(claudeDir, { recursive: true });
+      const settings = {
+        hooks: {
+          PreToolUse: [
+            { matcher: '', hooks: [{ type: 'command', command: `node "${EVENT_BRIDGE}" "${EVENTS_PATH}" tool_start` }] },
+            { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${EVENT_BRIDGE}" "${EVENTS_PATH}" idle` }] },
+            { matcher: '', hooks: [{ type: 'command', command: 'echo user-pretool' }] },
+          ],
+          UserPromptSubmit: [
+            { matcher: '', hooks: [{ type: 'command', command: 'echo user-hook' }] },
+            { matcher: '', hooks: [{ type: 'command', command: `node "${EVENT_BRIDGE}" "${EVENTS_PATH}" prompt` }] },
+          ],
+          PermissionRequest: [
+            { matcher: '', hooks: [{ type: 'command', command: `node "${EVENT_BRIDGE}" "${EVENTS_PATH}" idle` }] },
+          ],
+          PostToolUse: [
+            { matcher: '', hooks: [{ type: 'command', command: `node "${EVENT_BRIDGE}" "${EVENTS_PATH}" tool_end` }] },
+          ],
+        },
+      };
+      fs.writeFileSync(
+        path.join(claudeDir, 'settings.local.json'),
+        JSON.stringify(settings, null, 2),
+      );
 
-    stripActivityHooks(tmpDir);
+      stripKangenticHooks(tmpDir);
 
-    expect(settingsExists()).toBe(false);
-  });
+      const result = readSettings();
+      const hooks = result.hooks as Record<string, unknown[]>;
+      expect(hooks.UserPromptSubmit).toHaveLength(1);
+      expect((hooks.UserPromptSubmit[0] as { hooks: Array<{ command: string }> }).hooks[0].command).toBe('echo user-hook');
+      expect(hooks.PreToolUse).toHaveLength(1);
+      expect((hooks.PreToolUse[0] as { hooks: Array<{ command: string }> }).hooks[0].command).toBe('echo user-pretool');
+      // PermissionRequest and PostToolUse had only kangentic hooks — keys removed
+      expect(hooks.PermissionRequest).toBeUndefined();
+      expect(hooks.PostToolUse).toBeUndefined();
+    });
 
-  it('stripActivityHooks handles missing file', () => {
-    // No .claude/ directory at all — should not throw
-    expect(() => stripActivityHooks(tmpDir)).not.toThrow();
+    it('also removes legacy activity-bridge hooks', () => {
+      const claudeDir = path.join(tmpDir, '.claude');
+      fs.mkdirSync(claudeDir, { recursive: true });
+      const ACTIVITY_BRIDGE = '/fake/.kangentic/activity-bridge.js';
+      const ACTIVITY_PATH = '/fake/.kangentic/sessions/abc/activity.json';
+      const settings = {
+        hooks: {
+          UserPromptSubmit: [
+            { matcher: '', hooks: [{ type: 'command', command: `node "${ACTIVITY_BRIDGE}" "${ACTIVITY_PATH}" thinking` }] },
+            { matcher: '', hooks: [{ type: 'command', command: 'echo user-hook' }] },
+          ],
+        },
+      };
+      fs.writeFileSync(
+        path.join(claudeDir, 'settings.local.json'),
+        JSON.stringify(settings, null, 2),
+      );
+
+      stripKangenticHooks(tmpDir);
+
+      const result = readSettings();
+      const hooks = result.hooks as Record<string, unknown[]>;
+      expect(hooks.UserPromptSubmit).toHaveLength(1);
+      expect((hooks.UserPromptSubmit[0] as { hooks: Array<{ command: string }> }).hooks[0].command).toBe('echo user-hook');
+    });
+
+    it('cleans up empty settings file', () => {
+      const claudeDir = path.join(tmpDir, '.claude');
+      fs.mkdirSync(claudeDir, { recursive: true });
+      const settings = {
+        hooks: {
+          UserPromptSubmit: [
+            { matcher: '', hooks: [{ type: 'command', command: `node "${EVENT_BRIDGE}" "${EVENTS_PATH}" prompt` }] },
+          ],
+        },
+      };
+      fs.writeFileSync(
+        path.join(claudeDir, 'settings.local.json'),
+        JSON.stringify(settings, null, 2),
+      );
+
+      stripKangenticHooks(tmpDir);
+
+      expect(settingsExists()).toBe(false);
+    });
+
+    it('handles missing file', () => {
+      expect(() => stripKangenticHooks(tmpDir)).not.toThrow();
+    });
   });
 });

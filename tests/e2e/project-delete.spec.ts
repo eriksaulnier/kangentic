@@ -3,11 +3,14 @@
  *
  * Verifies that deleting a project:
  *  - Removes the `.kangentic/` directory
- *  - Removes the `.claude/` directory when it only contained our hooks (e.g. from older versions)
  *  - Preserves `.claude/` when the user has their own files (e.g. CLAUDE.md)
  *  - Strips the `.kangentic/` entry from `.gitignore`
  *  - Fully purges sessions from SessionManager (no cross-project bleed)
  *  - Leaves the rest of the project directory intact
+ *
+ * Note: For non-worktree sessions, hooks are passed via --settings flag
+ * pointing to `.kangentic/sessions/<id>/settings.json`. No `.claude/`
+ * files are created or modified by Kangentic.
  *
  * Uses mock-claude so tests work without a real Claude installation.
  */
@@ -119,28 +122,23 @@ async function dragTaskToColumn(taskTitle: string, targetColumn: string) {
 }
 
 test.describe('Project Delete Cleanup', () => {
-  test('removes .kangentic/ and empty .claude/ on delete', async () => {
+  test('removes .kangentic/ on delete and purges sessions', async () => {
     const tmpDir = createTempProject(`${TEST_NAME}-clean`);
     const projectName = `CleanDel ${runId}`;
     await createProject(page, projectName, tmpDir);
 
-    // Create a task and move to Running to spawn a session
+    // Create a task and move to Code Review to spawn a session
     const taskTitle = `Cleanup Task ${runId}`;
     await createTask(page, taskTitle, 'Will be cleaned up');
     await dragTaskToColumn(taskTitle, 'Code Review');
     await waitForSession(taskTitle);
 
-    // Verify .kangentic/ was created
+    // Verify .kangentic/ was created (session data lives here)
     expect(fs.existsSync(path.join(tmpDir, '.kangentic'))).toBe(true);
 
-    // Simulate a settings.local.json left by a previous version or worktree session
-    // (main-repo sessions use --settings flag, not settings.local.json)
-    const claudeDir = path.join(tmpDir, '.claude');
-    fs.mkdirSync(claudeDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(claudeDir, 'settings.local.json'),
-      JSON.stringify({ hooks: { Stop: [{ matcher: '', hooks: [{ type: 'command', command: 'node ".kangentic/event-bridge" "path" idle' }] }] } }, null, 2),
-    );
+    // For non-worktree sessions, hooks are passed via --settings flag
+    // pointing to .kangentic/sessions/<id>/settings.json — no
+    // .claude/settings.local.json is created in the project root.
 
     // Verify .gitignore has our entry
     const gitignoreBefore = fs.readFileSync(path.join(tmpDir, '.gitignore'), 'utf-8');
@@ -167,9 +165,6 @@ test.describe('Project Delete Cleanup', () => {
     // .kangentic/ should be gone
     expect(fs.existsSync(path.join(tmpDir, '.kangentic'))).toBe(false);
 
-    // .claude/ should be gone (it only contained our settings.local.json)
-    expect(fs.existsSync(path.join(tmpDir, '.claude'))).toBe(false);
-
     // .gitignore should NOT contain .kangentic/ anymore
     if (fs.existsSync(path.join(tmpDir, '.gitignore'))) {
       const gitignoreAfter = fs.readFileSync(path.join(tmpDir, '.gitignore'), 'utf-8');
@@ -192,22 +187,20 @@ test.describe('Project Delete Cleanup', () => {
     const projectName = `PreserveDel ${runId}`;
     await createProject(page, projectName, tmpDir);
 
-    // Create a task and move to Running to spawn a session
+    // Simulate a user's .claude/ directory with their own config files
+    const claudeDir = path.join(tmpDir, '.claude');
+    fs.mkdirSync(claudeDir, { recursive: true });
+    fs.writeFileSync(path.join(claudeDir, 'CLAUDE.md'), '# My project instructions\n');
+    fs.writeFileSync(path.join(claudeDir, 'settings.json'), '{"permissions":{"allow":["Read"]}}\n');
+
+    // Create a task and move to Code Review to spawn a session
     const taskTitle = `Preserve Task ${runId}`;
     await createTask(page, taskTitle, 'Claude dir has user files');
     await dragTaskToColumn(taskTitle, 'Code Review');
     await waitForSession(taskTitle);
 
-    // Simulate a settings.local.json left by a previous version or worktree session
-    const claudeDir = path.join(tmpDir, '.claude');
-    fs.mkdirSync(claudeDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(claudeDir, 'settings.local.json'),
-      JSON.stringify({ hooks: { Stop: [{ matcher: '', hooks: [{ type: 'command', command: 'node ".kangentic/event-bridge" "path" idle' }] }] } }, null, 2),
-    );
-
-    // Add a user file to .claude/ (simulating user's own Claude config)
-    fs.writeFileSync(path.join(claudeDir, 'CLAUDE.md'), '# My project instructions\n');
+    // Verify .kangentic/ was created
+    expect(fs.existsSync(path.join(tmpDir, '.kangentic'))).toBe(true);
 
     // Delete the project
     const projectId = await page.evaluate(async () => {
@@ -222,14 +215,12 @@ test.describe('Project Delete Cleanup', () => {
     // .kangentic/ should be gone
     expect(fs.existsSync(path.join(tmpDir, '.kangentic'))).toBe(false);
 
-    // .claude/ should still exist (user's file is in there)
-    expect(fs.existsSync(path.join(tmpDir, '.claude'))).toBe(true);
+    // .claude/ should still exist (user's files are in there)
+    expect(fs.existsSync(claudeDir)).toBe(true);
 
-    // Our hooks file should be gone
-    expect(fs.existsSync(path.join(tmpDir, '.claude', 'settings.local.json'))).toBe(false);
-
-    // User's file should be preserved
-    expect(fs.existsSync(path.join(tmpDir, '.claude', 'CLAUDE.md'))).toBe(true);
+    // User's files should be preserved
+    expect(fs.existsSync(path.join(claudeDir, 'CLAUDE.md'))).toBe(true);
+    expect(fs.existsSync(path.join(claudeDir, 'settings.json'))).toBe(true);
   });
 
   test('new project after delete has no stale sessions', async () => {

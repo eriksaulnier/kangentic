@@ -17,7 +17,7 @@ import { AttachmentRepository } from '../db/repositories/attachment-repository';
 import { recoverSessions, reconcileSessions, pruneOrphanedWorktrees } from '../engine/session-recovery';
 import { CommandInjector } from '../engine/command-injector';
 import { WorktreeManager, isGitRepo, isInsideWorktree, isFileTracked } from '../git/worktree-manager';
-import { stripActivityHooks } from '../agent/hook-manager';
+import { stripKangenticHooks } from '../agent/hook-manager';
 import { getProjectDb, closeProjectDb } from '../db/database';
 import { PATHS } from '../config/paths';
 import type { Task } from '../../shared/types';
@@ -264,20 +264,20 @@ export async function cleanupProject(projectId: string, projectPath: string): Pr
     }
   }
 
-  // 3. Strip our activity-bridge hooks from .claude/settings.local.json
+  // 3. Strip our hooks from .claude/settings.local.json
   //    (project root and any worktree dirs that may still exist)
-  stripActivityHooks(projectPath);
+  stripKangenticHooks(projectPath);
   const worktreesDir = path.join(projectPath, '.kangentic', 'worktrees');
   if (fs.existsSync(worktreesDir)) {
     try {
       for (const entry of fs.readdirSync(worktreesDir)) {
-        stripActivityHooks(path.join(worktreesDir, entry));
+        stripKangenticHooks(path.join(worktreesDir, entry));
       }
     } catch { /* best effort */ }
   }
 
   // 4. Remove empty .claude/ directory if it only contained our hooks file.
-  //    stripActivityHooks deletes settings.local.json, but on Windows the file
+  //    stripKangenticHooks deletes settings.local.json, but on Windows the file
   //    may still be pending delete when rmdirSync runs. Use rmSync with retries
   //    and only remove if no user files (CLAUDE.md, settings.json, etc.) exist.
   const claudeDir = path.join(projectPath, '.claude');

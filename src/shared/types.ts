@@ -363,7 +363,6 @@ export interface SpawnSessionInput {
   cwd: string;
   env?: Record<string, string>;
   statusOutputPath?: string; // path for the status bridge JSON file
-  activityOutputPath?: string; // path for the activity bridge JSON file
   eventsOutputPath?: string; // path for the event bridge JSONL file (activity log)
 }
 

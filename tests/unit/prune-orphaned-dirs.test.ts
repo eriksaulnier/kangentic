@@ -63,7 +63,8 @@ vi.mock('../../src/main/agent/trust-manager', () => ({
   ensureWorktreeTrust: vi.fn(),
 }));
 vi.mock('../../src/main/agent/hook-manager', () => ({
-  injectEventHooks: vi.fn(),
+  buildEventHooks: vi.fn(),
+  stripKangenticHooks: vi.fn(),
 }));
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));
 vi.mock('better-sqlite3', () => ({ default: vi.fn() }));

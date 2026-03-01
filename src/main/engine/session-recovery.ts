@@ -13,6 +13,7 @@ import { CommandBuilder } from '../agent/command-builder';
 import { ConfigManager } from '../config/config-manager';
 import type { SessionRecord, ActionConfig, Task, PermissionMode } from '../../shared/types';
 import { ensureWorktreeTrust } from '../agent/trust-manager';
+import { sessionOutputPaths } from './session-paths';
 import { sanitizeForPty } from '../../shared/paths';
 
 // ---------------------------------------------------------------------------
@@ -396,9 +397,7 @@ export async function recoverSessions(
         console.error(`Failed to create session directory: ${sessionDir}`, err);
         throw new Error(`Cannot create session directory at ${sessionDir}: ${(err as Error).message}`);
       }
-      const statusOutputPath = path.join(sessionDir, 'status.json');
-      const activityOutputPath = path.join(sessionDir, 'activity.json');
-      const eventsOutputPath = path.join(sessionDir, 'events.jsonl');
+      const { statusOutputPath, eventsOutputPath } = sessionOutputPaths(sessionDir);
 
       const command = commandBuilder.buildClaudeCommand({
         claudePath: claude.path,
@@ -419,7 +418,6 @@ export async function recoverSessions(
         command,
         cwd: record.cwd,
         statusOutputPath,
-        activityOutputPath,
         eventsOutputPath,
       });
 
@@ -599,9 +597,7 @@ export async function reconcileSessions(
           console.error(`Failed to create session directory: ${sessionDir}`, err);
           throw new Error(`Cannot create session directory at ${sessionDir}: ${(err as Error).message}`);
         }
-        const statusOutputPath = path.join(sessionDir, 'status.json');
-        const activityOutputPath = path.join(sessionDir, 'activity.json');
-        const eventsOutputPath = path.join(sessionDir, 'events.jsonl');
+        const { statusOutputPath, eventsOutputPath } = sessionOutputPaths(sessionDir);
 
         const command = commandBuilder.buildClaudeCommand({
           claudePath: claude.path,
@@ -620,7 +616,6 @@ export async function reconcileSessions(
           command,
           cwd,
           statusOutputPath,
-          activityOutputPath,
           eventsOutputPath,
         });
 

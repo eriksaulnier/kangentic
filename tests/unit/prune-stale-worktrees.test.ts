@@ -135,7 +135,7 @@ vi.mock('../../src/main/git/worktree-manager', () => {
   };
 });
 vi.mock('../../src/main/agent/hook-manager', () => ({
-  stripActivityHooks: vi.fn(),
+  stripKangenticHooks: vi.fn(),
 }));
 vi.mock('../../src/shared/paths', () => ({
   adaptCommandForShell: (cmd: string) => cmd,

@@ -3,8 +3,7 @@
  *
  * When the event watcher reads JSONL events from the event-bridge, it derives
  * the activity state (thinking/idle) from the event type. This is the primary
- * mechanism for task card indicators — more reliable than the separate
- * activity-bridge pipeline because the event-bridge fires for ALL tools.
+ * mechanism for task card indicators — the event-bridge fires for ALL tools.
  *
  * Mapping:
  *   tool_start   → thinking
@@ -90,7 +89,7 @@ describe('Event-derived activity state', () => {
   let spawnedSessionId: string | null = null;
 
   beforeEach(() => {
-    manager = new SessionManager();
+    manager = new SessionManager(tmpDir);
   });
 
   afterEach(async () => {

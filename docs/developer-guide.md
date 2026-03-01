@@ -28,7 +28,7 @@ src/
       hook-manager.ts      # Injects/strips Kangentic hooks from Claude settings
       trust-manager.ts     # Pre-populates ~/.claude.json trust entries for worktrees
       status-bridge.js     # Hook script: writes usage data to status.json
-      event-bridge.js      # Hook script: appends tool events + activity state to events.jsonl
+      event-bridge.js      # Hook script: appends tool events to events.jsonl
     config/
       config-manager.ts    # Three-tier config: global → project overrides → effective
     db/                    # SQLite database layer

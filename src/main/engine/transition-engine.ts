@@ -8,6 +8,7 @@ import { CommandBuilder } from '../agent/command-builder';
 import { ClaudeDetector } from '../agent/claude-detector';
 import { WorktreeManager } from '../git/worktree-manager';
 import { ensureWorktreeTrust } from '../agent/trust-manager';
+import { sessionOutputPaths } from './session-paths';
 import type { ActionRepository } from '../db/repositories/action-repository';
 import type { TaskRepository } from '../db/repositories/task-repository';
 import type { SessionRepository } from '../db/repositories/session-repository';
@@ -167,9 +168,7 @@ export class TransitionEngine {
       console.error(`Failed to create session directory: ${sessionDir}`, err);
       throw new Error(`Cannot create session directory at ${sessionDir}: ${(err as Error).message}`);
     }
-    const statusOutputPath = path.join(sessionDir, 'status.json');
-    const activityOutputPath = path.join(sessionDir, 'activity.json');
-    const eventsOutputPath = path.join(sessionDir, 'events.jsonl');
+    const { statusOutputPath, eventsOutputPath } = sessionOutputPaths(sessionDir);
 
     const command = this.commandBuilder.buildClaudeCommand({
       claudePath: claude.path,
@@ -190,7 +189,6 @@ export class TransitionEngine {
       command,
       cwd,
       statusOutputPath,
-      activityOutputPath,
       eventsOutputPath,
     });
 

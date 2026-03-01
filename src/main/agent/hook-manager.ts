@@ -1,12 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+/** Hook entry in Claude Code's settings.json. */
+export interface ClaudeHookEntry {
+  matcher: string;
+  hooks: Array<{ type: string; command: string }>;
+}
+
 /**
  * Identify a hook entry injected by Kangentic.
  * Matches a known bridge script name AND `.kangentic` in the command string
  * to ensure we never touch user-defined hooks.
  */
-function isKangenticHook(h: any): boolean {
+function isKangenticHook(h: { command?: string }): boolean {
   if (typeof h.command !== 'string') return false;
   const cmd = h.command;
   return cmd.includes('.kangentic') && (
@@ -14,30 +20,13 @@ function isKangenticHook(h: any): boolean {
   );
 }
 
-/** Check if a hook entry is specifically an event-bridge entry. */
-function isEventBridgeHook(h: any): boolean {
-  return typeof h.command === 'string'
-    && h.command.includes('event-bridge')
-    && h.command.includes('.kangentic');
-}
-
 /**
  * Filter out ALL Kangentic-injected entries from a hook event array.
  * Returns only entries that are NOT ours (any bridge type).
  */
-function filterOurHooks(entries: any[] | undefined): any[] {
+function filterOurHooks(entries: ClaudeHookEntry[] | undefined): ClaudeHookEntry[] {
   return (entries || []).filter(
-    (e: any) => !e?.hooks?.some?.(isKangenticHook),
-  );
-}
-
-/**
- * Filter out only event-bridge entries from a hook event array.
- * Preserves user-defined hooks.
- */
-function filterEventHooks(entries: any[] | undefined): any[] {
-  return (entries || []).filter(
-    (e: any) => !e?.hooks?.some?.(isEventBridgeHook),
+    (e) => !e?.hooks?.some?.(isKangenticHook),
   );
 }
 
@@ -49,68 +38,44 @@ function settingsLocalPath(dir: string): string {
 }
 
 /**
- * Inject Kangentic event-bridge hooks into `<cwd>/.claude/settings.local.json`.
- * Adds hooks for all tracked Claude Code lifecycle events (PreToolUse,
- * PostToolUse, PostToolUseFailure, UserPromptSubmit, Stop, PermissionRequest).
- * Replaces any stale event-bridge entries from previous sessions while
- * preserving all user-defined hooks/settings.
+ * Build event-bridge hook entries to merge into Claude Code settings.
+ * Takes the resolved bridge script path, events output path, and existing
+ * hooks, and returns the merged hooks object with event-bridge entries appended.
  */
-export function injectEventHooks(
-  cwd: string,
+export function buildEventHooks(
   eventBridge: string,
   eventsPath: string,
-): void {
-  const localSettingsDir = path.join(cwd, '.claude');
-  fs.mkdirSync(localSettingsDir, { recursive: true });
-  const p = settingsLocalPath(cwd);
-
-  let settings: Record<string, any> = {};
-  try {
-    const raw = fs.readFileSync(p, 'utf-8');
-    settings = JSON.parse(raw);
-  } catch {
-    // Doesn't exist or malformed — start fresh
-  }
-
-  const existingHooks = settings.hooks || {};
-
-  settings.hooks = {
+  existingHooks: Record<string, ClaudeHookEntry[]>,
+): Record<string, ClaudeHookEntry[]> {
+  return {
     ...existingHooks,
     PreToolUse: [
-      ...filterEventHooks(existingHooks.PreToolUse),
+      ...(existingHooks.PreToolUse || []),
       { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_start` }] },
       { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
       { matcher: 'ExitPlanMode', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
     ],
     PostToolUse: [
-      ...filterEventHooks(existingHooks.PostToolUse),
+      ...(existingHooks.PostToolUse || []),
       { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_end` }] },
-      { matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" prompt` }] },
-      { matcher: 'ExitPlanMode', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" prompt` }] },
     ],
     UserPromptSubmit: [
-      ...filterEventHooks(existingHooks.UserPromptSubmit),
+      ...(existingHooks.UserPromptSubmit || []),
       { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" prompt` }] },
     ],
     Stop: [
-      ...filterEventHooks(existingHooks.Stop),
+      ...(existingHooks.Stop || []),
       { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
     ],
     PermissionRequest: [
-      ...filterEventHooks(existingHooks.PermissionRequest),
+      ...(existingHooks.PermissionRequest || []),
       { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
     ],
-    PostToolUseFailure: [
-      ...filterEventHooks(existingHooks.PostToolUseFailure),
-      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_failure` }] },
-    ],
   };
-
-  fs.writeFileSync(p, JSON.stringify(settings, null, 2));
 }
 
 /**
- * Strip ALL Kangentic hook entries (activity-bridge + event-bridge) from
+ * Strip ALL Kangentic hook entries (event-bridge) from
  * `.claude/settings.local.json` at the given directory. Preserves all
  * other user hooks and settings.
  *
@@ -121,7 +86,7 @@ export function injectEventHooks(
  * - Restores from backup on any error
  * - If the file becomes empty `{}`, deletes it (and the backup)
  */
-export function stripActivityHooks(dir: string): void {
+export function stripKangenticHooks(dir: string): void {
   const p = settingsLocalPath(dir);
   if (!fs.existsSync(p)) return;
 
@@ -168,6 +133,6 @@ export function stripActivityHooks(dir: string): void {
       try { fs.copyFileSync(backupPath, p); } catch { /* can't recover */ }
       try { fs.unlinkSync(backupPath); } catch { /* best effort */ }
     }
-    console.error(`[stripActivityHooks] Failed to clean hooks at ${p}:`, err);
+    console.error(`[stripKangenticHooks] Failed to clean hooks at ${p}:`, err);
   }
 }

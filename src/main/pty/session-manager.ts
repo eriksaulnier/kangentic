@@ -25,7 +25,6 @@ interface ManagedSession {
   scrollback: string;
   statusOutputPath: string | null;
   statusWatcher: fs.FSWatcher | null;
-  activityOutputPath: string | null;
   eventsOutputPath: string | null;
   eventsWatcher: fs.FSWatcher | null;
   eventsFileOffset: number;
@@ -89,7 +88,6 @@ export class SessionManager extends EventEmitter {
         scrollback: '',
         statusOutputPath: input.statusOutputPath || null,
         statusWatcher: null,
-        activityOutputPath: input.activityOutputPath || null,
         eventsOutputPath: input.eventsOutputPath || null,
         eventsWatcher: null,
         eventsFileOffset: 0,
@@ -132,11 +130,10 @@ export class SessionManager extends EventEmitter {
     // from deleting files that the new session will create at the same
     // paths. This race occurs when resuming a session: the old and new
     // sessions share the same claudeSessionId, so the merged settings,
-    // status, and activity files all resolve to the same path.
+    // status, and events files all resolve to the same path.
     if (existing) {
       existing.mergedSettingsPath = null;
       existing.statusOutputPath = null;
-      existing.activityOutputPath = null;
       existing.eventsOutputPath = null;
     }
 
@@ -194,7 +191,6 @@ export class SessionManager extends EventEmitter {
         scrollback: previousScrollback,
         statusOutputPath: input.statusOutputPath || null,
         statusWatcher: null,
-        activityOutputPath: input.activityOutputPath || null,
         eventsOutputPath: input.eventsOutputPath || null,
         eventsWatcher: null,
         eventsFileOffset: 0,
@@ -228,7 +224,6 @@ export class SessionManager extends EventEmitter {
       scrollback: previousScrollback,
       statusOutputPath: input.statusOutputPath || null,
       statusWatcher: null,
-      activityOutputPath: input.activityOutputPath || null,
       eventsOutputPath: input.eventsOutputPath || null,
       eventsWatcher: null,
       eventsFileOffset: 0,
@@ -376,7 +371,6 @@ export class SessionManager extends EventEmitter {
     // Null out file paths BEFORE killing so the onExit handler's
     // cleanupSessionFiles() skips file deletion — files persist for resume
     session.statusOutputPath = null;
-    session.activityOutputPath = null;
     session.eventsOutputPath = null;
     session.mergedSettingsPath = null;
 
@@ -481,10 +475,10 @@ export class SessionManager extends EventEmitter {
       try {
         const raw = fs.readFileSync(session.statusOutputPath!, 'utf-8');
         const usage = ClaudeStatusParser.parseStatus(raw);
-        if (usage) {
-          this.usageCache.set(session.id, usage);
-          this.emit('usage', session.id, usage);
-        }
+        if (!usage) return;
+
+        this.usageCache.set(session.id, usage);
+        this.emit('usage', session.id, usage);
       } catch {
         // File may not exist yet — ignore
       }
@@ -570,7 +564,8 @@ export class SessionManager extends EventEmitter {
             events.push(event);
             this.emit('event', session.id, event);
 
-            // Derive activity state from event types.
+            // Derive activity state from events — the event-bridge
+            // fires for ALL tools via blank PreToolUse matcher.
             if (event.type === 'tool_start' || event.type === 'prompt') {
               this.activityCache.set(session.id, 'thinking');
               this.emit('activity', session.id, 'thinking');
@@ -621,7 +616,7 @@ export class SessionManager extends EventEmitter {
   }
 
   /**
-   * Stop watchers and clean up status + activity + events + merged settings files.
+   * Stop watchers and clean up status + events + merged settings files.
    */
   private cleanupSessionFiles(session: ManagedSession): void {
     if (session.statusWatcher) {
@@ -635,11 +630,6 @@ export class SessionManager extends EventEmitter {
     // Clean up status JSON file
     if (session.statusOutputPath) {
       try { fs.unlinkSync(session.statusOutputPath); } catch { /* may not exist */ }
-    }
-
-    // Clean up activity JSON file
-    if (session.activityOutputPath) {
-      try { fs.unlinkSync(session.activityOutputPath); } catch { /* may not exist */ }
     }
 
     // Clean up events JSONL file
@@ -720,7 +710,6 @@ export class SessionManager extends EventEmitter {
         session.pty = null;
         // Null file paths before kill so onExit doesn't clean them up
         session.statusOutputPath = null;
-        session.activityOutputPath = null;
         session.eventsOutputPath = null;
         session.mergedSettingsPath = null;
         try { ptyRef.kill(); } catch { /* already dead */ }

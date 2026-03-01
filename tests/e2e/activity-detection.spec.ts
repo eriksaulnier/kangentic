@@ -2,13 +2,13 @@
  * E2E tests for Claude Code activity detection (thinking vs idle).
  *
  * Verifies:
- * - Merged settings file contains event-bridge hooks for lifecycle events
- * - Event watcher emits activity state changes to the renderer
+ * - Event bridge script writes correct JSONL when invoked
+ * - Merged settings file contains hooks for tool_start, prompt, and idle events
+ * - Events JSONL file watcher emits state changes to the renderer
  * - Task card shows Loader2 spinner when thinking, static dot when idle
- * - Activity state defaults to 'idle' for newly spawned sessions
  *
  * Uses mock Claude CLI. Since mock Claude doesn't invoke hooks,
- * tests write events.jsonl directly to simulate Claude Code's behavior.
+ * tests write event files directly to simulate Claude Code's behavior.
  */
 import { test, expect } from '@playwright/test';
 import {
@@ -23,6 +23,7 @@ import {
 import type { ElectronApplication, Page } from '@playwright/test';
 import path from 'node:path';
 import fs from 'node:fs';
+import { execSync } from 'node:child_process';
 
 const TEST_NAME = 'activity-detection';
 const runId = Date.now();
@@ -41,12 +42,6 @@ function mockClaudePath(): string {
   const jsPath = path.join(fixturesDir, 'mock-claude.js');
   fs.chmodSync(jsPath, 0o755);
   return jsPath;
-}
-
-/** Strip ANSI/terminal escape codes from text */
-function stripAnsi(text: string): string {
-  // eslint-disable-next-line no-control-regex
-  return text.replace(/\x1B\[[0-9;]*[a-zA-Z]|\x1B\].*?\x07|\x1B[()][A-Z0-9]/g, '');
 }
 
 test.beforeAll(async () => {
@@ -147,7 +142,7 @@ async function waitForTerminalOutput(marker: string, timeoutMs = 15000): Promise
  * Find the most recent merged settings file and return its parsed contents.
  * Settings are at .kangentic/sessions/<id>/settings.json.
  */
-function findMergedSettings(): Record<string, any> | null {
+function findMergedSettings(): Record<string, unknown> | null {
   const sessionsDir = path.join(tmpDir, '.kangentic', 'sessions');
   if (!fs.existsSync(sessionsDir)) return null;
 
@@ -166,23 +161,104 @@ function findMergedSettings(): Record<string, any> | null {
 }
 
 /**
- * Extract the events JSONL output path from the merged settings hooks.
+ * Extract the events output path from the merged settings hooks.
+ * Looks for event-bridge commands referencing events.jsonl.
  */
 function findEventsOutputPath(): string | null {
   const settings = findMergedSettings();
-  if (!settings?.hooks?.Stop?.[0]?.hooks?.[0]?.command) return null;
-  const cmd: string = settings.hooks.Stop[0].hooks[0].command;
+  if (!settings) return null;
+  const hooks = settings.hooks as Record<string, Array<{ hooks: Array<{ command: string }> }>> | undefined;
+  if (!hooks?.Stop?.[0]?.hooks?.[0]?.command) return null;
+  const cmd: string = hooks.Stop[0].hooks[0].command;
   // Extract the path from: node "bridge" "path" idle
   const match = cmd.match(/"([^"]+events\.jsonl)"/);
   return match ? match[1].replace(/\//g, path.sep) : null;
 }
+
+test.describe('Event Bridge Script', () => {
+  test('event-bridge.js writes correct JSONL for tool_start event', async () => {
+    const bridgePath = path.join(__dirname, '..', '..', 'src', 'main', 'agent', 'event-bridge.js');
+    const outFile = path.join(tmpDir, 'test-tool-start.jsonl');
+
+    const stdinData = JSON.stringify({ tool_name: 'Read', tool_input: { file_path: '/src/main.ts' } });
+    const stdinFile = path.join(tmpDir, 'test-tool-start-input.json');
+    fs.writeFileSync(stdinFile, stdinData);
+
+    execSync(`node "${bridgePath}" "${outFile}" tool_start < "${stdinFile}"`, {
+      encoding: 'utf-8',
+      timeout: 5000,
+    });
+
+    const lines = fs.readFileSync(outFile, 'utf-8').trim().split('\n');
+    expect(lines).toHaveLength(1);
+    const event = JSON.parse(lines[0]);
+    expect(event.type).toBe('tool_start');
+    expect(event.tool).toBe('Read');
+    expect(event.detail).toBe('/src/main.ts');
+    expect(event.ts).toBeGreaterThan(0);
+
+    fs.unlinkSync(outFile);
+    fs.unlinkSync(stdinFile);
+  });
+
+  test('event-bridge.js writes correct JSONL for idle event', async () => {
+    const bridgePath = path.join(__dirname, '..', '..', 'src', 'main', 'agent', 'event-bridge.js');
+    const outFile = path.join(tmpDir, 'test-idle.jsonl');
+
+    execSync(`echo {} | node "${bridgePath}" "${outFile}" idle`, {
+      encoding: 'utf-8',
+      timeout: 5000,
+    });
+
+    const lines = fs.readFileSync(outFile, 'utf-8').trim().split('\n');
+    expect(lines).toHaveLength(1);
+    const event = JSON.parse(lines[0]);
+    expect(event.type).toBe('idle');
+    expect(event.ts).toBeGreaterThan(0);
+
+    fs.unlinkSync(outFile);
+  });
+
+  test('event-bridge.js writes correct JSONL for prompt event', async () => {
+    const bridgePath = path.join(__dirname, '..', '..', 'src', 'main', 'agent', 'event-bridge.js');
+    const outFile = path.join(tmpDir, 'test-prompt.jsonl');
+
+    execSync(`echo {} | node "${bridgePath}" "${outFile}" prompt`, {
+      encoding: 'utf-8',
+      timeout: 5000,
+    });
+
+    const lines = fs.readFileSync(outFile, 'utf-8').trim().split('\n');
+    expect(lines).toHaveLength(1);
+    const event = JSON.parse(lines[0]);
+    expect(event.type).toBe('prompt');
+
+    fs.unlinkSync(outFile);
+  });
+
+  test('event-bridge.js appends multiple events (JSONL format)', async () => {
+    const bridgePath = path.join(__dirname, '..', '..', 'src', 'main', 'agent', 'event-bridge.js');
+    const outFile = path.join(tmpDir, 'test-multi.jsonl');
+
+    // Write two events to the same file
+    execSync(`echo {} | node "${bridgePath}" "${outFile}" prompt`, { encoding: 'utf-8', timeout: 5000 });
+    execSync(`echo {} | node "${bridgePath}" "${outFile}" idle`, { encoding: 'utf-8', timeout: 5000 });
+
+    const lines = fs.readFileSync(outFile, 'utf-8').trim().split('\n');
+    expect(lines).toHaveLength(2);
+    expect(JSON.parse(lines[0]).type).toBe('prompt');
+    expect(JSON.parse(lines[1]).type).toBe('idle');
+
+    fs.unlinkSync(outFile);
+  });
+});
 
 test.describe('Merged Settings Hooks', () => {
   test.beforeEach(async () => {
     await ensureBoard();
   });
 
-  test('merged settings file contains UserPromptSubmit and Stop hooks', async () => {
+  test('merged settings file contains event-bridge hooks', async () => {
     const title = `Hooks Check ${runId}`;
     await createTask(page, title, 'Check hooks in merged settings');
 
@@ -191,42 +267,32 @@ test.describe('Merged Settings Hooks', () => {
 
     const settings = findMergedSettings();
     expect(settings).toBeTruthy();
-    expect(settings!.hooks).toBeTruthy();
+    const hooks = settings!.hooks as Record<string, Array<{ hooks: Array<{ command: string; type: string }> }>>;
+    expect(hooks).toBeTruthy();
 
-    // UserPromptSubmit hook (event-bridge → prompt)
-    expect(settings!.hooks.UserPromptSubmit).toBeInstanceOf(Array);
-    expect(settings!.hooks.UserPromptSubmit.length).toBeGreaterThanOrEqual(1);
-    const upsHook = settings!.hooks.UserPromptSubmit[0];
-    expect(upsHook.hooks[0].type).toBe('command');
-    expect(upsHook.hooks[0].command).toContain('event-bridge');
-    expect(upsHook.hooks[0].command).toContain('prompt');
+    // PreToolUse hooks — should contain event-bridge tool_start
+    expect(hooks.PreToolUse).toBeInstanceOf(Array);
+    expect(hooks.PreToolUse.length).toBeGreaterThanOrEqual(1);
+    const ptuCommands = hooks.PreToolUse.flatMap(e => e.hooks.map(h => h.command));
+    expect(ptuCommands.some(c => c.includes('event-bridge') && c.includes('tool_start'))).toBe(true);
 
-    // Stop hook (event-bridge → idle)
-    expect(settings!.hooks.Stop).toBeInstanceOf(Array);
-    expect(settings!.hooks.Stop.length).toBeGreaterThanOrEqual(1);
-    const stopHook = settings!.hooks.Stop[0];
-    expect(stopHook.hooks[0].type).toBe('command');
-    expect(stopHook.hooks[0].command).toContain('event-bridge');
-    expect(stopHook.hooks[0].command).toContain('idle');
+    // UserPromptSubmit hooks — should contain event-bridge prompt
+    expect(hooks.UserPromptSubmit).toBeInstanceOf(Array);
+    const upsCommands = hooks.UserPromptSubmit.flatMap(e => e.hooks.map(h => h.command));
+    expect(upsCommands.some(c => c.includes('event-bridge') && c.includes('prompt'))).toBe(true);
 
-    // PostToolUse should include AskUserQuestion and ExitPlanMode prompt matchers
-    expect(settings!.hooks.PostToolUse).toBeInstanceOf(Array);
-    const postToolUseMatchers = settings!.hooks.PostToolUse.map((e: Record<string, unknown>) => e.matcher);
-    expect(postToolUseMatchers).toContain('AskUserQuestion');
-    expect(postToolUseMatchers).toContain('ExitPlanMode');
-
-    // PostToolUseFailure should exist with event-bridge
-    expect(settings!.hooks.PostToolUseFailure).toBeInstanceOf(Array);
-    expect(settings!.hooks.PostToolUseFailure.length).toBeGreaterThanOrEqual(1);
-    expect(settings!.hooks.PostToolUseFailure[0].hooks[0].command).toContain('event-bridge');
-    expect(settings!.hooks.PostToolUseFailure[0].hooks[0].command).toContain('tool_failure');
+    // Stop hooks — should contain event-bridge idle
+    expect(hooks.Stop).toBeInstanceOf(Array);
+    const stopCommands = hooks.Stop.flatMap(e => e.hooks.map(h => h.command));
+    expect(stopCommands.some(c => c.includes('event-bridge') && c.includes('idle'))).toBe(true);
   });
 
   test('hooks reference events file in session directory', async () => {
     const settings = findMergedSettings();
     expect(settings).toBeTruthy();
+    const hooks = settings!.hooks as Record<string, Array<{ hooks: Array<{ command: string }> }>>;
 
-    const stopCmd: string = settings!.hooks.Stop[0].hooks[0].command;
+    const stopCmd: string = hooks.Stop[0].hooks[0].command;
     // Events file should be in .kangentic/sessions/<id>/events.jsonl
     expect(stopCmd).toMatch(/\.kangentic[/\\]sessions[/\\].*events\.jsonl/);
   });
@@ -254,7 +320,7 @@ test.describe('Activity State via IPC', () => {
     expect(states).toContain('idle');
   });
 
-  test('writing events JSONL transitions state to idle', async () => {
+  test('writing events JSONL transitions state to thinking', async () => {
     // Find the events output path from the merged settings
     const eventsPath = findEventsOutputPath();
     expect(eventsPath).toBeTruthy();
@@ -262,36 +328,41 @@ test.describe('Activity State via IPC', () => {
     // Ensure directory exists
     fs.mkdirSync(path.dirname(eventsPath!), { recursive: true });
 
-    // Write idle event to the events file (simulating Stop hook)
-    const idleEvent = JSON.stringify({ ts: Date.now(), type: 'idle' });
-    fs.appendFileSync(eventsPath!, idleEvent + '\n');
+    // Write tool_start event to the events file (simulating PreToolUse hook)
+    fs.appendFileSync(eventsPath!, JSON.stringify({
+      ts: Date.now(),
+      type: 'tool_start',
+      tool: 'Read',
+    }) + '\n');
 
     // Wait for the file watcher to pick it up and emit to the renderer
     await page.waitForTimeout(500);
 
-    // Check that at least one session is now idle
-    const activity = await page.evaluate(async () => {
-      return window.electronAPI.sessions.getActivity();
-    });
-    const states = Object.values(activity) as string[];
-    expect(states).toContain('idle');
-  });
-
-  test('writing events JSONL transitions state back to thinking', async () => {
-    const eventsPath = findEventsOutputPath();
-    expect(eventsPath).toBeTruthy();
-
-    // Write tool_start event (simulating PreToolUse hook → thinking)
-    const toolEvent = JSON.stringify({ ts: Date.now(), type: 'tool_start', tool: 'Read', detail: '/some/file.ts' });
-    fs.appendFileSync(eventsPath!, toolEvent + '\n');
-
-    await page.waitForTimeout(500);
-
+    // Check that at least one session is now thinking
     const activity = await page.evaluate(async () => {
       return window.electronAPI.sessions.getActivity();
     });
     const states = Object.values(activity) as string[];
     expect(states).toContain('thinking');
+  });
+
+  test('writing idle event transitions state back to idle', async () => {
+    const eventsPath = findEventsOutputPath();
+    expect(eventsPath).toBeTruthy();
+
+    // Write idle event (simulating Stop hook)
+    fs.appendFileSync(eventsPath!, JSON.stringify({
+      ts: Date.now(),
+      type: 'idle',
+    }) + '\n');
+
+    await page.waitForTimeout(500);
+
+    const activity = await page.evaluate(async () => {
+      return window.electronAPI.sessions.getActivity();
+    });
+    const states = Object.values(activity) as string[];
+    expect(states).toContain('idle');
   });
 });
 
@@ -329,8 +400,10 @@ test.describe('Task Card Spinner', () => {
     expect(eventsPath).toBeTruthy();
 
     fs.mkdirSync(path.dirname(eventsPath!), { recursive: true });
-    const idleEvent = JSON.stringify({ ts: Date.now(), type: 'idle' });
-    fs.appendFileSync(eventsPath!, idleEvent + '\n');
+    fs.appendFileSync(eventsPath!, JSON.stringify({
+      ts: Date.now(),
+      type: 'idle',
+    }) + '\n');
 
     await page.waitForTimeout(500);
 

@@ -79,11 +79,9 @@ export function ContextBar({ sessionId, compact = false }: ContextBarProps) {
         </span>
       )}
 
-      {!compact && (
-        <span ref={fractionRef} className={`${pill} text-fg-muted tabular-nums`} title="Current context usage / window size">
-          {formatTokenCount(usedTokens)} / {formatTokenCount(contextWindowSize)}
-        </span>
-      )}
+      <span ref={fractionRef} className={`${pill} text-fg-muted tabular-nums`} title="Context tokens used / total window size">
+        {formatTokenCount(usedTokens)} / {formatTokenCount(contextWindowSize)}
+      </span>
 
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <div className="flex-1 h-1.5 bg-surface-hover rounded-full overflow-hidden" title={barTooltip}>
@@ -92,7 +90,7 @@ export function ContextBar({ sessionId, compact = false }: ContextBarProps) {
             style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: progressColor }}
           />
         </div>
-        <span ref={pctRef} className="tabular-nums text-fg-faint whitespace-nowrap transition-colors duration-300" title="Context window usage — how much of the model's context is filled">{pct}% context</span>
+        <span ref={pctRef} className="tabular-nums text-fg-faint whitespace-nowrap transition-colors duration-300" title={`${100 - pct}% remaining until compaction`}>{pct}% context</span>
       </div>
     </div>
   );
