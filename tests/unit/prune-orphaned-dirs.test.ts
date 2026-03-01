@@ -116,7 +116,7 @@ function setupReaddir(map: Record<string, { name: string; isDirectory: () => boo
   });
 }
 
-async function runWithTimers<T>(promise: Promise<T> | void): Promise<void> {
+async function runWithTimers(): Promise<void> {
   // Flush microtasks + advance timers through retry delays
   for (let i = 0; i < 20; i++) {
     await vi.advanceTimersByTimeAsync(500);

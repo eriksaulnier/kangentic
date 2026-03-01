@@ -57,16 +57,17 @@ export function pruneOrphanedWorktrees(
   // not referenced by any task. Collects ALL referenced IDs (including archived
   // tasks) synchronously, then runs async deletion so the UI stays responsive.
   const allTasks = [...taskRepo.list(), ...taskRepo.listArchived()];
-  const referencedWorktrees = new Set(allTasks.map(t => t.worktree_path).filter(Boolean));
+  const referencedWorktrees = new Set(allTasks.map(t => t.worktree_path).filter((p): p is string => Boolean(p)));
   const referencedTaskIds = new Set(allTasks.map(t => t.id));
   const referencedSessionDirIds = new Set([
     ...allTasks.map(t => t.id),              // session dirs may be named by task ID
-    ...allTasks.map(t => t.session_id).filter(Boolean),
+    ...allTasks.map(t => t.session_id).filter((s): s is string => Boolean(s)),
     ...sessionManager.listSessions().map(s => s.id),
     ...sessionRepo.listAllClaudeSessionIds(), // session dirs are named by Claude session ID
   ]);
 
-  pruneStaleResources(projectPath, referencedWorktrees, referencedTaskIds, referencedSessionDirIds).catch(() => {});
+  pruneStaleResources(projectPath, referencedWorktrees, referencedTaskIds, referencedSessionDirIds)
+    .catch(err => console.warn('[PRUNE] Background cleanup failed:', err));
 
   return pruned;
 }
@@ -84,9 +85,9 @@ export function pruneOrphanedWorktrees(
  */
 async function pruneStaleResources(
   projectPath: string,
-  referencedWorktrees: Set<string | null>,
+  referencedWorktrees: Set<string>,
   referencedTaskIds: Set<string>,
-  referencedSessionIds: Set<string | null>,
+  referencedSessionIds: Set<string>,
 ): Promise<void> {
   const kangenticDir = path.join(projectPath, '.kangentic');
 
@@ -118,10 +119,9 @@ async function pruneDirectory(
   isReferenced: (dirPath: string, name: string) => boolean,
   label: string,
 ): Promise<void> {
-  const fsPromises = fs.promises;
   let entries: fs.Dirent[];
   try {
-    entries = await fsPromises.readdir(parentDir, { withFileTypes: true });
+    entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
   } catch {
     return; // Directory doesn't exist — nothing to prune
   }
@@ -138,7 +138,7 @@ async function pruneDirectory(
     for (const delay of delays) {
       if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
       try {
-        await fsPromises.rm(dirPath, { recursive: true, force: true });
+        await fs.promises.rm(dirPath, { recursive: true, force: true });
         removed = true;
         break;
       } catch {
