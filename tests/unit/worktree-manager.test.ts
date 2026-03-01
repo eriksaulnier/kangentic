@@ -21,14 +21,19 @@ vi.mock('simple-git', () => ({
 vi.mock('node:fs', () => ({
   default: {
     existsSync: vi.fn(),
+    statSync: vi.fn(),
     mkdirSync: vi.fn(),
     rmSync: vi.fn(),
     copyFileSync: vi.fn(),
   },
 }));
 
+vi.mock('node:child_process', () => ({
+  execFileSync: vi.fn(),
+}));
+
 import fs from 'node:fs';
-import { WorktreeManager } from '../../src/main/git/worktree-manager';
+import { WorktreeManager, isGitRepo, isInsideWorktree } from '../../src/main/git/worktree-manager';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -406,5 +411,78 @@ describe('WorktreeManager — listWorktrees', () => {
     const result = await mgr.listWorktrees();
 
     expect(result).toEqual([]);
+  });
+});
+
+// ── ensureWorktree guard tests ─────────────────────────────────────────────
+
+describe('WorktreeManager — ensureWorktree', () => {
+  const gitConfig = { worktreesEnabled: true, defaultBaseBranch: 'main', copyFiles: [] as string[] };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Default: isGitRepo returns true, isInsideWorktree returns false
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.statSync).mockImplementation(() => { throw new Error('not a file'); });
+    mockProjectGit.raw.mockResolvedValue('');
+    mockWorktreeGit.raw.mockResolvedValue('');
+  });
+
+  it('returns null when task already has a worktree_path', async () => {
+    const mgr = new WorktreeManager('/project');
+    const result = await mgr.ensureWorktree(
+      { id: 'abcd1234', title: 'Test', worktree_path: '/existing' },
+      gitConfig,
+    );
+    expect(result).toBeNull();
+    expect(mockProjectGit.raw).not.toHaveBeenCalled();
+  });
+
+  it('returns null when worktreesEnabled is false', async () => {
+    const mgr = new WorktreeManager('/project');
+    const result = await mgr.ensureWorktree(
+      { id: 'abcd1234', title: 'Test', worktree_path: null },
+      { ...gitConfig, worktreesEnabled: false },
+    );
+    expect(result).toBeNull();
+  });
+
+  it('returns null when project is not a git repo', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    const mgr = new WorktreeManager('/project');
+    const result = await mgr.ensureWorktree(
+      { id: 'abcd1234', title: 'Test', worktree_path: null },
+      gitConfig,
+    );
+    expect(result).toBeNull();
+    expect(isGitRepo('/project')).toBe(false);
+  });
+
+  it('returns null when project is inside a worktree', async () => {
+    // existsSync true (for .git check) + statSync returns isFile=true (worktree)
+    vi.mocked(fs.statSync).mockReturnValue({ isFile: () => true } as ReturnType<typeof fs.statSync>);
+
+    const mgr = new WorktreeManager('/project');
+    const result = await mgr.ensureWorktree(
+      { id: 'abcd1234', title: 'Test', worktree_path: null },
+      gitConfig,
+    );
+    expect(result).toBeNull();
+    expect(isInsideWorktree('/project')).toBe(true);
+  });
+
+  it('delegates to createWorktree with resolved base branch on success', async () => {
+    // statSync throws (not a worktree file), existsSync true (is git repo)
+    const mgr = new WorktreeManager('/project');
+    const result = await mgr.ensureWorktree(
+      { id: 'abcd1234', title: 'Test', worktree_path: null, base_branch: 'develop' },
+      gitConfig,
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.branchName).toContain('kanban/');
+    // Should have used 'develop' (task override) not 'main' (config default)
+    expect(mockProjectGit.raw).toHaveBeenCalledWith(['fetch', 'origin', 'develop']);
   });
 });

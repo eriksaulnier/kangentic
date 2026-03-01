@@ -466,6 +466,11 @@ export interface ElectronAPI {
     openPath: (dirPath: string) => Promise<string>;
   };
 
+  // Git
+  git: {
+    listBranches: () => Promise<string[]>;
+  };
+
   // Dialog
   dialog: {
     selectFolder: () => Promise<string | null>;

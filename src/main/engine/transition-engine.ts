@@ -294,28 +294,23 @@ export class TransitionEngine {
   }
 
   private async executeCreateWorktree(config: ActionConfig, task: Task): Promise<void> {
-    if (task.worktree_path) return; // already has one
-
     const appConfig = this.getConfig();
-    if (!appConfig.projectPath || !appConfig.gitConfig.worktreesEnabled) return;
-    if (!WorktreeManager.isGitRepo(appConfig.projectPath)) return;
-    if (WorktreeManager.isInsideWorktree(appConfig.projectPath)) return;
+    if (!appConfig.projectPath) return;
 
     const wm = new WorktreeManager(appConfig.projectPath);
-    const baseBranch = task.base_branch || config.baseBranch || appConfig.gitConfig.defaultBaseBranch;
-    const copyFiles = config.copyFiles || appConfig.gitConfig.copyFiles;
+    const gitConfig = {
+      ...appConfig.gitConfig,
+      defaultBaseBranch: config.baseBranch || appConfig.gitConfig.defaultBaseBranch,
+      copyFiles: config.copyFiles || appConfig.gitConfig.copyFiles,
+    };
 
-    const { worktreePath, branchName } = await wm.createWorktree(
-      task.id,
-      task.title,
-      baseBranch,
-      copyFiles,
-    );
+    const result = await wm.ensureWorktree(task, gitConfig);
+    if (!result) return;
 
     this.taskRepo.update({
       id: task.id,
-      worktree_path: worktreePath,
-      branch_name: branchName,
+      worktree_path: result.worktreePath,
+      branch_name: result.branchName,
     });
   }
 

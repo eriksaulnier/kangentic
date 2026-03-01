@@ -77,6 +77,9 @@ export const IPC = {
   // Shell utilities
   SHELL_OPEN_PATH: 'shell:openPath',
 
+  // Git
+  GIT_LIST_BRANCHES: 'git:listBranches',
+
   // Dialog
   DIALOG_SELECT_FOLDER: 'dialog:selectFolder',
 

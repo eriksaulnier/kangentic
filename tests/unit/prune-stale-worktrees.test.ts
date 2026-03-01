@@ -122,13 +122,17 @@ vi.mock('../../src/main/engine/session-recovery', () => ({
 vi.mock('../../src/main/git/worktree-manager', () => {
   class MockWorktreeManager {
     createWorktree = vi.fn();
+    ensureWorktree = vi.fn();
     removeWorktree = vi.fn();
     removeBranch = vi.fn();
     renameBranch = vi.fn();
-    static isGitRepo = vi.fn(() => false);
-    static isInsideWorktree = mockIsInsideWorktree;
   }
-  return { WorktreeManager: MockWorktreeManager };
+  return {
+    WorktreeManager: MockWorktreeManager,
+    isGitRepo: vi.fn(() => false),
+    isInsideWorktree: mockIsInsideWorktree,
+    isFileTracked: vi.fn(() => false),
+  };
 });
 vi.mock('../../src/main/agent/hook-manager', () => ({
   stripActivityHooks: vi.fn(),

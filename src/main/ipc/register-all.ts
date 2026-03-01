@@ -1,9 +1,7 @@
-import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ipcMain, BrowserWindow, dialog, shell } from 'electron';
 import { IPC } from '../../shared/ipc-channels';
-import type Database from 'better-sqlite3';
 import { ProjectRepository } from '../db/repositories/project-repository';
 import { TaskRepository } from '../db/repositories/task-repository';
 import { SwimlaneRepository } from '../db/repositories/swimlane-repository';
@@ -18,18 +16,11 @@ import { SessionRepository } from '../db/repositories/session-repository';
 import { AttachmentRepository } from '../db/repositories/attachment-repository';
 import { recoverSessions, reconcileSessions, pruneOrphanedWorktrees } from '../engine/session-recovery';
 import { CommandInjector } from '../engine/command-injector';
-import { WorktreeManager } from '../git/worktree-manager';
+import { WorktreeManager, isGitRepo, isInsideWorktree, isFileTracked } from '../git/worktree-manager';
 import { stripActivityHooks } from '../agent/hook-manager';
 import { getProjectDb, closeProjectDb } from '../db/database';
 import { PATHS } from '../config/paths';
-import type { AppConfig, Task } from '../../shared/types';
-
-/**
- * Resolve the base branch for worktree creation: task override > config default > 'main'.
- */
-function resolveBaseBranch(task: { base_branch?: string | null }, config: AppConfig): string {
-  return task.base_branch || config.git.defaultBaseBranch || 'main';
-}
+import type { Task } from '../../shared/types';
 
 /**
  * Ensure `.kangentic/` and `.claude/settings.local.json` are listed in the
@@ -37,7 +28,7 @@ function resolveBaseBranch(task: { base_branch?: string | null }, config: AppCon
  * directory or permission issue must never prevent the app from opening.
  */
 function ensureGitignore(projectPath: string): void {
-  if (!WorktreeManager.isGitRepo(projectPath)) return;
+  if (!isGitRepo(projectPath)) return;
   try {
     const gitignorePath = path.join(projectPath, '.gitignore');
     let content = '';
@@ -65,16 +56,7 @@ function ensureGitignore(projectPath: string): void {
       (l) => l.trim() === '.claude/settings.local.json',
     );
     if (!settingsIgnored) {
-      const settingsTracked = (() => {
-        try {
-          execSync('git ls-files --error-unmatch .claude/settings.local.json', {
-            cwd: projectPath, stdio: 'ignore',
-          });
-          return true;
-        } catch {
-          return false;
-        }
-      })();
+      const settingsTracked = isFileTracked(projectPath, '.claude/settings.local.json');
       if (!settingsTracked) {
         const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
         fs.writeFileSync(gitignorePath, content + separator + '.claude/settings.local.json\n');
@@ -107,6 +89,48 @@ function buildAutoCommandVars(task: Task): Record<string, string> {
     worktreePath: task.worktree_path || '',
     branchName: task.branch_name || '',
   };
+}
+
+/**
+ * Create a worktree for a task if needed and update the DB + task object in place.
+ * No-ops silently when worktrees are disabled, project isn't a git repo, etc.
+ */
+async function ensureTaskWorktree(task: Task, tasks: TaskRepository): Promise<void> {
+  if (!currentProjectPath) return;
+  try {
+    const config = configManager.getEffectiveConfig(currentProjectPath);
+    const wm = new WorktreeManager(currentProjectPath);
+    const result = await wm.ensureWorktree(task, config.git);
+    if (result) {
+      tasks.update({ id: task.id, worktree_path: result.worktreePath, branch_name: result.branchName });
+      Object.assign(task, tasks.getById(task.id));
+    }
+  } catch (err) {
+    console.error('Worktree creation failed:', err);
+  }
+}
+
+/** Create a TransitionEngine wired to the current project singletons. */
+function createTransitionEngine(
+  actions: ActionRepository,
+  tasks: TaskRepository,
+  sessionRepo: SessionRepository,
+  attachments: AttachmentRepository,
+): TransitionEngine {
+  return new TransitionEngine(
+    sessionManager, actions, tasks, claudeDetector, commandBuilder,
+    () => {
+      const config = configManager.getEffectiveConfig(currentProjectPath || undefined);
+      return {
+        permissionMode: config.claude.permissionMode,
+        claudePath: config.claude.cliPath,
+        projectPath: currentProjectPath,
+        gitConfig: config.git,
+      };
+    },
+    sessionRepo,
+    attachments,
+  );
 }
 
 function getProjectRepos(): { tasks: TaskRepository; swimlanes: SwimlaneRepository; actions: ActionRepository; attachments: AttachmentRepository } {
@@ -227,7 +251,7 @@ export async function cleanupProject(projectId: string, projectPath: string): Pr
   }
 
   // 2. Cleanly detach git worktrees (keeps branches with user code intact)
-  if (WorktreeManager.isGitRepo(projectPath)) {
+  if (isGitRepo(projectPath)) {
     for (const task of allTasks) {
       if (task.worktree_path && fs.existsSync(task.worktree_path)) {
         try {
@@ -271,7 +295,7 @@ export async function cleanupProject(projectId: string, projectPath: string): Pr
   // Steps 6–7 modify the project's .gitignore and .kangentic/ directory.
   // Skip for worktrees — their .gitignore is inherited from the parent branch
   // and should not be modified by ephemeral cleanup.
-  const isWorktree = WorktreeManager.isInsideWorktree(projectPath);
+  const isWorktree = isInsideWorktree(projectPath);
 
   // 6. Remove our `.kangentic/` entry from .gitignore (delete file if it becomes empty)
   if (!isWorktree) {
@@ -337,7 +361,7 @@ export function deleteProjectFromIndex(id: string): void {
 export async function pruneStaleWorktreeProjects(): Promise<void> {
   const projects = projectRepo.list();
   for (const project of projects) {
-    if (!WorktreeManager.isInsideWorktree(project.path)) continue;
+    if (!isInsideWorktree(project.path)) continue;
 
     console.log(`[PRUNE] Removing ephemeral preview project: ${project.name} (${project.path})`);
 
@@ -566,38 +590,10 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
     // Create worktree if worktrees are enabled and task doesn't have one yet.
     // Needed for agent-active columns AND non-agent columns that will spawn
     // a fresh session (e.g. Backlog → Review).
-    if (!task.worktree_path && currentProjectPath) {
-      const config = configManager.getEffectiveConfig(currentProjectPath);
-      if (config.git.worktreesEnabled && WorktreeManager.isGitRepo(currentProjectPath) && !WorktreeManager.isInsideWorktree(currentProjectPath)) {
-        try {
-          const wm = new WorktreeManager(currentProjectPath);
-          const { worktreePath, branchName } = await wm.createWorktree(
-            task.id, task.title, resolveBaseBranch(task, config), config.git.copyFiles,
-          );
-          tasks.update({ id: task.id, worktree_path: worktreePath, branch_name: branchName });
-          const updated = tasks.getById(task.id);
-          if (updated) Object.assign(task, updated);
-        } catch (err) {
-          console.error('Worktree creation failed:', err);
-        }
-      }
-    }
+    await ensureTaskWorktree(task, tasks);
 
     // Execute transition actions (may fire spawn_agent which handles resume internally)
-    const engine = new TransitionEngine(
-      sessionManager, actions, tasks, claudeDetector, commandBuilder,
-      () => {
-        const config = configManager.getEffectiveConfig(currentProjectPath || undefined);
-        return {
-          permissionMode: config.claude.permissionMode,
-          claudePath: config.claude.cliPath,
-          projectPath: currentProjectPath,
-          gitConfig: config.git,
-        };
-      },
-      sessionRepo,
-      attachments,
-    );
+    const engine = createTransitionEngine(actions, tasks, sessionRepo, attachments);
 
     try {
       await engine.executeTransition(task, fromSwimlaneId, input.targetSwimlaneId, toLane?.permission_strategy);
@@ -650,21 +646,7 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
     }
 
     // Create worktree if needed (any non-backlog column gets an agent)
-    if (!task.worktree_path && currentProjectPath) {
-      const config = configManager.getEffectiveConfig(currentProjectPath);
-      if (config.git.worktreesEnabled && WorktreeManager.isGitRepo(currentProjectPath) && !WorktreeManager.isInsideWorktree(currentProjectPath)) {
-        try {
-          const wm = new WorktreeManager(currentProjectPath);
-          const { worktreePath, branchName } = await wm.createWorktree(
-            task.id, task.title, resolveBaseBranch(task, config), config.git.copyFiles,
-          );
-          tasks.update({ id: task.id, worktree_path: worktreePath, branch_name: branchName });
-          Object.assign(task, tasks.getById(task.id));
-        } catch (err) {
-          console.error('Worktree creation failed during unarchive:', err);
-        }
-      }
-    }
+    await ensureTaskWorktree(task, tasks);
 
     // Execute transition actions (from Done → target) for ALL non-kill columns
     if (currentProjectPath) {
@@ -672,20 +654,7 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
       if (doneLane) {
         const db = getProjectDb(currentProjectId!);
         const sessionRepo = new SessionRepository(db);
-        const engine = new TransitionEngine(
-          sessionManager, actions, tasks, claudeDetector, commandBuilder,
-          () => {
-            const config = configManager.getEffectiveConfig(currentProjectPath || undefined);
-            return {
-              permissionMode: config.claude.permissionMode,
-              claudePath: config.claude.cliPath,
-              projectPath: currentProjectPath,
-              gitConfig: config.git,
-            };
-          },
-          sessionRepo,
-          attachmentRepo,
-        );
+        const engine = createTransitionEngine(actions, tasks, sessionRepo, attachmentRepo);
 
         try {
           await engine.executeTransition(task, doneLane.id, input.targetSwimlaneId, toLane?.permission_strategy);
@@ -854,39 +823,11 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
     const lane = swimlanes.getById(task.swimlane_id);
 
     // Create worktree if needed
-    if (!task.worktree_path && currentProjectPath) {
-      const config = configManager.getEffectiveConfig(currentProjectPath);
-      if (config.git.worktreesEnabled && WorktreeManager.isGitRepo(currentProjectPath) && !WorktreeManager.isInsideWorktree(currentProjectPath)) {
-        try {
-          const wm = new WorktreeManager(currentProjectPath);
-          const { worktreePath, branchName } = await wm.createWorktree(
-            task.id, task.title, resolveBaseBranch(task, config), config.git.copyFiles,
-          );
-          tasks.update({ id: task.id, worktree_path: worktreePath, branch_name: branchName });
-          Object.assign(task, tasks.getById(task.id));
-        } catch (err) {
-          console.error('Worktree creation failed during session resume:', err);
-        }
-      }
-    }
+    await ensureTaskWorktree(task, tasks);
 
     const db = getProjectDb(currentProjectId!);
     const sessionRepo = new SessionRepository(db);
-
-    const engine = new TransitionEngine(
-      sessionManager, actions, tasks, claudeDetector, commandBuilder,
-      () => {
-        const config = configManager.getEffectiveConfig(currentProjectPath || undefined);
-        return {
-          permissionMode: config.claude.permissionMode,
-          claudePath: config.claude.cliPath,
-          projectPath: currentProjectPath,
-          gitConfig: config.git,
-        };
-      },
-      sessionRepo,
-      attachmentRepo,
-    );
+    const engine = createTransitionEngine(actions, tasks, sessionRepo, attachmentRepo);
 
     await engine.resumeSuspendedSession(task, lane?.permission_strategy);
 
@@ -1006,6 +947,15 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.SHELL_GET_AVAILABLE, () => shellResolver.getAvailableShells());
   ipcMain.handle(IPC.SHELL_GET_DEFAULT, () => shellResolver.getDefaultShell());
   ipcMain.handle(IPC.SHELL_OPEN_PATH, (_, dirPath: string) => shell.openPath(dirPath));
+
+  // === Git ===
+  ipcMain.handle(IPC.GIT_LIST_BRANCHES, async () => {
+    if (!currentProjectPath || !isGitRepo(currentProjectPath)) return [];
+    try {
+      const wm = new WorktreeManager(currentProjectPath);
+      return await wm.listRemoteBranches();
+    } catch { return []; }
+  });
 
   // === Dialog ===
   ipcMain.handle(IPC.DIALOG_SELECT_FOLDER, async () => {

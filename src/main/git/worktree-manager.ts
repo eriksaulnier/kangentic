@@ -1,28 +1,66 @@
+import { execFileSync } from 'node:child_process';
 import simpleGit, { SimpleGit } from 'simple-git';
 import path from 'node:path';
 import fs from 'node:fs';
 import { slugify } from '../../shared/slugify';
 
+// ---------------------------------------------------------------------------
+// Free functions — lightweight checks, no simple-git dependency
+// ---------------------------------------------------------------------------
+
+/** Check whether the project path is inside a git repository. */
+export function isGitRepo(projectPath: string): boolean {
+  return fs.existsSync(path.join(projectPath, '.git'));
+}
+
+/** Check whether the project path is a git worktree (has `.git` as a file, not a directory). */
+export function isInsideWorktree(projectPath: string): boolean {
+  const dotGit = path.join(projectPath, '.git');
+  try {
+    return fs.statSync(dotGit).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** Check whether a file is tracked by git (committed or staged). */
+export function isFileTracked(projectPath: string, filePath: string): boolean {
+  try {
+    execFileSync('git', ['ls-files', '--error-unmatch', '--', filePath], {
+      cwd: projectPath, stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// WorktreeManager class
+// ---------------------------------------------------------------------------
+
 export class WorktreeManager {
   private git: SimpleGit;
 
-  constructor(private projectPath: string) {
-    this.git = simpleGit(projectPath);
+  constructor(private projectPath: string, git?: SimpleGit) {
+    this.git = git ?? simpleGit(projectPath);
   }
 
-  /** Check whether the project path is inside a git repository. */
-  static isGitRepo(projectPath: string): boolean {
-    return fs.existsSync(path.join(projectPath, '.git'));
-  }
+  /**
+   * Guard + create worktree in one call. Returns null if any guard fails
+   * (already has worktree, worktrees disabled, not a git repo, is a worktree).
+   */
+  async ensureWorktree(
+    task: { id: string; title: string; worktree_path: string | null; base_branch?: string | null },
+    gitConfig: { worktreesEnabled: boolean; defaultBaseBranch: string; copyFiles: string[] },
+  ): Promise<{ worktreePath: string; branchName: string } | null> {
+    if (task.worktree_path) return null;
+    if (!gitConfig.worktreesEnabled) return null;
+    if (!isGitRepo(this.projectPath)) return null;
+    if (isInsideWorktree(this.projectPath)) return null;
 
-  /** Check whether the project path is a git worktree (has `.git` as a file, not a directory). */
-  static isInsideWorktree(projectPath: string): boolean {
-    const dotGit = path.join(projectPath, '.git');
-    try {
-      return fs.statSync(dotGit).isFile();
-    } catch {
-      return false;
-    }
+    const baseBranch = task.base_branch || gitConfig.defaultBaseBranch || 'main';
+    return this.createWorktree(task.id, task.title, baseBranch, gitConfig.copyFiles);
   }
 
   /**
@@ -154,6 +192,28 @@ export class WorktreeManager {
     try {
       await this.git.raw(['branch', '-D', branchName]);
     } catch { /* branch may not exist */ }
+  }
+
+  /**
+   * List remote branches sorted by most recent commit first.
+   * Fetches from origin first (fails silently if offline).
+   */
+  async listRemoteBranches(): Promise<string[]> {
+    try { await this.git.raw(['fetch', '--prune']); } catch { /* offline OK */ }
+    // %(refname:short) shortens origin/HEAD to bare "origin" — filter by
+    // requiring the origin/ prefix before stripping it, which excludes both
+    // the HEAD symref and any non-origin remotes.
+    const raw = await this.git.raw(['branch', '-r', '--sort=-committerdate', '--format=%(refname:short)']);
+    const seen = new Set<string>();
+    return raw.split('\n')
+      .map(l => l.trim())
+      .filter(l => l.startsWith('origin/') && !l.endsWith('/HEAD'))
+      .map(l => l.slice('origin/'.length))
+      .filter(l => {
+        if (!l || seen.has(l)) return false;
+        seen.add(l);
+        return true;
+      });
   }
 
   async listWorktrees(): Promise<string[]> {

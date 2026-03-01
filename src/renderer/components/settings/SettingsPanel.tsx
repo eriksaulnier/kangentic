@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Bot, Check, ChevronDown, CircleAlert, GitBranch, Palette, SlidersHorizontal, Terminal, X } from 'lucide-react';
 import { useConfigStore } from '../../stores/config-store';
+import { BranchPicker } from '../dialogs/BranchPicker';
 import type { PermissionMode, ThemeMode } from '../../../shared/types';
 import { NAMED_THEMES } from '../../../shared/types';
 
@@ -245,14 +246,14 @@ export function SettingsPanel() {
                   />
                 </SettingRow>
                 <SettingRow label="Default Base Branch" description="Branch to create worktrees from">
-                  <input
-                    type="text"
+                  <BranchPicker
+                    variant="input"
                     value={config.git.defaultBaseBranch}
-                    onChange={(e) => updateConfig({ git: { ...config.git, defaultBaseBranch: e.target.value } })}
-                    className={inputClass}
+                    defaultBranch="main"
+                    onChange={(branch) => updateConfig({ git: { ...config.git, defaultBaseBranch: branch } })}
                   />
                 </SettingRow>
-                <SettingRow label="Copy Files" description="Comma-separated files copied into each worktree">
+                <SettingRow label="Copy Files" description="Additional files copied into each worktree">
                   <input
                     type="text"
                     value={config.git.copyFiles.join(', ')}

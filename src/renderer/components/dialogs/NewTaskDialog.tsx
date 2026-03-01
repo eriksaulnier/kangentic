@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, ChevronRight, X, Image } from 'lucide-react';
+import { Plus, X, Image } from 'lucide-react';
 import { useBoardStore } from '../../stores/board-store';
 import { useConfigStore } from '../../stores/config-store';
 import { useToastStore } from '../../stores/toast-store';
 import { BaseDialog } from './BaseDialog';
+import { BranchPicker } from './BranchPicker';
 
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -33,7 +34,6 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [baseBranch, setBaseBranch] = useState('');
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [previewAttachment, setPreviewAttachment] = useState<PendingAttachment | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -273,26 +273,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center gap-1 text-xs text-fg-muted hover:text-fg-secondary transition-colors"
-            >
-              <ChevronRight size={12} className={`transition-transform ${showAdvanced ? 'rotate-90' : ''}`} />
-              Advanced
-            </button>
-            {showAdvanced && (
-              <div className="space-y-1">
-                <label className="text-xs text-fg-muted">Base Branch</label>
-                <input
-                  type="text"
-                  placeholder={defaultBaseBranch || 'main'}
-                  value={baseBranch}
-                  onChange={(e) => setBaseBranch(e.target.value)}
-                  className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-accent"
-                />
-              </div>
-            )}
+            <BranchPicker value={baseBranch} defaultBranch={defaultBaseBranch || 'main'} onChange={setBaseBranch} />
 
             {/* Drag overlay */}
             {isDragOver && (

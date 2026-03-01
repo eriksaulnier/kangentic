@@ -40,7 +40,7 @@
       worktreesEnabled: true,
       autoCleanup: true,
       defaultBaseBranch: 'main',
-      copyFiles: ['.claude/settings.local.json'],
+      copyFiles: [],
       initScript: null,
     },
     skipDeleteConfirm: false,
@@ -537,6 +537,12 @@
       },
       openPath: async function () {
         return '';
+      },
+    },
+
+    git: {
+      listBranches: async function () {
+        return ['main', 'develop', 'feature/auth', 'feature/dashboard', 'fix/login-bug'];
       },
     },
 

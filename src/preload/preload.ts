@@ -117,6 +117,10 @@ const api: ElectronAPI = {
     openPath: (dirPath: string) => ipcRenderer.invoke(IPC.SHELL_OPEN_PATH, dirPath),
   },
 
+  git: {
+    listBranches: () => ipcRenderer.invoke(IPC.GIT_LIST_BRANCHES),
+  },
+
   dialog: {
     selectFolder: () => ipcRenderer.invoke(IPC.DIALOG_SELECT_FOLDER),
   },

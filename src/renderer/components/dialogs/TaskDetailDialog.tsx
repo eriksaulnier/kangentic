@@ -10,6 +10,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { useToastStore } from '../../stores/toast-store';
 import { useConfigStore } from '../../stores/config-store';
 import { useSessionDisplayState } from '../../utils/session-display-state';
+import { BranchPicker } from './BranchPicker';
 import type { Task, TaskAttachment } from '../../../shared/types';
 
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -83,7 +84,6 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
   const [showKebabMenu, setShowKebabMenu] = useState(false);
   const [showMoveSubmenu, setShowMoveSubmenu] = useState(false);
   const [baseBranch, setBaseBranch] = useState(task.base_branch || '');
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [textareaFocused, setTextareaFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [toggling, setToggling] = useState(false);
@@ -470,7 +470,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
       {isEditing ? (
         <>
           <button
-            onClick={() => { setTitle(task.title); setDescription(task.description); setBaseBranch(task.base_branch || ''); setShowAdvanced(false); setIsEditing(false); }}
+            onClick={() => { setTitle(task.title); setDescription(task.description); setBaseBranch(task.base_branch || ''); setIsEditing(false); }}
             className="px-3 py-1.5 text-xs text-fg-muted hover:text-fg-secondary border border-edge-input hover:border-fg-faint rounded transition-colors flex-shrink-0"
           >
             Cancel
@@ -701,30 +701,9 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
             </div>
             {thumbnailStrip}
 
-            {/* Advanced section — base branch (no-session edit only) */}
+            {/* Base branch picker (no-session edit only) */}
             {!hasSessionContext && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="flex items-center gap-1 text-xs text-fg-muted hover:text-fg-secondary transition-colors"
-                >
-                  <ChevronRight size={12} className={`transition-transform ${showAdvanced ? 'rotate-90' : ''}`} />
-                  Advanced
-                </button>
-                {showAdvanced && (
-                  <div className="space-y-1">
-                    <label className="text-xs text-fg-muted">Base Branch</label>
-                    <input
-                      type="text"
-                      placeholder={defaultBaseBranch || 'main'}
-                      value={baseBranch}
-                      onChange={(e) => setBaseBranch(e.target.value)}
-                      className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-accent"
-                    />
-                  </div>
-                )}
-              </>
+              <BranchPicker value={baseBranch} defaultBranch={defaultBaseBranch || 'main'} onChange={setBaseBranch} />
             )}
 
             {isDragOver && (
