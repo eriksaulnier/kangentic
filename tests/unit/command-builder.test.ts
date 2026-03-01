@@ -198,11 +198,19 @@ describe('Command Builder Logic', () => {
   });
 
   it('interpolateTemplate replaces variables', () => {
-    const template = 'Task: {{title}}\n\n{{description}}';
-    const vars = { title: 'My Task', description: 'Build the feature' };
+    const template = '{{title}}{{description}}';
+    const vars = { title: 'My Task', description: ': Build the feature' };
     const result = interpolateTemplate(template, vars);
 
-    expect(result).toBe('Task: My Task\n\nBuild the feature');
+    expect(result).toBe('My Task: Build the feature');
+  });
+
+  it('interpolateTemplate with empty description omits separator', () => {
+    const template = '{{title}}{{description}}';
+    const vars = { title: 'My Task', description: '' };
+    const result = interpolateTemplate(template, vars);
+
+    expect(result).toBe('My Task');
   });
 
   it('interpolateTemplate handles missing variables', () => {
@@ -213,11 +221,12 @@ describe('Command Builder Logic', () => {
     expect(result).toBe('Fix bug in ');
   });
 
-  it('full pipeline: interpolateTemplate + quoteArg with multiline description', () => {
-    const template = 'Task: {{title}}\n\n{{description}}';
+  it('full pipeline: interpolateTemplate + quoteArg with multiline description (pre-cleaned)', () => {
+    // In the real pipeline, description is cleaned before interpolation
+    const template = '{{title}}{{description}}';
     const vars = {
       title: 'Fix bug',
-      description: 'Step 1: do X\nStep 2: do Y\nStep 3: do Z',
+      description: ': Step 1: do X Step 2: do Y Step 3: do Z',
     };
     const interpolated = interpolateTemplate(template, vars);
     const quoted = quoteArg(interpolated);

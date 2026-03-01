@@ -5,6 +5,7 @@ import { getProjectDb } from '../db/database';
 import { SessionRepository } from '../db/repositories/session-repository';
 import { TaskRepository } from '../db/repositories/task-repository';
 import { ActionRepository } from '../db/repositories/action-repository';
+import { AttachmentRepository } from '../db/repositories/attachment-repository';
 import { SwimlaneRepository } from '../db/repositories/swimlane-repository';
 import { SessionManager } from '../pty/session-manager';
 import { ClaudeDetector } from '../agent/claude-detector';
@@ -12,6 +13,7 @@ import { CommandBuilder } from '../agent/command-builder';
 import { ConfigManager } from '../config/config-manager';
 import type { SessionRecord, ActionConfig, Task, PermissionMode } from '../../shared/types';
 import { ensureWorktreeTrust } from '../agent/trust-manager';
+import { sanitizeForPty } from '../../shared/paths';
 
 // ---------------------------------------------------------------------------
 // Prune orphaned worktree tasks (worktree dir deleted externally)
@@ -181,6 +183,7 @@ export async function recoverSessions(
   const sessionRepo = new SessionRepository(db);
   const taskRepo = new TaskRepository(db);
   const actionRepo = new ActionRepository(db);
+  const attachmentRepo = new AttachmentRepository(db);
 
   // 1. Mark leftover 'running' records as orphaned (crash case).
   //    SKIP records whose task already has a live PTY session — this prevents
@@ -368,13 +371,19 @@ export async function recoverSessions(
           }
         }
 
+        const cleanTitle = sanitizeForPty(task.title);
+        const cleanDesc = sanitizeForPty(task.description);
+        const attachmentPaths = attachmentRepo.getPathsForTask(task.id);
         prompt = actionConfig?.promptTemplate
           ? commandBuilder.interpolateTemplate(actionConfig.promptTemplate, {
-              title: task.title,
-              description: task.description,
+              title: cleanTitle,
+              description: cleanDesc ? `: ${cleanDesc}` : '',
               taskId: task.id,
               worktreePath: task.worktree_path || '',
               branchName: task.branch_name || '',
+              attachments: attachmentPaths.length > 0
+                ? ` [Review images: ${attachmentPaths.join(', ')}]`
+                : '',
             })
           : undefined;
       }
@@ -485,6 +494,7 @@ export async function reconcileSessions(
   const taskRepo = new TaskRepository(db);
   const actionRepo = new ActionRepository(db);
   const sessionRepo = new SessionRepository(db);
+  const attachmentRepo = new AttachmentRepository(db);
   const config = configManager.getEffectiveConfig(projectPath);
 
   // Determine which columns should have active agents (auto_spawn=true)
@@ -566,13 +576,19 @@ export async function reconcileSessions(
 
         // Generate a Claude session ID upfront so recovery can resume
         const claudeSessionId = randomUUID();
+        const cleanTitle = sanitizeForPty(task.title);
+        const cleanDesc = sanitizeForPty(task.description);
+        const attachmentPaths = attachmentRepo.getPathsForTask(task.id);
         const prompt = actionConfig?.promptTemplate
           ? commandBuilder.interpolateTemplate(actionConfig.promptTemplate, {
-              title: task.title,
-              description: task.description,
+              title: cleanTitle,
+              description: cleanDesc ? `: ${cleanDesc}` : '',
               taskId: task.id,
               worktreePath: task.worktree_path || '',
               branchName: task.branch_name || '',
+              attachments: attachmentPaths.length > 0
+                ? ` [Review images: ${attachmentPaths.join(', ')}]`
+                : '',
             })
           : undefined;
 

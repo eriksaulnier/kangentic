@@ -31,16 +31,20 @@ export class TransitionEngine {
    */
   async resumeSuspendedSession(task: Task, permissionOverride?: PermissionMode | null): Promise<void> {
     const attachmentPaths = this.attachmentRepo?.getPathsForTask(task.id) ?? [];
+    const cleanTitle = sanitizeForPty(task.title);
+    const cleanDesc = sanitizeForPty(task.description);
+    // {{description}} includes its own ": " separator when non-empty,
+    // producing "Title: Description" or just "Title" when blank.
     await this.executeSpawnAgent({
-      promptTemplate: 'Task: {{title}}\n\n{{description}}{{attachments}}',
+      promptTemplate: '{{title}}{{description}}{{attachments}}',
     }, task, {
-      title: task.title,
-      description: task.description,
+      title: cleanTitle,
+      description: cleanDesc ? `: ${cleanDesc}` : '',
       taskId: task.id,
       worktreePath: task.worktree_path || '',
       branchName: task.branch_name || '',
       attachments: attachmentPaths.length > 0
-        ? '\n\nAttached images for reference (use Read tool to view):\n' + attachmentPaths.map(p => `- ${p}`).join('\n')
+        ? ` [Review images: ${attachmentPaths.join(', ')}]`
         : '',
     }, permissionOverride);
   }
@@ -66,14 +70,16 @@ export class TransitionEngine {
       return; // skip action with malformed config
     }
     const attachmentPaths = this.attachmentRepo?.getPathsForTask(task.id) ?? [];
+    const cleanTitle = sanitizeForPty(task.title);
+    const cleanDesc = sanitizeForPty(task.description);
     const templateVars: Record<string, string> = {
-      title: task.title,
-      description: task.description,
+      title: cleanTitle,
+      description: cleanDesc ? `: ${cleanDesc}` : '',
       taskId: task.id,
       worktreePath: task.worktree_path || '',
       branchName: task.branch_name || '',
       attachments: attachmentPaths.length > 0
-        ? '\n\nAttached images for reference (use Read tool to view):\n' + attachmentPaths.map(p => `- ${p}`).join('\n')
+        ? ` [Review images: ${attachmentPaths.join(', ')}]`
         : '',
     };
 

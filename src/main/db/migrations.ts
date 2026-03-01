@@ -190,7 +190,10 @@ export function runProjectMigrations(db: Database.Database): void {
     `);
   }
 
-  // Data migration: append {{attachments}} to spawn_agent promptTemplates that lack it
+  // Data migrations for spawn_agent actions (single pass):
+  //  1. Append {{attachments}} to promptTemplates that lack it
+  //  2. Remove legacy permission mode values (fall through to app default)
+  //  3. Update old 'Task: {{title}}...' template to '{{title}}{{description}}{{attachments}}'
   const spawnActions = db.prepare(
     "SELECT id, config_json FROM actions WHERE type = 'spawn_agent'"
   ).all() as Array<{ id: string; config_json: string }>;
@@ -198,25 +201,27 @@ export function runProjectMigrations(db: Database.Database): void {
   for (const action of spawnActions) {
     try {
       const config = JSON.parse(action.config_json);
+      let changed = false;
+
+      // 1. Append {{attachments}} if missing
       if (config.promptTemplate && !config.promptTemplate.includes('{{attachments}}')) {
         config.promptTemplate = config.promptTemplate + '{{attachments}}';
-        db.prepare('UPDATE actions SET config_json = ? WHERE id = ?')
-          .run(JSON.stringify(config), action.id);
+        changed = true;
       }
-    } catch { /* skip malformed config */ }
-  }
 
-  // Data migration: update spawn_agent actions that still use legacy
-  // permission mode values to omit them (falling through to app default).
-  const agentActions = db.prepare(
-    "SELECT id, config_json FROM actions WHERE type = 'spawn_agent'"
-  ).all() as Array<{ id: string; config_json: string }>;
-
-  for (const action of agentActions) {
-    try {
-      const config = JSON.parse(action.config_json);
+      // 2. Remove legacy permission modes
       if (config.permissionMode === 'dangerously-skip' || config.permissionMode === 'bypass-permissions') {
         delete config.permissionMode;
+        changed = true;
+      }
+
+      // 3. Update old 'Task: {{title}}...' prompt template
+      if (config.promptTemplate && config.promptTemplate.includes('Task: {{title}}')) {
+        config.promptTemplate = '{{title}}{{description}}{{attachments}}';
+        changed = true;
+      }
+
+      if (changed) {
         db.prepare('UPDATE actions SET config_json = ? WHERE id = ?')
           .run(JSON.stringify(config), action.id);
       }
@@ -303,7 +308,7 @@ function seedActionsAndTransitions(db: Database.Database, now: string): void {
     'spawn_agent',
     JSON.stringify({
       agent: 'claude',
-      promptTemplate: 'Task: {{title}}\n\n{{description}}{{attachments}}',
+      promptTemplate: '{{title}}{{description}}{{attachments}}',
     }),
     now,
   );

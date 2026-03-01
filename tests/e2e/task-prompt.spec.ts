@@ -169,8 +169,6 @@ test.describe('Claude Agent — Task Prompt', () => {
     // Verify both title and description are in the prompt
     expect(scrollback).toContain(title);
     expect(scrollback).toContain(description);
-    // Verify it uses the "Task:" template format
-    expect(scrollback).toContain('Task:');
   });
 
   test('fresh session to Planning receives prompt in plan mode', async () => {
