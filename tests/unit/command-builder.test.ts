@@ -9,14 +9,17 @@ import { execFileSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import {
+  quoteArg,
+  isUnixLikeShell,
+  adaptCommandForShell,
+  convertWindowsExePath,
+  sanitizeForPty,
+} from '../../src/shared/paths';
+import { interpolateTemplate } from '../../src/main/agent/command-builder';
+import { slugify } from '../../src/shared/slugify';
 
-// ── Inline helpers (mirrors src/main/agent/command-builder.ts logic) ────────
-
-function quoteArg(arg: string): string {
-  if (/^[a-zA-Z0-9_.\/:-]+$/.test(arg)) return arg;
-  if (process.platform === 'win32') return `"${arg.replace(/"/g, '\\"')}"`;
-  return `'${arg.replace(/'/g, "'\\''")}'`;
-}
+// ── Inline test-only helper (deliberately simplified, omits merged settings / hooks) ──
 
 function buildClaudeCommand(options: {
   claudePath: string;
@@ -44,60 +47,7 @@ function buildClaudeCommand(options: {
   return parts.join(' ');
 }
 
-function slugify(text: string, maxLen = 50): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, maxLen)
-    .replace(/-+$/, '');
-}
-
-function interpolateTemplate(template: string, vars: Record<string, string>): string {
-  let result = template;
-  for (const [key, value] of Object.entries(vars)) {
-    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
-  }
-  return result;
-}
-
-function isUnixLikeShell(shellName: string): boolean {
-  return !shellName.includes('cmd');
-}
-
-function convertWindowsExePath(cmd: string, isWsl: boolean): string {
-  const prefix = isWsl ? '/mnt/' : '/';
-
-  if (cmd.startsWith('"')) {
-    return cmd.replace(
-      /^"([A-Za-z]):((?:\\[^"]+)+)"/,
-      (_m, drive: string, rest: string) => {
-        const posix = `${prefix}${drive.toLowerCase()}${rest.replace(/\\/g, '/')}`;
-        return posix.includes(' ') ? `"${posix}"` : posix;
-      },
-    );
-  }
-
-  return cmd.replace(
-    /^([A-Za-z]):((?:\\[^\s]+)+)/,
-    (_m, drive: string, rest: string) => {
-      return `${prefix}${drive.toLowerCase()}${rest.replace(/\\/g, '/')}`;
-    },
-  );
-}
-
-function adaptCommandForShell(cmd: string, shellName: string): string {
-  if (shellName.includes('powershell') || shellName.includes('pwsh')) {
-    return '& ' + cmd;
-  }
-  if (isUnixLikeShell(shellName)) {
-    const isWsl = shellName.startsWith('wsl');
-    return convertWindowsExePath(cmd, isWsl);
-  }
-  return cmd;
-}
-
-// ── Shell detection (copied from tests/e2e/helpers.ts) ─────────────────────
+// ── Shell detection (test infrastructure — not a production duplicate) ──────
 
 interface ShellInfo {
   name: string;
@@ -169,6 +119,44 @@ function detectAvailableShells(): ShellInfo[] {
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
+describe('sanitizeForPty', () => {
+  it('strips newlines', () => {
+    expect(sanitizeForPty('hello\nworld')).toBe('hello world');
+  });
+
+  it('strips \\r\\n (Windows line endings)', () => {
+    expect(sanitizeForPty('line1\r\nline2')).toBe('line1 line2');
+  });
+
+  it('strips standalone \\r', () => {
+    expect(sanitizeForPty('old\rmac')).toBe('old mac');
+  });
+
+  it('strips tabs', () => {
+    expect(sanitizeForPty('col1\tcol2')).toBe('col1 col2');
+  });
+
+  it('collapses multiple newlines into single space', () => {
+    expect(sanitizeForPty('a\n\n\nb')).toBe('a b');
+  });
+
+  it('collapses mixed whitespace', () => {
+    expect(sanitizeForPty('a\n\t\r\n  b')).toBe('a b');
+  });
+
+  it('trims leading/trailing whitespace', () => {
+    expect(sanitizeForPty('\n  hello  \n')).toBe('hello');
+  });
+
+  it('returns empty string for whitespace-only input', () => {
+    expect(sanitizeForPty('\n\r\n\t  ')).toBe('');
+  });
+
+  it('passes through clean text unchanged', () => {
+    expect(sanitizeForPty('simple text')).toBe('simple text');
+  });
+});
+
 describe('Command Builder Logic', () => {
   it('quoteArg skips quoting simple paths', () => {
     expect(quoteArg('claude')).toBe('claude');
@@ -181,6 +169,13 @@ describe('Command Builder Logic', () => {
     const pathWithSpaces = 'C:/Program Files/claude/claude.exe';
     const quoted = quoteArg(pathWithSpaces);
     expect(quoted).toContain('"');
+  });
+
+  it('quoteArg sanitises multiline input', () => {
+    const multiline = 'line1\nline2\nline3';
+    const result = quoteArg(multiline);
+    expect(result).not.toContain('\n');
+    expect(result).toContain('line1 line2 line3');
   });
 
   it('PowerShell call operator prefix', () => {
@@ -216,6 +211,20 @@ describe('Command Builder Logic', () => {
     const result = interpolateTemplate(template, vars);
 
     expect(result).toBe('Fix bug in ');
+  });
+
+  it('full pipeline: interpolateTemplate + quoteArg with multiline description', () => {
+    const template = 'Task: {{title}}\n\n{{description}}';
+    const vars = {
+      title: 'Fix bug',
+      description: 'Step 1: do X\nStep 2: do Y\nStep 3: do Z',
+    };
+    const interpolated = interpolateTemplate(template, vars);
+    const quoted = quoteArg(interpolated);
+
+    expect(quoted).not.toContain('\n');
+    expect(quoted).toContain('Fix bug');
+    expect(quoted).toContain('Step 1: do X Step 2: do Y Step 3: do Z');
   });
 });
 
@@ -337,7 +346,9 @@ describe('Slugify Logic', () => {
   });
 });
 
-describe('Windows Path Conversion for Shells', () => {
+// adaptCommandForShell has a `process.platform !== 'win32'` early-return guard
+// in production, so these tests only exercise the conversion logic on Windows.
+describe.runIf(process.platform === 'win32')('Windows Path Conversion for Shells (adaptCommandForShell)', () => {
   it('converts Windows paths to Git Bash POSIX format', () => {
     const cmd = 'C:\\Users\\dev\\.local\\bin\\claude.EXE --dangerously-skip-permissions "Task: test"';
     const result = adaptCommandForShell(cmd, 'c:\\program files\\git\\usr\\bin\\bash.exe');
@@ -380,7 +391,10 @@ describe('Windows Path Conversion for Shells', () => {
     expect(result.startsWith('/c/Users/dev/bin/claude.EXE')).toBe(true);
     expect(result).toContain('C:\\some\\path');
   });
+});
 
+// convertWindowsExePath has no platform guard — runs on all platforms
+describe('Windows Path Conversion (convertWindowsExePath)', () => {
   it('no-op for Unix paths (macOS/Linux)', () => {
     const cmd = '/usr/local/bin/claude --print "hello"';
     const result = convertWindowsExePath(cmd, false);

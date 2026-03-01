@@ -32,6 +32,17 @@ interface CommandOptions {
   eventsOutputPath?: string; // path where the event bridge appends JSONL
 }
 
+/**
+ * Replace `{{key}}` placeholders in a template string with values from `vars`.
+ */
+export function interpolateTemplate(template: string, vars: Record<string, string>): string {
+  let result = template;
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+  }
+  return result;
+}
+
 export class CommandBuilder {
   buildClaudeCommand(options: CommandOptions): string {
     const parts = [quoteArg(options.claudePath)];
@@ -102,11 +113,7 @@ export class CommandBuilder {
   }
 
   interpolateTemplate(template: string, vars: Record<string, string>): string {
-    let result = template;
-    for (const [key, value] of Object.entries(vars)) {
-      result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
-    }
-    return result;
+    return interpolateTemplate(template, vars);
   }
 
   /**

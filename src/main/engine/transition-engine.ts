@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Task, Action, ActionConfig, SwimlaneTransition, AppConfig, PermissionMode } from '../../shared/types';
+import { sanitizeForPty } from '../../shared/paths';
 import { SessionManager } from '../pty/session-manager';
 import { CommandBuilder } from '../agent/command-builder';
 import { ClaudeDetector } from '../agent/claude-detector';
@@ -222,9 +223,10 @@ export class TransitionEngine {
 
   private executeSendCommand(config: ActionConfig, task: Task, vars: Record<string, string>): void {
     if (!task.session_id) return;
-    const command = config.command
+    const raw = config.command
       ? this.commandBuilder.interpolateTemplate(config.command, vars)
       : '';
+    const command = sanitizeForPty(raw);
     if (command) {
       this.sessionManager.write(task.session_id, command + '\r');
     }

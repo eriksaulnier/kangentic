@@ -107,6 +107,21 @@ export function adaptCommandForShell(cmd: string, shellName: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// PTY-safe text sanitisation
+// ---------------------------------------------------------------------------
+
+/**
+ * Sanitise text before writing to a PTY.
+ *
+ * Newlines are interpreted as Enter (submit) by terminal emulators,
+ * tabs can trigger autocomplete, and consecutive whitespace is noise.
+ * This function collapses all of these into tidy single spaces.
+ */
+export function sanitizeForPty(text: string): string {
+  return text.replace(/[\r\n\t]+/g, ' ').replace(/ {2,}/g, ' ').trim();
+}
+
+// ---------------------------------------------------------------------------
 // CLI argument quoting
 // ---------------------------------------------------------------------------
 
@@ -124,9 +139,7 @@ export function quoteArg(arg: string): string {
   if (/^[a-zA-Z0-9_.\/:-]+$/.test(arg)) {
     return arg;
   }
-  // Replace literal newlines with spaces — PTY shells interpret newlines
-  // as line-break / execute, which splits the command across multiple lines.
-  const sanitised = arg.replace(/\r?\n/g, ' ');
+  const sanitised = sanitizeForPty(arg);
   if (process.platform === 'win32') {
     return `"${sanitised.replace(/"/g, '\\"')}"`;
   }
@@ -134,7 +147,7 @@ export function quoteArg(arg: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Internal helpers
+// Windows executable path conversion
 // ---------------------------------------------------------------------------
 
 /**
@@ -144,7 +157,7 @@ export function quoteArg(arg: string): string {
  * Quoted:   "C:\path with spaces\exe" --flag  →  /c/path with spaces/exe --flag
  * Unquoted: C:\path\to\exe --flag             →  /c/path/to/exe --flag
  */
-function convertWindowsExePath(cmd: string, isWsl: boolean): string {
+export function convertWindowsExePath(cmd: string, isWsl: boolean): string {
   const prefix = isWsl ? '/mnt/' : '/';
 
   if (cmd.startsWith('"')) {

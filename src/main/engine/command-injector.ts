@@ -1,4 +1,5 @@
 import type { SessionManager } from '../pty/session-manager';
+import { sanitizeForPty } from '../../shared/paths';
 
 /**
  * Tracks a pending auto-command injection for a single task.
@@ -235,6 +236,6 @@ export class CommandInjector {
    * Newlines in a task title could prematurely submit a partial command.
    */
   private sanitize(command: string): string {
-    return command.replace(/[\r\n]+/g, ' ').trim();
+    return sanitizeForPty(command);
   }
 }

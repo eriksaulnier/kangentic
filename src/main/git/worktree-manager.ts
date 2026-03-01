@@ -1,19 +1,7 @@
 import simpleGit, { SimpleGit } from 'simple-git';
 import path from 'node:path';
 import fs from 'node:fs';
-
-/**
- * Turn a task title into a filesystem-safe slug.
- * e.g. "Fix login bug (urgent!)" → "fix-login-bug-urgent"
- */
-function slugify(text: string, maxLen = 50): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, maxLen)
-    .replace(/-+$/, '');
-}
+import { slugify } from '../../shared/slugify';
 
 export class WorktreeManager {
   private git: SimpleGit;
