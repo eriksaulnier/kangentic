@@ -30,7 +30,7 @@ afterEach(() => {
 
 describe('hook-manager', () => {
   describe('buildEventHooks', () => {
-    it('produces correct hook entries for all event types', () => {
+    it('produces correct hook entries for all 17 event types', () => {
       const hooks = buildEventHooks(EVENT_BRIDGE, EVENTS_PATH, {});
 
       // PreToolUse: tool_start only (blank matcher)
@@ -60,6 +60,53 @@ describe('hook-manager', () => {
       // PermissionRequest: idle
       expect(hooks.PermissionRequest).toHaveLength(1);
       expect(hooks.PermissionRequest[0].hooks[0].command).toContain('idle');
+
+      // SessionStart: session_start
+      expect(hooks.SessionStart).toHaveLength(1);
+      expect(hooks.SessionStart[0].hooks[0].command).toContain('session_start');
+
+      // SessionEnd: session_end
+      expect(hooks.SessionEnd).toHaveLength(1);
+      expect(hooks.SessionEnd[0].hooks[0].command).toContain('session_end');
+
+      // SubagentStart: subagent_start
+      expect(hooks.SubagentStart).toHaveLength(1);
+      expect(hooks.SubagentStart[0].hooks[0].command).toContain('subagent_start');
+
+      // SubagentStop: subagent_stop
+      expect(hooks.SubagentStop).toHaveLength(1);
+      expect(hooks.SubagentStop[0].hooks[0].command).toContain('subagent_stop');
+
+      // Notification: notification
+      expect(hooks.Notification).toHaveLength(1);
+      expect(hooks.Notification[0].hooks[0].command).toContain('notification');
+
+      // PreCompact: compact
+      expect(hooks.PreCompact).toHaveLength(1);
+      expect(hooks.PreCompact[0].hooks[0].command).toContain('compact');
+
+      // TeammateIdle: teammate_idle
+      expect(hooks.TeammateIdle).toHaveLength(1);
+      expect(hooks.TeammateIdle[0].hooks[0].command).toContain('teammate_idle');
+
+      // TaskCompleted: task_completed
+      expect(hooks.TaskCompleted).toHaveLength(1);
+      expect(hooks.TaskCompleted[0].hooks[0].command).toContain('task_completed');
+
+      // ConfigChange: config_change
+      expect(hooks.ConfigChange).toHaveLength(1);
+      expect(hooks.ConfigChange[0].hooks[0].command).toContain('config_change');
+
+      // WorktreeCreate: worktree_create
+      expect(hooks.WorktreeCreate).toHaveLength(1);
+      expect(hooks.WorktreeCreate[0].hooks[0].command).toContain('worktree_create');
+
+      // WorktreeRemove: worktree_remove
+      expect(hooks.WorktreeRemove).toHaveLength(1);
+      expect(hooks.WorktreeRemove[0].hooks[0].command).toContain('worktree_remove');
+
+      // Total: 17 hook event keys
+      expect(Object.keys(hooks)).toHaveLength(17);
     });
 
     it('preserves existing user hooks', () => {

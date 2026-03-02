@@ -6,6 +6,7 @@ import { ShellResolver } from './shell-resolver';
 import { SessionQueue } from './session-queue';
 import { ClaudeStatusParser } from '../agent/claude-status-parser';
 import { adaptCommandForShell } from '../../shared/paths';
+import { EventType, EventTypeActivity, ClaudeTool } from '../../shared/types';
 import type { Session, SessionStatus, SessionUsage, ActivityState, SessionEvent, SpawnSessionInput } from '../../shared/types';
 
 const MAX_SCROLLBACK = 512 * 1024; // 512KB per session
@@ -276,6 +277,8 @@ export class SessionManager extends EventEmitter {
       // Don't overwrite 'suspended' — suspend() sets that before killing PTY
       if (session.status !== 'suspended') {
         session.status = 'exited';
+        // Synthetic session_end — Claude Code's hook won't fire on kill
+        this.emitSessionEnd(id);
       }
       session.exitCode = exitCode;
       session.pty = null;
@@ -374,6 +377,9 @@ export class SessionManager extends EventEmitter {
     session.eventsOutputPath = null;
     session.mergedSettingsPath = null;
 
+    // Synthetic session_end before we kill — Claude Code's hook won't fire
+    this.emitSessionEnd(sessionId);
+
     // Mark suspended BEFORE killing so the async onExit handler preserves it
     session.status = 'suspended';
 
@@ -434,6 +440,26 @@ export class SessionManager extends EventEmitter {
       result[id] = events;
     }
     return result;
+  }
+
+  /**
+   * Inject a synthetic session_end event into the event cache and emit it.
+   * Claude Code's SessionEnd hook won't fire when we kill the PTY, so we
+   * synthesize one ourselves so the activity log always shows session end.
+   */
+  private emitSessionEnd(sessionId: string): void {
+    let events = this.eventCache.get(sessionId);
+    // Skip if the last event is already session_end (Claude Code may have fired it)
+    if (events && events.length > 0 && events[events.length - 1].type === EventType.SessionEnd) {
+      return;
+    }
+    const event: SessionEvent = { ts: Date.now(), type: EventType.SessionEnd };
+    if (!events) {
+      events = [];
+      this.eventCache.set(sessionId, events);
+    }
+    events.push(event);
+    this.emit('event', sessionId, event);
   }
 
   private findByTaskId(taskId: string): ManagedSession | undefined {
@@ -564,21 +590,21 @@ export class SessionManager extends EventEmitter {
             events.push(event);
             this.emit('event', session.id, event);
 
-            // Derive activity state from events — the event-bridge
-            // fires for ALL tools via blank PreToolUse matcher.
+            // Detect ExitPlanMode → emit plan-exit
+            // Uses ToolStart (PreToolUse) because ExitPlanMode is a mode-transition
+            // tool that may not fire PostToolUse (ToolEnd).
+            if (event.type === EventType.ToolStart && event.tool === ClaudeTool.ExitPlanMode) {
+              this.emit('plan-exit', session.id);
+            }
+
+            // Derive activity state from events via declarative lookup.
             // Only emit when state actually changes (dedup defense-in-depth
             // against multiple hooks firing the same state, e.g. Stop +
             // PermissionRequest both emitting idle).
-            if (event.type === 'tool_start' || event.type === 'prompt') {
-              if (this.activityCache.get(session.id) !== 'thinking') {
-                this.activityCache.set(session.id, 'thinking');
-                this.emit('activity', session.id, 'thinking');
-              }
-            } else if (event.type === 'idle' || event.type === 'interrupted') {
-              if (this.activityCache.get(session.id) !== 'idle') {
-                this.activityCache.set(session.id, 'idle');
-                this.emit('activity', session.id, 'idle');
-              }
+            const newActivity = EventTypeActivity[event.type];
+            if (newActivity && this.activityCache.get(session.id) !== newActivity) {
+              this.activityCache.set(session.id, newActivity);
+              this.emit('activity', session.id, newActivity);
             }
           }
         }

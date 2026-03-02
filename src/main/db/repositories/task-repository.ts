@@ -16,6 +16,10 @@ export class TaskRepository {
     return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as Task | undefined;
   }
 
+  getBySessionId(sessionId: string): Task | undefined {
+    return this.db.prepare('SELECT * FROM tasks WHERE session_id = ? AND archived_at IS NULL LIMIT 1').get(sessionId) as Task | undefined;
+  }
+
   create(input: TaskCreateInput): Task {
     const now = new Date().toISOString();
     const id = uuidv4();

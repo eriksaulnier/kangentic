@@ -97,6 +97,19 @@ export function App() {
       }));
     }
 
+    // Task auto-moved (plan exit → next column)
+    const tasks = window.electronAPI?.tasks;
+    if (tasks?.onAutoMoved) {
+      cleanups.push(tasks.onAutoMoved((_taskId, _targetSwimlaneId, taskTitle) => {
+        useBoardStore.getState().loadBoard();
+        useSessionStore.getState().syncSessions();
+        useToastStore.getState().addToast({
+          message: `Plan complete — moved "${taskTitle}" to next column`,
+          variant: 'success',
+        });
+      }));
+    }
+
     return () => cleanups.forEach((fn) => fn());
   }, []);
 

@@ -5,12 +5,23 @@
  * the activity state (thinking/idle) from the event type. This is the primary
  * mechanism for task card indicators — the event-bridge fires for ALL tools.
  *
- * Mapping:
- *   tool_start   → thinking
- *   prompt       → thinking
- *   idle         → idle
- *   interrupted  → idle
- *   tool_end     → no change
+ * Mapping (via EventTypeActivity):
+ *   tool_start      → thinking
+ *   prompt          → thinking
+ *   subagent_start  → thinking
+ *   subagent_stop   → thinking
+ *   compact         → thinking
+ *   worktree_create → thinking
+ *   idle            → idle
+ *   interrupted     → idle
+ *   tool_end        → no change
+ *   session_start   → no change
+ *   session_end     → no change
+ *   notification    → no change
+ *   teammate_idle   → no change
+ *   task_completed  → no change
+ *   config_change   → no change
+ *   worktree_remove → no change
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
@@ -35,6 +46,7 @@ vi.mock('../../src/shared/paths', () => ({
 
 import * as pty from 'node-pty';
 import { SessionManager } from '../../src/main/pty/session-manager';
+import { EventType } from '../../src/shared/types';
 import type { ActivityState } from '../../src/shared/types';
 
 let tmpDir: string;
@@ -138,7 +150,7 @@ describe('Event-derived activity state', () => {
     const { session, eventsPath } = await spawnWithEvents();
     const states = collectActivity(manager, session.id);
 
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Read' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
     await waitForWatcher();
 
     expect(states).toContain('thinking');
@@ -149,7 +161,7 @@ describe('Event-derived activity state', () => {
     const { session, eventsPath } = await spawnWithEvents();
     const states = collectActivity(manager, session.id);
 
-    appendEvent(eventsPath, { ts: Date.now(), type: 'prompt' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Prompt });
     await waitForWatcher();
 
     expect(states).toContain('thinking');
@@ -160,12 +172,12 @@ describe('Event-derived activity state', () => {
     const { session, eventsPath } = await spawnWithEvents();
 
     // First set thinking so we can verify transition to idle
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Read' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
     // Now write idle event
-    appendEvent(eventsPath, { ts: Date.now(), type: 'idle' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
     await waitForWatcher();
 
     expect(manager.getActivityCache()[session.id]).toBe('idle');
@@ -175,7 +187,7 @@ describe('Event-derived activity state', () => {
     const { session, eventsPath } = await spawnWithEvents();
 
     // Set thinking via tool_start
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Read' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
@@ -183,7 +195,7 @@ describe('Event-derived activity state', () => {
     const statesAfter = collectActivity(manager, session.id);
 
     // tool_end should NOT emit any activity change
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_end', tool: 'Read' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolEnd, tool: 'Read' });
     await waitForWatcher();
 
     // Activity should still be thinking — tool_end doesn't change it
@@ -197,17 +209,17 @@ describe('Event-derived activity state', () => {
     const states = collectActivity(manager, session.id);
 
     // 1. Tool starts → thinking
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Read' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
     // 2. AskUserQuestion → idle
-    appendEvent(eventsPath, { ts: Date.now(), type: 'idle' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('idle');
 
     // 3. User responds, new tool starts → thinking
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Edit' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Edit' });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
@@ -219,18 +231,18 @@ describe('Event-derived activity state', () => {
     const states = collectActivity(manager, session.id);
 
     // 1. Bash tool starts → thinking
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Bash' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Bash' });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
     // 2. PermissionRequest fires → idle (permission dialog shown)
-    appendEvent(eventsPath, { ts: Date.now(), type: 'idle' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('idle');
 
     // 3. User approves → tool_end + new tool_start → thinking
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_end', tool: 'Bash' });
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Read' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolEnd, tool: 'Bash' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
@@ -241,12 +253,12 @@ describe('Event-derived activity state', () => {
     const { session, eventsPath } = await spawnWithEvents();
 
     // First set thinking so we can verify transition to idle
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Bash' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Bash' });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
     // Now write interrupted event (user pressed Escape)
-    appendEvent(eventsPath, { ts: Date.now(), type: 'interrupted', tool: 'Bash' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Interrupted, tool: 'Bash' });
     await waitForWatcher();
 
     expect(manager.getActivityCache()[session.id]).toBe('idle');
@@ -257,17 +269,17 @@ describe('Event-derived activity state', () => {
     const states = collectActivity(manager, session.id);
 
     // 1. Bash tool starts → thinking
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Bash' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Bash' });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
     // 2. User presses Escape → interrupted → idle
-    appendEvent(eventsPath, { ts: Date.now(), type: 'interrupted', tool: 'Bash' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Interrupted, tool: 'Bash' });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('idle');
 
     // 3. Claude resumes with a prompt → thinking
-    appendEvent(eventsPath, { ts: Date.now(), type: 'prompt' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Prompt });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
@@ -278,20 +290,20 @@ describe('Event-derived activity state', () => {
     const { session, eventsPath } = await spawnWithEvents();
 
     // Set thinking first so the idle transition is observable
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Read' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
     const states = collectActivity(manager, session.id);
 
     // 1. Stop hook fires → idle (AskUserQuestion waiting for input)
-    appendEvent(eventsPath, { ts: Date.now(), type: 'idle' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('idle');
 
     // 2. User answers → PostToolUse fires tool_end (no change) + prompt (thinking)
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_end', tool: 'AskUserQuestion' });
-    appendEvent(eventsPath, { ts: Date.now(), type: 'prompt' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolEnd, tool: 'AskUserQuestion' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Prompt });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
@@ -304,11 +316,11 @@ describe('Event-derived activity state', () => {
 
     // Write multiple events at once (simulates rapid tool execution)
     const events = [
-      { ts: Date.now(), type: 'tool_start', tool: 'Read' },
-      { ts: Date.now() + 1, type: 'tool_end', tool: 'Read' },
-      { ts: Date.now() + 2, type: 'tool_start', tool: 'Grep' },
-      { ts: Date.now() + 3, type: 'tool_end', tool: 'Grep' },
-      { ts: Date.now() + 4, type: 'idle' },
+      { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' },
+      { ts: Date.now() + 1, type: EventType.ToolEnd, tool: 'Read' },
+      { ts: Date.now() + 2, type: EventType.ToolStart, tool: 'Grep' },
+      { ts: Date.now() + 3, type: EventType.ToolEnd, tool: 'Grep' },
+      { ts: Date.now() + 4, type: EventType.Idle },
     ];
     const chunk = events.map(e => JSON.stringify(e)).join('\n') + '\n';
     fs.appendFileSync(eventsPath, chunk);
@@ -325,7 +337,7 @@ describe('Event-derived activity state', () => {
     const { session, eventsPath } = await spawnWithEvents();
 
     // Set thinking first so we can verify transition to idle
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Read' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
@@ -333,8 +345,8 @@ describe('Event-derived activity state', () => {
     const states = collectActivity(manager, session.id);
 
     // Write two idle events back-to-back (e.g. PermissionRequest + Stop both firing)
-    appendEvent(eventsPath, { ts: Date.now(), type: 'idle' });
-    appendEvent(eventsPath, { ts: Date.now() + 1, type: 'idle' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
+    appendEvent(eventsPath, { ts: Date.now() + 1, type: EventType.Idle });
     await waitForWatcher();
 
     expect(manager.getActivityCache()[session.id]).toBe('idle');
@@ -346,7 +358,7 @@ describe('Event-derived activity state', () => {
     const { session, eventsPath } = await spawnWithEvents();
 
     // Set thinking via tool_start
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Bash' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Bash' });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
@@ -355,7 +367,7 @@ describe('Event-derived activity state', () => {
 
     // PostToolUseFailure non-interrupt: event-bridge converts to tool_end
     // (tool error, not user Escape). Should NOT change activity state.
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_end', tool: 'Bash' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolEnd, tool: 'Bash' });
     await waitForWatcher();
 
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
@@ -366,7 +378,7 @@ describe('Event-derived activity state', () => {
     const { session, eventsPath } = await spawnWithEvents();
 
     // Set thinking first
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Bash' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Bash' });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
@@ -374,8 +386,8 @@ describe('Event-derived activity state', () => {
 
     // PostToolUseFailure(interrupt) fires interrupted, then Stop fires idle
     // Both map to 'idle' — dedup should suppress the second emission
-    appendEvent(eventsPath, { ts: Date.now(), type: 'interrupted', tool: 'Bash' });
-    appendEvent(eventsPath, { ts: Date.now() + 1, type: 'idle' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Interrupted, tool: 'Bash' });
+    appendEvent(eventsPath, { ts: Date.now() + 1, type: EventType.Idle });
     await waitForWatcher();
 
     expect(manager.getActivityCache()[session.id]).toBe('idle');
@@ -388,12 +400,175 @@ describe('Event-derived activity state', () => {
     const states = collectActivity(manager, session.id);
 
     // Write two tool_start events back-to-back (rapid tool execution)
-    appendEvent(eventsPath, { ts: Date.now(), type: 'tool_start', tool: 'Read' });
-    appendEvent(eventsPath, { ts: Date.now() + 1, type: 'tool_start', tool: 'Grep' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
+    appendEvent(eventsPath, { ts: Date.now() + 1, type: EventType.ToolStart, tool: 'Grep' });
     await waitForWatcher();
 
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
     // Dedup: only one emission despite two tool_start events
     expect(states).toEqual(['thinking']);
+  });
+
+  // --- New event types: thinking triggers ---
+
+  it('session_start does not change activity state', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+
+    // Set thinking first so we can verify no change
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    const statesAfter = collectActivity(manager, session.id);
+
+    // session_start should NOT change activity — agent may be idle at prompt
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SessionStart });
+    await waitForWatcher();
+
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+    expect(statesAfter).toHaveLength(0);
+  });
+
+  it('subagent_start event emits thinking activity', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Explore' });
+    await waitForWatcher();
+
+    expect(states).toContain('thinking');
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+  });
+
+  it('subagent_stop event emits thinking activity', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStop, detail: 'Explore' });
+    await waitForWatcher();
+
+    expect(states).toContain('thinking');
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+  });
+
+  it('compact event emits thinking activity', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Compact });
+    await waitForWatcher();
+
+    expect(states).toContain('thinking');
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+  });
+
+  it('worktree_create event emits thinking activity', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.WorktreeCreate, detail: 'feature-x' });
+    await waitForWatcher();
+
+    expect(states).toContain('thinking');
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+  });
+
+  // --- New event types: no activity change ---
+
+  it('session_end does not change activity state', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+
+    // Set thinking first
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    const statesAfter = collectActivity(manager, session.id);
+
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SessionEnd });
+    await waitForWatcher();
+
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+    expect(statesAfter).toHaveLength(0);
+  });
+
+  it('notification does not change activity state', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    const statesAfter = collectActivity(manager, session.id);
+
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Notification, detail: 'Context getting full' });
+    await waitForWatcher();
+
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+    expect(statesAfter).toHaveLength(0);
+  });
+
+  it('teammate_idle does not change activity state', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    const statesAfter = collectActivity(manager, session.id);
+
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.TeammateIdle, detail: 'agent-2' });
+    await waitForWatcher();
+
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+    expect(statesAfter).toHaveLength(0);
+  });
+
+  it('task_completed does not change activity state', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    const statesAfter = collectActivity(manager, session.id);
+
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.TaskCompleted, detail: 'Done' });
+    await waitForWatcher();
+
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+    expect(statesAfter).toHaveLength(0);
+  });
+
+  it('config_change does not change activity state', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    const statesAfter = collectActivity(manager, session.id);
+
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ConfigChange });
+    await waitForWatcher();
+
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+    expect(statesAfter).toHaveLength(0);
+  });
+
+  it('worktree_remove does not change activity state', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    const statesAfter = collectActivity(manager, session.id);
+
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.WorktreeRemove, detail: '/tmp/wt' });
+    await waitForWatcher();
+
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+    expect(statesAfter).toHaveLength(0);
   });
 });

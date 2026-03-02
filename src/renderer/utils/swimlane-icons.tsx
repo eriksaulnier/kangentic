@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Layers, Map as MapIcon, CircleCheckBig,
+  Layers, CircleCheckBig,
   icons,
 } from 'lucide-react';
 import type { Swimlane, SwimlaneRole } from '../../shared/types';
@@ -46,14 +46,12 @@ export const ICON_REGISTRY = new Map<string, IconComponent>(
 /** Default icons for system swimlane roles. */
 export const ROLE_DEFAULTS: Record<SwimlaneRole, IconComponent> = {
   backlog: Layers,
-  planning: MapIcon,
   done: CircleCheckBig,
 };
 
 /** Reverse lookup: role → kebab-case icon name. */
 const ROLE_DEFAULT_NAMES: Record<SwimlaneRole, string> = {
   backlog: 'layers',
-  planning: 'map',
   done: 'circle-check-big',
 };
 

@@ -25,6 +25,12 @@ const api: ElectronAPI = {
     move: (input) => ipcRenderer.invoke(IPC.TASK_MOVE, input),
     listArchived: () => ipcRenderer.invoke(IPC.TASK_LIST_ARCHIVED),
     unarchive: (input) => ipcRenderer.invoke(IPC.TASK_UNARCHIVE, input),
+    onAutoMoved: (callback) => {
+      const handler = (_event: Electron.IpcRendererEvent, taskId: string, targetSwimlaneId: string, taskTitle: string) =>
+        callback(taskId, targetSwimlaneId, taskTitle);
+      ipcRenderer.on(IPC.TASK_AUTO_MOVED, handler);
+      return () => ipcRenderer.removeListener(IPC.TASK_AUTO_MOVED, handler);
+    },
   },
 
   attachments: {

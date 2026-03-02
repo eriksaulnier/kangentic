@@ -503,7 +503,12 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
     tasks.delete(id);
   });
 
-  ipcMain.handle(IPC.TASK_MOVE, async (_, input) => {
+  /**
+   * Core task-move logic shared by the TASK_MOVE IPC handler and the
+   * plan-exit auto-move listener. Moves the task, runs transitions, and
+   * manages session lifecycle based on the target column's role.
+   */
+  async function handleTaskMove(input: { taskId: string; targetSwimlaneId: string; targetPosition: number }): Promise<void> {
     const { tasks, actions, swimlanes, attachments } = getProjectRepos();
     const task = tasks.getById(input.taskId);
     if (!task) throw new Error(`Task ${input.taskId} not found`);
@@ -623,7 +628,9 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
       const interpolated = commandBuilder.interpolateTemplate(toLane.auto_command, vars);
       commandInjector.schedule(finalTask.id, finalTask.session_id, interpolated, { freshlySpawned: true });
     }
-  });
+  }
+
+  ipcMain.handle(IPC.TASK_MOVE, async (_, input) => handleTaskMove(input));
 
   ipcMain.handle(IPC.TASK_LIST_ARCHIVED, () => {
     const { tasks } = getProjectRepos();
@@ -914,6 +921,35 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
       } catch {
         // DB may be closed during shutdown
       }
+    }
+  });
+
+  // Auto-move task when agent exits plan mode (ExitPlanMode tool)
+  sessionManager.on('plan-exit', async (sessionId: string) => {
+    if (!currentProjectId) return;
+    try {
+      const session = sessionManager.getSession(sessionId);
+      if (!session) return;
+
+      const { tasks, swimlanes } = getProjectRepos();
+      const task = tasks.getBySessionId(sessionId);
+      if (!task) return;
+
+      const lane = swimlanes.getById(task.swimlane_id);
+      if (!lane?.plan_exit_target_id) return;
+
+      const target = swimlanes.getById(lane.plan_exit_target_id);
+      if (!target) return;
+
+      const pos = tasks.list(target.id).length;
+      await handleTaskMove({ taskId: task.id, targetSwimlaneId: target.id, targetPosition: pos });
+
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC.TASK_AUTO_MOVED, task.id, target.id, task.title);
+      }
+      console.log(`[plan-exit] Auto-moved "${task.title}" → "${target.name}"`);
+    } catch (err) {
+      console.error('[plan-exit] Auto-move failed:', err);
     }
   });
 

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { useSessionStore } from '../../stores/session-store';
+import { EventType } from '../../../shared/types';
 import type { SessionEvent } from '../../../shared/types';
 
 // 8 distinct colors for session badges (Tailwind-ish)
@@ -191,51 +192,70 @@ interface EventLineProps {
   showLabel: boolean;
 }
 
-function EventLine({ event, label, colorClass, showLabel }: EventLineProps) {
-  switch (event.type) {
-    case 'tool_start':
-      return (
-        <div className="flex items-baseline gap-1.5 min-w-0">
-          <span className="text-zinc-600 shrink-0">{formatTime(event.ts)}</span>
-          {showLabel && <span className={`${colorClass} font-semibold shrink-0`}>[{label}]</span>}
-          <span className="bg-surface-raised text-fg-secondary px-1.5 py-0.5 rounded text-[11px] font-medium shrink-0">
-            {event.tool || 'Tool'}
-          </span>
-          {event.detail && (
-            <span className="text-fg-faint truncate min-w-0">{event.detail}</span>
-          )}
-        </div>
-      );
+/** Dim italic text line (no detail). */
+function DimLine({ ts, label, colorClass, showLabel, text }: {
+  ts: number; label: string; colorClass: string; showLabel: boolean; text: string;
+}) {
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <span className="text-zinc-600 shrink-0">{formatTime(ts)}</span>
+      {showLabel && <span className={`${colorClass} font-semibold shrink-0`}>[{label}]</span>}
+      <span className="text-fg-faint italic">{text}</span>
+    </div>
+  );
+}
 
-    case 'tool_end':
-      // tool_end is typically not shown — the tool_start line is sufficient.
-      // Only render if there's no tool_start context (e.g., tool name only).
+/** Dim italic text line with optional trailing detail. */
+function DimDetailLine({ ts, label, colorClass, showLabel, text, detail }: {
+  ts: number; label: string; colorClass: string; showLabel: boolean; text: string; detail?: string;
+}) {
+  return (
+    <div className="flex items-baseline gap-1.5 min-w-0">
+      <span className="text-zinc-600 shrink-0">{formatTime(ts)}</span>
+      {showLabel && <span className={`${colorClass} font-semibold shrink-0`}>[{label}]</span>}
+      <span className="text-fg-faint italic">{text}</span>
+      {detail && <span className="text-fg-faint truncate min-w-0">{detail}</span>}
+    </div>
+  );
+}
+
+/** Badge line: colored pill label with optional trailing detail. */
+function BadgeLine({ ts, label, colorClass, showLabel, badge, detail, variant = 'default' }: {
+  ts: number; label: string; colorClass: string; showLabel: boolean;
+  badge: string; detail?: string; variant?: 'default' | 'warn';
+}) {
+  const badgeClass = variant === 'warn'
+    ? 'bg-amber-900/30 text-amber-400'
+    : 'bg-surface-raised text-fg-secondary';
+  return (
+    <div className="flex items-baseline gap-1.5 min-w-0">
+      <span className="text-zinc-600 shrink-0">{formatTime(ts)}</span>
+      {showLabel && <span className={`${colorClass} font-semibold shrink-0`}>[{label}]</span>}
+      <span className={`${badgeClass} px-1.5 py-0.5 rounded text-[11px] font-medium shrink-0`}>
+        {badge}
+      </span>
+      {detail && <span className="text-fg-faint truncate min-w-0">{detail}</span>}
+    </div>
+  );
+}
+
+function EventLine({ event, label, colorClass, showLabel }: EventLineProps) {
+  const common = { ts: event.ts, label, colorClass, showLabel };
+
+  switch (event.type) {
+    case EventType.ToolStart:
+      return <BadgeLine {...common} badge={event.tool || 'Tool'} detail={event.detail} />;
+
+    case EventType.ToolEnd:
       return null;
 
-    case 'interrupted':
-      return (
-        <div className="flex items-baseline gap-1.5 min-w-0">
-          <span className="text-zinc-600 shrink-0">{formatTime(event.ts)}</span>
-          {showLabel && <span className={`${colorClass} font-semibold shrink-0`}>[{label}]</span>}
-          <span className="bg-amber-900/30 text-amber-400 px-1.5 py-0.5 rounded text-[11px] font-medium shrink-0">
-            {event.tool || 'Tool'} interrupted
-          </span>
-          {event.detail && (
-            <span className="text-fg-faint truncate min-w-0">{event.detail}</span>
-          )}
-        </div>
-      );
+    case EventType.Interrupted:
+      return <BadgeLine {...common} badge={`${event.tool || 'Tool'} interrupted`} detail={event.detail} variant="warn" />;
 
-    case 'idle':
-      return (
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-zinc-600 shrink-0">{formatTime(event.ts)}</span>
-          {showLabel && <span className={`${colorClass} font-semibold shrink-0`}>[{label}]</span>}
-          <span className="text-fg-faint italic">Idle — waiting for input</span>
-        </div>
-      );
+    case EventType.Idle:
+      return <DimLine {...common} text="Idle — waiting for input" />;
 
-    case 'prompt':
+    case EventType.Prompt:
       return (
         <div className="flex items-baseline gap-1.5">
           <span className="text-zinc-600 shrink-0">{formatTime(event.ts)}</span>
@@ -243,6 +263,39 @@ function EventLine({ event, label, colorClass, showLabel }: EventLineProps) {
           <span className="text-fg-muted">Thinking...</span>
         </div>
       );
+
+    case EventType.SessionStart:
+      return <DimLine {...common} text="Session started" />;
+
+    case EventType.SessionEnd:
+      return <DimLine {...common} text="Session ended" />;
+
+    case EventType.SubagentStart:
+      return <BadgeLine {...common} badge="Subagent" detail={event.detail} />;
+
+    case EventType.SubagentStop:
+      return <BadgeLine {...common} badge="Subagent done" detail={event.detail} />;
+
+    case EventType.Notification:
+      return <BadgeLine {...common} badge="Notice" detail={event.detail} variant="warn" />;
+
+    case EventType.Compact:
+      return <DimLine {...common} text="Compacting context..." />;
+
+    case EventType.TeammateIdle:
+      return <DimDetailLine {...common} text="Teammate idle" detail={event.detail} />;
+
+    case EventType.TaskCompleted:
+      return <BadgeLine {...common} badge="Task done" detail={event.detail} />;
+
+    case EventType.ConfigChange:
+      return <DimLine {...common} text="Config changed" />;
+
+    case EventType.WorktreeCreate:
+      return <BadgeLine {...common} badge="Worktree" detail={event.detail} />;
+
+    case EventType.WorktreeRemove:
+      return <DimDetailLine {...common} text="Worktree removed" detail={event.detail} />;
 
     default:
       return null;

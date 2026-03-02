@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { EventType, HookEvent } from '../../shared/types';
 
 /** Hook entry in Claude Code's settings.json. */
 export interface ClaudeHookEntry {
@@ -49,29 +50,73 @@ export function buildEventHooks(
 ): Record<string, ClaudeHookEntry[]> {
   return {
     ...existingHooks,
-    PreToolUse: [
-      ...(existingHooks.PreToolUse || []),
-      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_start` }] },
+    [HookEvent.PreToolUse]: [
+      ...(existingHooks[HookEvent.PreToolUse] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.ToolStart}` }] },
     ],
-    PostToolUse: [
-      ...(existingHooks.PostToolUse || []),
-      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_end` }] },
+    [HookEvent.PostToolUse]: [
+      ...(existingHooks[HookEvent.PostToolUse] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.ToolEnd}` }] },
     ],
-    PostToolUseFailure: [
-      ...(existingHooks.PostToolUseFailure || []),
+    [HookEvent.PostToolUseFailure]: [
+      ...(existingHooks[HookEvent.PostToolUseFailure] || []),
       { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" tool_failure` }] },
     ],
-    UserPromptSubmit: [
-      ...(existingHooks.UserPromptSubmit || []),
-      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" prompt` }] },
+    [HookEvent.UserPromptSubmit]: [
+      ...(existingHooks[HookEvent.UserPromptSubmit] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.Prompt}` }] },
     ],
-    Stop: [
-      ...(existingHooks.Stop || []),
-      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
+    [HookEvent.Stop]: [
+      ...(existingHooks[HookEvent.Stop] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.Idle}` }] },
     ],
-    PermissionRequest: [
-      ...(existingHooks.PermissionRequest || []),
-      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" idle` }] },
+    [HookEvent.PermissionRequest]: [
+      ...(existingHooks[HookEvent.PermissionRequest] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.Idle}` }] },
+    ],
+    [HookEvent.SessionStart]: [
+      ...(existingHooks[HookEvent.SessionStart] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.SessionStart}` }] },
+    ],
+    [HookEvent.SessionEnd]: [
+      ...(existingHooks[HookEvent.SessionEnd] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.SessionEnd}` }] },
+    ],
+    [HookEvent.SubagentStart]: [
+      ...(existingHooks[HookEvent.SubagentStart] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.SubagentStart}` }] },
+    ],
+    [HookEvent.SubagentStop]: [
+      ...(existingHooks[HookEvent.SubagentStop] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.SubagentStop}` }] },
+    ],
+    [HookEvent.Notification]: [
+      ...(existingHooks[HookEvent.Notification] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.Notification}` }] },
+    ],
+    [HookEvent.PreCompact]: [
+      ...(existingHooks[HookEvent.PreCompact] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.Compact}` }] },
+    ],
+    [HookEvent.TeammateIdle]: [
+      ...(existingHooks[HookEvent.TeammateIdle] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.TeammateIdle}` }] },
+    ],
+    [HookEvent.TaskCompleted]: [
+      ...(existingHooks[HookEvent.TaskCompleted] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.TaskCompleted}` }] },
+    ],
+    [HookEvent.ConfigChange]: [
+      ...(existingHooks[HookEvent.ConfigChange] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.ConfigChange}` }] },
+    ],
+    [HookEvent.WorktreeCreate]: [
+      ...(existingHooks[HookEvent.WorktreeCreate] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.WorktreeCreate}` }] },
+    ],
+    [HookEvent.WorktreeRemove]: [
+      ...(existingHooks[HookEvent.WorktreeRemove] || []),
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.WorktreeRemove}` }] },
     ],
   };
 }

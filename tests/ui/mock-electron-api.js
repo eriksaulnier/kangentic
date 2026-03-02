@@ -80,13 +80,13 @@
   }
 
   var DEFAULT_SWIMLANES = [
-    { name: 'Backlog', role: 'backlog', color: '#6b7280', icon: 'layers', is_archived: false, permission_strategy: null, auto_spawn: false, auto_command: null },
-    { name: 'Planning', role: 'planning', color: '#8b5cf6', icon: 'map', is_archived: false, permission_strategy: 'plan', auto_spawn: true, auto_command: null },
-    { name: 'Executing', role: null, color: '#3b82f6', icon: 'square-terminal', is_archived: false, permission_strategy: null, auto_spawn: true, auto_command: null },
-    { name: 'Code Review', role: null, color: '#f59e0b', icon: 'code', is_archived: false, permission_strategy: null, auto_spawn: true, auto_command: null },
-    { name: 'Tests', role: null, color: '#06b6d4', icon: 'flask-conical', is_archived: false, permission_strategy: null, auto_spawn: true, auto_command: null },
-    { name: 'Ship It', role: null, color: '#F97316', icon: 'sailboat', is_archived: false, permission_strategy: null, auto_spawn: true, auto_command: null },
-    { name: 'Done', role: 'done', color: '#10b981', icon: 'circle-check-big', is_archived: true, permission_strategy: null, auto_spawn: false, auto_command: null },
+    { name: 'Backlog', role: 'backlog', color: '#6b7280', icon: 'layers', is_archived: false, permission_strategy: null, auto_spawn: false, auto_command: null, plan_exit_target_id: null },
+    { name: 'Planning', role: null, color: '#8b5cf6', icon: 'map', is_archived: false, permission_strategy: 'plan', auto_spawn: true, auto_command: null, plan_exit_target_id: '__executing__' },
+    { name: 'Executing', role: null, color: '#3b82f6', icon: 'square-terminal', is_archived: false, permission_strategy: null, auto_spawn: true, auto_command: null, plan_exit_target_id: null },
+    { name: 'Code Review', role: null, color: '#f59e0b', icon: 'code', is_archived: false, permission_strategy: null, auto_spawn: true, auto_command: null, plan_exit_target_id: null },
+    { name: 'Tests', role: null, color: '#06b6d4', icon: 'flask-conical', is_archived: false, permission_strategy: null, auto_spawn: true, auto_command: null, plan_exit_target_id: null },
+    { name: 'Ship It', role: null, color: '#F97316', icon: 'sailboat', is_archived: false, permission_strategy: null, auto_spawn: true, auto_command: null, plan_exit_target_id: null },
+    { name: 'Done', role: 'done', color: '#10b981', icon: 'circle-check-big', is_archived: true, permission_strategy: null, auto_spawn: false, auto_command: null, plan_exit_target_id: null },
   ];
 
   function noop() {}
@@ -134,6 +134,12 @@
               created_at: now(),
             });
           });
+          // Resolve plan_exit_target_id placeholder: Planning → Executing
+          var planningLane = swimlanes.find(function (s) { return s.name === 'Planning'; });
+          var executingLane = swimlanes.find(function (s) { return s.name === 'Executing'; });
+          if (planningLane && executingLane) {
+            planningLane.plan_exit_target_id = executingLane.id;
+          }
         }
         tasks = tasks; // keep existing tasks
         archivedTasks = archivedTasks;
@@ -168,6 +174,12 @@
           swimlanes = DEFAULT_SWIMLANES.map(function (s, i) {
             return Object.assign({}, s, { id: uuid(), position: i, created_at: now() });
           });
+          // Resolve plan_exit_target_id placeholder: Planning → Executing
+          var planLane = swimlanes.find(function (s) { return s.name === 'Planning'; });
+          var execLane = swimlanes.find(function (s) { return s.name === 'Executing'; });
+          if (planLane && execLane) {
+            planLane.plan_exit_target_id = execLane.id;
+          }
         }
         return project;
       },
@@ -302,6 +314,9 @@
       listArchived: async function () {
         return archivedTasks;
       },
+      onAutoMoved: function () {
+        return noop;
+      },
       unarchive: async function (input) {
         var idx = archivedTasks.findIndex(function (t) {
           return t.id === input.id;
@@ -368,6 +383,7 @@
           permission_strategy: input.permission_strategy || null,
           auto_spawn: (input.auto_spawn !== undefined && input.auto_spawn !== null) ? input.auto_spawn : true,
           auto_command: input.auto_command || null,
+          plan_exit_target_id: input.plan_exit_target_id || null,
           position: swimlanes.length,
           created_at: now(),
         };

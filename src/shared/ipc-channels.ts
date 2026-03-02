@@ -16,6 +16,7 @@ export const IPC = {
   TASK_MOVE: 'task:move',
   TASK_LIST_ARCHIVED: 'task:list-archived',
   TASK_UNARCHIVE: 'task:unarchive',
+  TASK_AUTO_MOVED: 'task:autoMoved',
 
   // Attachments
   ATTACHMENT_LIST: 'attachment:list',

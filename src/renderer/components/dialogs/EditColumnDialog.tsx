@@ -46,6 +46,7 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
   const [permissionStrategy, setPermissionStrategy] = useState<PermissionMode | null>(swimlane.permission_strategy);
   const [autoSpawn, setAutoSpawn] = useState(swimlane.auto_spawn);
   const [autoCommand, setAutoCommand] = useState(swimlane.auto_command || '');
+  const [planExitTargetId, setPlanExitTargetId] = useState<string | null>(swimlane.plan_exit_target_id);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,9 +55,9 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
   const isLocked = swimlane.role !== null;
 
   const isBacklogOrDone = swimlane.role === 'backlog' || swimlane.role === 'done';
-  const isPlanning = swimlane.role === 'planning';
-  const permissionLocked = isPlanning || isBacklogOrDone;
-  const autoSpawnLocked = isLocked; // backlog, planning, done all have locked auto_spawn
+  const permissionLocked = isBacklogOrDone;
+  const autoSpawnLocked = isBacklogOrDone;
+  const isPlanMode = permissionStrategy === 'plan';
 
   const isCustomColor = !PRESET_COLORS.includes(color);
   const usedIcons = getUsedIcons(swimlanes, swimlane.id);
@@ -75,6 +76,7 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
       permission_strategy: permissionLocked ? undefined : permissionStrategy,
       auto_spawn: autoSpawnLocked ? undefined : autoSpawn,
       auto_command: isBacklogOrDone ? undefined : (autoCommand.trim() || null),
+      plan_exit_target_id: isPlanMode ? (planExitTargetId || null) : undefined,
     });
     onClose();
   };
@@ -290,30 +292,6 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
             <div className="flex-1 border-t border-edge-subtle" />
           </div>
 
-          {/* Permissions dropdown */}
-          <div>
-            <label className="text-xs text-fg-muted mb-1.5 block">Permissions</label>
-            <select
-              value={permissionStrategy ?? ''}
-              onChange={(e) => setPermissionStrategy(e.target.value ? e.target.value as PermissionMode : null)}
-              disabled={permissionLocked}
-              className="w-full appearance-none bg-surface border border-edge-input rounded px-3 py-1.5 text-sm text-fg focus:outline-none focus:border-accent disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <option value="">{PERMISSION_LABELS[globalPermissionMode]}</option>
-              {globalPermissionMode !== 'plan' && <option value="plan">Plan</option>}
-              {globalPermissionMode !== 'acceptEdits' && <option value="acceptEdits">Accept Edits</option>}
-              {globalPermissionMode !== 'default' && <option value="default">Default (Allowlist)</option>}
-              {globalPermissionMode !== 'bypass-permissions' && <option value="bypass-permissions">Bypass (Unsafe)</option>}
-            </select>
-            <p className="text-[11px] text-fg-faint mt-1">
-              {isPlanning
-                ? 'Locked to Plan for this column.'
-                : 'Override the global permission setting for agents in this column.'}
-            </p>
-          </div>
-
-          <div className="border-t border-edge-subtle" />
-
           {/* Auto-spawn toggle */}
           <div>
             <div className="flex items-center justify-between mb-1">
@@ -339,37 +317,76 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
             <p className="text-[11px] text-fg-faint mt-1">
               {isBacklogOrDone
                 ? 'Tasks in this column do not start agents.'
-                : isPlanning
-                  ? 'Starts an agent when tasks enter this column.'
-                  : 'Start an agent when a task enters this column.'}
+                : 'Start an agent when a task enters this column.'}
             </p>
           </div>
 
+          {/* Permissions dropdown */}
+          <div>
+            <label className="text-xs text-fg-muted mb-1.5 block">Permissions</label>
+            <select
+              value={permissionStrategy ?? ''}
+              onChange={(e) => setPermissionStrategy(e.target.value ? e.target.value as PermissionMode : null)}
+              disabled={permissionLocked}
+              className="w-full appearance-none bg-surface border border-edge-input rounded px-3 py-1.5 text-sm text-fg focus:outline-none focus:border-accent disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="">{PERMISSION_LABELS[globalPermissionMode]}</option>
+              {globalPermissionMode !== 'plan' && <option value="plan">Plan</option>}
+              {globalPermissionMode !== 'acceptEdits' && <option value="acceptEdits">Accept Edits</option>}
+              {globalPermissionMode !== 'default' && <option value="default">Default (Allowlist)</option>}
+              {globalPermissionMode !== 'bypass-permissions' && <option value="bypass-permissions">Bypass (Unsafe)</option>}
+            </select>
+            <p className="text-[11px] text-fg-faint mt-1">
+              Override the global permission setting for agents in this column.
+            </p>
+          </div>
+
+          {/* After planning dropdown (only for plan-mode columns) */}
+          {isPlanMode && (
+            <div>
+              <label className="text-xs text-fg-muted mb-1.5 block">After Plan Mode</label>
+              <select
+                value={planExitTargetId ?? ''}
+                onChange={(e) => setPlanExitTargetId(e.target.value || null)}
+                className="w-full appearance-none bg-surface border border-edge-input rounded px-3 py-1.5 text-sm text-fg focus:outline-none focus:border-accent"
+                data-testid="plan-exit-target"
+              >
+                <option value="">Nowhere — stay in column</option>
+                {swimlanes
+                  .filter((s) => s.id !== swimlane.id && s.role !== 'backlog' && s.role !== 'done')
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))
+                }
+              </select>
+              <p className="text-[11px] text-fg-faint mt-1">
+                Automatically moves the task when the agent exits Plan mode.
+              </p>
+            </div>
+          )}
+
           {/* Auto-command textarea (hidden for backlog/done — sessions don't run there) */}
           {!isBacklogOrDone && (
-            <>
-              <div className="border-t border-edge-subtle" />
-              <div>
-                <label className="text-xs text-fg-muted mb-1.5 block">Auto-command</label>
-                <textarea
-                  value={autoCommand}
-                  onChange={(e) => setAutoCommand(e.target.value)}
-                  rows={2}
-                  placeholder="/test, /review, or a prompt..."
-                  className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg font-mono placeholder-fg-faint focus:outline-none focus:border-accent resize-y"
-                  data-testid="auto-command-input"
-                />
-                <p className="text-[11px] text-fg-faint mt-1 flex items-center gap-1">
-                  Runs automatically when a task moves into this column
-                  <span
-                    title="Supports variables: {{title}}, {{description}}, {{branchName}}"
-                    className="inline-flex cursor-help text-fg-faint hover:text-fg-muted"
-                  >
-                    <Info size={12} />
-                  </span>
-                </p>
-              </div>
-            </>
+            <div>
+              <label className="text-xs text-fg-muted mb-1.5 block">Auto-command</label>
+              <textarea
+                value={autoCommand}
+                onChange={(e) => setAutoCommand(e.target.value)}
+                rows={2}
+                placeholder="/test, /review, or a prompt..."
+                className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg font-mono placeholder-fg-faint focus:outline-none focus:border-accent resize-y"
+                data-testid="auto-command-input"
+              />
+              <p className="text-[11px] text-fg-faint mt-1 flex items-center gap-1">
+                Runs automatically when a task moves into this column
+                <span
+                  title="Supports variables: {{title}}, {{description}}, {{branchName}}"
+                  className="inline-flex cursor-help text-fg-faint hover:text-fg-muted"
+                >
+                  <Info size={12} />
+                </span>
+              </p>
+            </div>
           )}
 
           {error && (

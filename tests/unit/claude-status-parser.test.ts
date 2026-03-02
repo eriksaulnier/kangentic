@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ClaudeStatusParser } from '../../src/main/agent/claude-status-parser';
+import { EventType } from '../../src/shared/types';
 
 describe('ClaudeStatusParser', () => {
   // -------------------------------------------------------------------------
@@ -254,14 +255,14 @@ describe('ClaudeStatusParser', () => {
     it('parses a valid event JSON line', () => {
       const line = JSON.stringify({
         ts: 1700000000,
-        type: 'tool_start',
+        type: EventType.ToolStart,
         tool: 'Read',
         detail: '/src/main.ts',
       });
       const event = ClaudeStatusParser.parseEvent(line);
       expect(event).not.toBeNull();
       expect(event!.ts).toBe(1700000000);
-      expect(event!.type).toBe('tool_start');
+      expect(event!.type).toBe(EventType.ToolStart);
       expect(event!.tool).toBe('Read');
       expect(event!.detail).toBe('/src/main.ts');
     });

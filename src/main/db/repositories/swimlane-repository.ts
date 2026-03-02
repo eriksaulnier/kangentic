@@ -14,6 +14,7 @@ interface SwimlaneRow {
   permission_strategy: string | null;
   auto_spawn: number;
   auto_command: string | null;
+  plan_exit_target_id: string | null;
   created_at: string;
 }
 
@@ -60,12 +61,13 @@ export class SwimlaneRepository {
       permission_strategy: input.permission_strategy ?? null,
       auto_spawn: input.auto_spawn ?? true,
       auto_command: input.auto_command ?? null,
+      plan_exit_target_id: input.plan_exit_target_id ?? null,
       created_at: now,
     };
 
     this.db.prepare(
-      'INSERT INTO swimlanes (id, name, role, position, color, icon, is_archived, permission_strategy, auto_spawn, auto_command, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(swimlane.id, swimlane.name, swimlane.role, swimlane.position, swimlane.color, swimlane.icon, swimlane.is_archived ? 1 : 0, swimlane.permission_strategy, swimlane.auto_spawn ? 1 : 0, swimlane.auto_command, swimlane.created_at);
+      'INSERT INTO swimlanes (id, name, role, position, color, icon, is_archived, permission_strategy, auto_spawn, auto_command, plan_exit_target_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(swimlane.id, swimlane.name, swimlane.role, swimlane.position, swimlane.color, swimlane.icon, swimlane.is_archived ? 1 : 0, swimlane.permission_strategy, swimlane.auto_spawn ? 1 : 0, swimlane.auto_command, swimlane.plan_exit_target_id, swimlane.created_at);
 
     return swimlane;
   }
@@ -83,10 +85,11 @@ export class SwimlaneRepository {
     if (input.permission_strategy !== undefined) updated.permission_strategy = input.permission_strategy;
     if (input.auto_spawn !== undefined) updated.auto_spawn = input.auto_spawn;
     if (input.auto_command !== undefined) updated.auto_command = input.auto_command;
+    if (input.plan_exit_target_id !== undefined) updated.plan_exit_target_id = input.plan_exit_target_id;
 
     this.db.prepare(
-      'UPDATE swimlanes SET name = ?, color = ?, icon = ?, position = ?, is_archived = ?, permission_strategy = ?, auto_spawn = ?, auto_command = ? WHERE id = ?'
-    ).run(updated.name, updated.color, updated.icon, updated.position, updated.is_archived ? 1 : 0, updated.permission_strategy, updated.auto_spawn ? 1 : 0, updated.auto_command, updated.id);
+      'UPDATE swimlanes SET name = ?, color = ?, icon = ?, position = ?, is_archived = ?, permission_strategy = ?, auto_spawn = ?, auto_command = ?, plan_exit_target_id = ? WHERE id = ?'
+    ).run(updated.name, updated.color, updated.icon, updated.position, updated.is_archived ? 1 : 0, updated.permission_strategy, updated.auto_spawn ? 1 : 0, updated.auto_command, updated.plan_exit_target_id, updated.id);
 
     return updated;
   }
@@ -118,7 +121,7 @@ export class SwimlaneRepository {
   }
 
   delete(id: string): void {
-    // Cannot delete columns with a role (backlog, planning, done)
+    // Cannot delete system columns (backlog, done)
     const lane = this.getById(id);
     if (lane && lane.role) {
       throw new Error(`Cannot delete the ${lane.role} column.`);
@@ -129,6 +132,8 @@ export class SwimlaneRepository {
       throw new Error('Cannot delete swimlane with tasks. Move or delete tasks first.');
     }
     this.db.prepare('DELETE FROM swimlane_transitions WHERE from_swimlane_id = ? OR to_swimlane_id = ?').run(id, id);
+    // Clear dangling plan_exit_target_id references
+    this.db.prepare('UPDATE swimlanes SET plan_exit_target_id = NULL WHERE plan_exit_target_id = ?').run(id);
     this.db.prepare('DELETE FROM swimlanes WHERE id = ?').run(id);
   }
 
@@ -144,6 +149,7 @@ export class SwimlaneRepository {
       permission_strategy: (row.permission_strategy as PermissionMode) ?? null,
       auto_spawn: Boolean(row.auto_spawn),
       auto_command: row.auto_command || null,
+      plan_exit_target_id: row.plan_exit_target_id || null,
       created_at: row.created_at,
     };
   }

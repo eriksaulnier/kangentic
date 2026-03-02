@@ -39,7 +39,7 @@ export interface TaskAttachment {
   created_at: string;
 }
 
-export type SwimlaneRole = 'backlog' | 'planning' | 'done';
+export type SwimlaneRole = 'backlog' | 'done';
 
 export interface Swimlane {
   id: string;
@@ -52,6 +52,7 @@ export interface Swimlane {
   permission_strategy: PermissionMode | null;
   auto_spawn: boolean;
   auto_command: string | null;
+  plan_exit_target_id: string | null;
   created_at: string;
 }
 
@@ -145,11 +146,98 @@ export interface SessionRecord {
 
 export type ActivityState = 'thinking' | 'idle';
 
+// === Typesafe Enums for Hook Events, Event Types, and Tool Names ===
+
+/** SessionEvent.type values (final values written to JSONL by event-bridge). */
+export const EventType = {
+  Prompt: 'prompt',
+  ToolStart: 'tool_start',
+  ToolEnd: 'tool_end',
+  Idle: 'idle',
+  Interrupted: 'interrupted',
+  SessionStart: 'session_start',
+  SessionEnd: 'session_end',
+  SubagentStart: 'subagent_start',
+  SubagentStop: 'subagent_stop',
+  Notification: 'notification',
+  Compact: 'compact',
+  TeammateIdle: 'teammate_idle',
+  TaskCompleted: 'task_completed',
+  ConfigChange: 'config_change',
+  WorktreeCreate: 'worktree_create',
+  WorktreeRemove: 'worktree_remove',
+} as const;
+export type EventType = (typeof EventType)[keyof typeof EventType];
+
+/** All Claude Code hook event names (settings.json keys). */
+export const HookEvent = {
+  // Tool lifecycle
+  PreToolUse: 'PreToolUse',
+  PostToolUse: 'PostToolUse',
+  PostToolUseFailure: 'PostToolUseFailure',
+  // Session lifecycle
+  SessionStart: 'SessionStart',
+  SessionEnd: 'SessionEnd',
+  // Agent stop
+  Stop: 'Stop',
+  SubagentStart: 'SubagentStart',
+  SubagentStop: 'SubagentStop',
+  // User interaction
+  UserPromptSubmit: 'UserPromptSubmit',
+  PermissionRequest: 'PermissionRequest',
+  Notification: 'Notification',
+  // Context management
+  PreCompact: 'PreCompact',
+  // Agent teams
+  TeammateIdle: 'TeammateIdle',
+  TaskCompleted: 'TaskCompleted',
+  // Configuration
+  ConfigChange: 'ConfigChange',
+  // Worktree operations
+  WorktreeCreate: 'WorktreeCreate',
+  WorktreeRemove: 'WorktreeRemove',
+} as const;
+export type HookEvent = (typeof HookEvent)[keyof typeof HookEvent];
+
+/** Claude Code tool names we detect/react to. */
+export const ClaudeTool = {
+  ExitPlanMode: 'ExitPlanMode',
+} as const;
+export type ClaudeTool = (typeof ClaudeTool)[keyof typeof ClaudeTool];
+
+/**
+ * Declarative mapping from EventType → ActivityState.
+ * `null` means the event does not change the activity state (log-only).
+ * `Record<EventType, ...>` ensures a compile error if a new EventType is
+ * added without a mapping.
+ */
+export const EventTypeActivity: Record<EventType, ActivityState | null> = {
+  // → thinking (agent actively working)
+  [EventType.ToolStart]: 'thinking',
+  [EventType.Prompt]: 'thinking',
+  [EventType.SubagentStart]: 'thinking',
+  [EventType.SubagentStop]: 'thinking',
+  [EventType.Compact]: 'thinking',
+  [EventType.WorktreeCreate]: 'thinking',
+  // → idle (agent waiting)
+  [EventType.Idle]: 'idle',
+  [EventType.Interrupted]: 'idle',
+  // → null (no state change, log-only)
+  [EventType.ToolEnd]: null,
+  [EventType.SessionStart]: null,
+  [EventType.SessionEnd]: null,
+  [EventType.Notification]: null,
+  [EventType.TeammateIdle]: null,
+  [EventType.TaskCompleted]: null,
+  [EventType.ConfigChange]: null,
+  [EventType.WorktreeRemove]: null,
+};
+
 // === Session Events (Claude Code Hooks → Activity Log) ===
 
 export interface SessionEvent {
   ts: number;
-  type: 'prompt' | 'tool_start' | 'tool_end' | 'idle' | 'interrupted';
+  type: EventType;
   tool?: string;    // for tool_start/tool_end/interrupted
   detail?: string;  // file path, command, etc.
 }
@@ -327,6 +415,7 @@ export interface SwimlaneCreateInput {
   permission_strategy?: PermissionMode | null;
   auto_spawn?: boolean;
   auto_command?: string | null;
+  plan_exit_target_id?: string | null;
 }
 
 export interface SwimlaneUpdateInput {
@@ -339,6 +428,7 @@ export interface SwimlaneUpdateInput {
   permission_strategy?: PermissionMode | null;
   auto_spawn?: boolean;
   auto_command?: string | null;
+  plan_exit_target_id?: string | null;
 }
 
 export interface ActionCreateInput {
@@ -392,6 +482,7 @@ export interface ElectronAPI {
     move: (input: TaskMoveInput) => Promise<void>;
     listArchived: () => Promise<Task[]>;
     unarchive: (input: TaskUnarchiveInput) => Promise<Task>;
+    onAutoMoved: (callback: (taskId: string, targetSwimlaneId: string, taskTitle: string) => void) => () => void;
   };
 
   // Attachments

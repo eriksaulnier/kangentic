@@ -149,4 +149,87 @@ describe('event-bridge', () => {
     runBridge('{}', []);
     expect(fs.existsSync(outputFile)).toBe(false);
   });
+
+  // --- New event types ---
+
+  it('session_start event', () => {
+    runBridge('{}', [outputFile, 'session_start']);
+    const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
+    expect(line.type).toBe('session_start');
+    expect(typeof line.ts).toBe('number');
+  });
+
+  it('session_end event', () => {
+    runBridge('{}', [outputFile, 'session_end']);
+    const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
+    expect(line.type).toBe('session_end');
+  });
+
+  it('subagent_start extracts agent_type', () => {
+    const stdin = JSON.stringify({ agent_type: 'Explore' });
+    runBridge(stdin, [outputFile, 'subagent_start']);
+    const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
+    expect(line.type).toBe('subagent_start');
+    expect(line.detail).toBe('Explore');
+  });
+
+  it('subagent_stop extracts agent_type', () => {
+    const stdin = JSON.stringify({ agent_type: 'Plan' });
+    runBridge(stdin, [outputFile, 'subagent_stop']);
+    const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
+    expect(line.type).toBe('subagent_stop');
+    expect(line.detail).toBe('Plan');
+  });
+
+  it('notification extracts message', () => {
+    const stdin = JSON.stringify({ message: 'Context getting full' });
+    runBridge(stdin, [outputFile, 'notification']);
+    const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
+    expect(line.type).toBe('notification');
+    expect(line.detail).toBe('Context getting full');
+  });
+
+  it('compact event', () => {
+    runBridge('{}', [outputFile, 'compact']);
+    const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
+    expect(line.type).toBe('compact');
+  });
+
+  it('teammate_idle extracts agent info', () => {
+    const stdin = JSON.stringify({ agent: 'agent-2' });
+    runBridge(stdin, [outputFile, 'teammate_idle']);
+    const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
+    expect(line.type).toBe('teammate_idle');
+    expect(line.detail).toBe('agent-2');
+  });
+
+  it('task_completed extracts task info', () => {
+    const stdin = JSON.stringify({ task: 'Fix login bug' });
+    runBridge(stdin, [outputFile, 'task_completed']);
+    const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
+    expect(line.type).toBe('task_completed');
+    expect(line.detail).toBe('Fix login bug');
+  });
+
+  it('config_change event', () => {
+    runBridge('{}', [outputFile, 'config_change']);
+    const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
+    expect(line.type).toBe('config_change');
+  });
+
+  it('worktree_create extracts name', () => {
+    const stdin = JSON.stringify({ name: 'feature-branch' });
+    runBridge(stdin, [outputFile, 'worktree_create']);
+    const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
+    expect(line.type).toBe('worktree_create');
+    expect(line.detail).toBe('feature-branch');
+  });
+
+  it('worktree_remove extracts path', () => {
+    const stdin = JSON.stringify({ path: '/tmp/worktree-1' });
+    runBridge(stdin, [outputFile, 'worktree_remove']);
+    const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
+    expect(line.type).toBe('worktree_remove');
+    expect(line.detail).toBe('/tmp/worktree-1');
+  });
 });

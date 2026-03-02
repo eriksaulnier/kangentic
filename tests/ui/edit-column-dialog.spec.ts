@@ -3,7 +3,8 @@
  * - Agent section divider
  * - Permission Strategy dropdown (per-column override)
  * - Auto-spawn toggle (per-column agent auto-start)
- * - Locked state for system columns (Backlog, Planning, Done)
+ * - Plan exit target dropdown (for plan-mode columns)
+ * - Locked state for system columns (Backlog, Done)
  */
 import { test, expect } from '@playwright/test';
 import { launchPage, waitForBoard, createProject } from './helpers';
@@ -84,29 +85,44 @@ test.describe('EditColumnDialog', () => {
     await closeDialog();
   });
 
-  test('Planning column has permissions locked to Plan', async () => {
+  test('Planning column has editable permissions set to Plan', async () => {
     await openEditDialog('Planning');
 
-    const select = page.locator('select').last();
-    await expect(select).toBeDisabled();
+    // Planning is now a regular column — permissions are editable
+    const select = page.locator('select').first();
+    await expect(select).toBeEnabled();
 
     const value = await select.inputValue();
     expect(value).toBe('plan');
 
-    // Should show explanation text
-    await expect(page.locator('text=Locked to Plan for this column.')).toBeVisible();
+    await closeDialog();
+  });
+
+  test('Planning column has editable auto-spawn ON', async () => {
+    await openEditDialog('Planning');
+
+    const toggle = page.locator('button[role="switch"]');
+    await expect(toggle).toBeEnabled();
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
 
     await closeDialog();
   });
 
-  test('Planning column has auto-spawn locked ON', async () => {
+  test('Planning column shows plan exit target dropdown', async () => {
     await openEditDialog('Planning');
 
-    const toggle = page.locator('button[role="switch"]');
-    await expect(toggle).toBeDisabled();
-    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+    const planExitSelect = page.locator('[data-testid="plan-exit-target"]');
+    await expect(planExitSelect).toBeVisible();
 
-    await expect(page.locator('text=Starts an agent when tasks enter this column.')).toBeVisible();
+    // Default target should be Executing
+    const options = await planExitSelect.locator('option').allTextContents();
+    expect(options).toContain('Nowhere — stay in column');
+    expect(options).toContain('Executing');
+
+    // Should not include current column, Backlog, or Done
+    expect(options).not.toContain('Planning');
+    expect(options).not.toContain('Backlog');
+    expect(options).not.toContain('Done');
 
     await closeDialog();
   });
@@ -140,9 +156,9 @@ test.describe('EditColumnDialog', () => {
   test('save persists permission_strategy and auto_spawn changes', async () => {
     await openEditDialog('Code Review');
 
-    // Change permissions to Plan
-    const select = page.locator('select').last();
-    await select.selectOption('plan');
+    // Change permissions to Plan (first select is the permissions dropdown)
+    const permSelect = page.locator('select').first();
+    await permSelect.selectOption('plan');
 
     // Toggle auto-spawn OFF
     const toggle = page.locator('button[role="switch"]');
@@ -157,15 +173,18 @@ test.describe('EditColumnDialog', () => {
     // Reopen and verify persisted values
     await openEditDialog('Code Review');
 
-    const selectAfter = page.locator('select').last();
-    const valueAfter = await selectAfter.inputValue();
+    const permSelectAfter = page.locator('select').first();
+    const valueAfter = await permSelectAfter.inputValue();
     expect(valueAfter).toBe('plan');
 
     const toggleAfter = page.locator('button[role="switch"]');
     await expect(toggleAfter).toHaveAttribute('aria-checked', 'false');
 
+    // Plan exit target dropdown should now be visible (since permissions = plan)
+    await expect(page.locator('[data-testid="plan-exit-target"]')).toBeVisible();
+
     // Restore original values so other tests aren't affected
-    await selectAfter.selectOption('');
+    await permSelectAfter.selectOption('');
     await toggleAfter.click();
     await page.locator('button:has-text("Save")').click();
     await page.waitForTimeout(300);
