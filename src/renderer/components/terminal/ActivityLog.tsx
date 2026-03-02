@@ -130,13 +130,18 @@ export function ActivityLog({ active, sessionIds, taskLabelMap }: ActivityLogPro
     return () => el.removeEventListener('scrollend', onEnd);
   }, []);
 
-  // Smooth-scroll back when switching to the Activity tab
+  // Instant-scroll to bottom when switching to the Activity tab
   // Also resets the smooth-scrolling guard — if a scroll was in progress
   // when the tab was hidden (display:none), scrollend won't fire.
   useEffect(() => {
     isSmoothScrollingRef.current = false;
     if (active && !autoScrollRef.current) {
-      requestAnimationFrame(() => smoothScrollToBottom());
+      autoScrollRef.current = true;
+      requestAnimationFrame(() => {
+        if (containerRef.current) {
+          containerRef.current.scrollTop = containerRef.current.scrollHeight;
+        }
+      });
     }
   }, [active]);
 
