@@ -300,6 +300,22 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
       ? 'w-[520px] h-[320px]'
       : 'w-[640px] max-h-[80vh]';
 
+  // Auto-save and exit edit mode when a session appears
+  const hadSessionContext = useRef(hasSessionContext);
+  const editingRef = useRef(isEditing);
+  const titleRef = useRef(title);
+  const descriptionRef = useRef(description);
+  editingRef.current = isEditing;
+  titleRef.current = title;
+  descriptionRef.current = description;
+  useEffect(() => {
+    if (!hadSessionContext.current && hasSessionContext && editingRef.current) {
+      updateTask({ id: task.id, title: titleRef.current, description: descriptionRef.current });
+      setIsEditing(false);
+    }
+    hadSessionContext.current = hasSessionContext;
+  }, [hasSessionContext, task.id, updateTask]);
+
   // Auto-expand textarea for no-session edit mode
   useEffect(() => {
     if (!isEditing || hasSessionContext) return;
@@ -532,13 +548,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
               {/* Edit */}
               <button
                 onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); setIsEditing(true); }}
-                disabled={isThinking}
-                className={`w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 ${
-                  isThinking
-                    ? 'text-fg-disabled cursor-not-allowed'
-                    : 'text-fg-tertiary hover:bg-surface-hover hover:text-fg'
-                }`}
-                title={isThinking ? 'Cannot edit while agent is thinking' : undefined}
+                className="w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 text-fg-tertiary hover:bg-surface-hover hover:text-fg"
               >
                 <Pencil size={14} />
                 Edit

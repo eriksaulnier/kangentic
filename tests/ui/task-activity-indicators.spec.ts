@@ -434,4 +434,122 @@ test.describe('Task Activity Indicators', () => {
       await browser.close();
     }
   });
+
+  test('auto-saves and exits edit mode when session appears', async () => {
+    // Custom pre-config: task in Backlog with NO session at all
+    const preConfig = `
+      window.__mockPreConfigure(function (state) {
+        var ts = new Date().toISOString();
+
+        state.projects.push({
+          id: '${PROJECT_ID}',
+          name: 'Activity Test',
+          path: '/mock/activity-test',
+          github_url: null,
+          default_agent: 'claude',
+          last_opened: ts,
+          created_at: ts,
+        });
+
+        state.DEFAULT_SWIMLANES.forEach(function (s, i) {
+          var id = i === 0 ? '${SWIMLANE_ID}' : state.uuid();
+          state.swimlanes.push({
+            id: id,
+            name: s.name,
+            role: s.role,
+            color: s.color,
+            icon: s.icon,
+            is_terminal: s.is_terminal,
+            permission_strategy: s.permission_strategy ?? null,
+            auto_spawn: s.auto_spawn ?? false,
+            position: i,
+            created_at: ts,
+          });
+        });
+
+        // No session pushed — task starts with no session context
+        state.tasks.push({
+          id: '${TASK_ID}',
+          title: 'Test Initializing Task',
+          description: '',
+          swimlane_id: '${SWIMLANE_ID}',
+          position: 0,
+          agent: null,
+          session_id: null,
+          worktree_path: null,
+          branch_name: null,
+          pr_number: null,
+          pr_url: null,
+          base_branch: null,
+          archived_at: null,
+          created_at: ts,
+          updated_at: ts,
+        });
+
+        return { currentProjectId: '${PROJECT_ID}' };
+      });
+    `;
+
+    const { browser, page } = await launchWithState(preConfig);
+
+    try {
+      await page.locator('[data-swimlane-name="Backlog"]').waitFor({ state: 'visible', timeout: 15000 });
+
+      // Click the card to open the detail dialog.
+      // Tasks with no session open directly in edit mode (initialEdit=true).
+      await page.locator('text=Test Initializing Task').first().click();
+      await page.waitForTimeout(300);
+
+      // Should already be in edit mode — title input visible
+      const titleInput = page.locator('.fixed input[type="text"]');
+      await expect(titleInput).toBeVisible();
+
+      // Fill in a new title
+      await titleInput.fill('Updated Title');
+
+      // Trigger resumeSession via the DEV-exposed Zustand store.
+      // This creates a session in the mock AND adds it to the session store,
+      // causing hasSessionContext to flip true → auto-save effect fires.
+      await page.evaluate(
+        `window.__zustandStores.session.getState().resumeSession('${TASK_ID}')`,
+      );
+
+      // Auto-save effect should exit edit mode and persist the new title.
+      // Heading visible (not input) with the updated text.
+      const heading = page.locator('.fixed h2:has-text("Updated Title")');
+      await expect(heading).toBeVisible({ timeout: 3000 });
+      await expect(titleInput).not.toBeVisible();
+    } finally {
+      await browser.close();
+    }
+  });
+
+  test('Edit button in kebab menu is enabled while agent is thinking', async () => {
+    const { browser, page } = await launchWithState(
+      makePreConfig({ sessionStatus: 'running', activity: 'thinking', withUsage: true })
+    );
+
+    try {
+      await page.locator('[data-swimlane-name="Backlog"]').waitFor({ state: 'visible', timeout: 15000 });
+
+      // Open task detail dialog
+      await page.locator('text=Test Initializing Task').first().click();
+      await page.waitForTimeout(300);
+
+      // Open kebab menu
+      await page.locator('[title="Actions"]').click();
+
+      // The Edit button should be present and enabled (not disabled)
+      const editButton = page.locator('button:has-text("Edit")').filter({ has: page.locator('.lucide-pencil') });
+      await expect(editButton).toBeVisible();
+      await expect(editButton).toBeEnabled();
+
+      // Click Edit — should enter edit mode (title input visible)
+      await editButton.click();
+      const titleInput = page.locator('.fixed input[type="text"]');
+      await expect(titleInput).toBeVisible();
+    } finally {
+      await browser.close();
+    }
+  });
 });

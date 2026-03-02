@@ -143,3 +143,12 @@ if (import.meta.hot) {
     useSessionStore.getState().syncSessions();
   });
 }
+
+// Dev-only: expose Zustand stores for UI test automation (Playwright page.evaluate).
+// @ts-expect-error — Vite defines import.meta.env; tsc doesn't support it
+if (import.meta.env.DEV) {
+  (window as unknown as Record<string, unknown>).__zustandStores = {
+    board: useBoardStore,
+    session: useSessionStore,
+  };
+}
