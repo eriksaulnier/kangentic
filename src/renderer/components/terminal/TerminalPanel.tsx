@@ -42,7 +42,8 @@ export function TerminalPanel({ collapsed = false, showContent = true, onToggleC
       : activeSessions.some((s) => s.id === activeSessionId)
         ? activeSessionId
         : activeSessions.length > 0
-          ? activeSessions[0].id
+          ? (activeSessions.find((s) => sessionActivity[s.id] === 'idle')?.id
+              ?? activeSessions[0].id)
           : null;
 
   // Sync the store when the effective ID differs (stale or first auto-select)
