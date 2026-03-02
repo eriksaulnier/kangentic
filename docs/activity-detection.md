@@ -65,6 +65,7 @@ The SessionManager derives thinking/idle state from event types using this mappi
 |------------|---------------|-----------|
 | `tool_start` | **thinking** | Agent is actively executing a tool |
 | `prompt` | **thinking** | Agent received input and will start processing |
+| `notification` | **thinking** | Agent sent a notification; indicates active processing |
 | `tool_end` | *(no change)* | Another tool_start typically follows immediately |
 | `tool_failure` | *(no change)* | Agent continues thinking after a failure |
 | `idle` | **idle** | Agent stopped, hit a permission wall, or asked a question |

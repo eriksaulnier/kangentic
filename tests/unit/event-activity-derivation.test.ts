@@ -17,7 +17,7 @@
  *   tool_end        → no change
  *   session_start   → no change
  *   session_end     → no change
- *   notification    → no change
+ *   notification    → thinking
  *   teammate_idle   → no change
  *   task_completed  → no change
  *   config_change   → no change
@@ -492,20 +492,15 @@ describe('Event-derived activity state', () => {
     expect(statesAfter).toHaveLength(0);
   });
 
-  it('notification does not change activity state', async () => {
+  it('notification event emits thinking activity', async () => {
     const { session, eventsPath } = await spawnWithEvents();
-
-    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
-    await waitForWatcher();
-    expect(manager.getActivityCache()[session.id]).toBe('thinking');
-
-    const statesAfter = collectActivity(manager, session.id);
+    const states = collectActivity(manager, session.id);
 
     appendEvent(eventsPath, { ts: Date.now(), type: EventType.Notification, detail: 'Context getting full' });
     await waitForWatcher();
 
+    expect(states).toContain('thinking');
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
-    expect(statesAfter).toHaveLength(0);
   });
 
   it('teammate_idle does not change activity state', async () => {

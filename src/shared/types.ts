@@ -219,6 +219,7 @@ export const EventTypeActivity: Record<EventType, ActivityState | null> = {
   [EventType.SubagentStop]: 'thinking',
   [EventType.Compact]: 'thinking',
   [EventType.WorktreeCreate]: 'thinking',
+  [EventType.Notification]: 'thinking',
   // → idle (agent waiting)
   [EventType.Idle]: 'idle',
   [EventType.Interrupted]: 'idle',
@@ -226,7 +227,6 @@ export const EventTypeActivity: Record<EventType, ActivityState | null> = {
   [EventType.ToolEnd]: null,
   [EventType.SessionStart]: null,
   [EventType.SessionEnd]: null,
-  [EventType.Notification]: null,
   [EventType.TeammateIdle]: null,
   [EventType.TaskCompleted]: null,
   [EventType.ConfigChange]: null,
