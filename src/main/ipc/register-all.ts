@@ -483,7 +483,7 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
           input.id, existing.branch_name, input.title,
         );
         if (newBranchName) {
-          console.log(`[TASK_UPDATE] Branch renamed: ${existing.branch_name} → ${newBranchName}`);
+          console.log(`[TASK_UPDATE] Branch renamed: ${existing.branch_name} -> ${newBranchName}`);
           input.branch_name = newBranchName;
         } else {
           console.log(`[TASK_UPDATE] Branch rename skipped (same slug or failed) for ${existing.branch_name}`);
@@ -951,7 +951,7 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
       if (!mainWindow.isDestroyed()) {
         mainWindow.webContents.send(IPC.TASK_AUTO_MOVED, task.id, target.id, task.title);
       }
-      console.log(`[plan-exit] Auto-moved "${task.title}" → "${target.name}"`);
+      console.log(`[plan-exit] Auto-moved "${task.title}" -> "${target.name}"`);
     } catch (err) {
       console.error('[plan-exit] Auto-move failed:', err);
     }

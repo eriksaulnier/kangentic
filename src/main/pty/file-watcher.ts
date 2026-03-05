@@ -21,6 +21,7 @@ export class FileWatcher {
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private lastWatcherFireTime: number;
   private closed = false;
+  private hasLoggedStaleRecovery = false;
 
   private readonly filePath: string;
   private readonly onChange: () => void;
@@ -74,6 +75,7 @@ export class FileWatcher {
   private onFileChange = (): void => {
     if (this.closed) return;
     this.lastWatcherFireTime = Date.now();
+    this.hasLoggedStaleRecovery = false;
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => this.onChange(), this.debounceMs);
   };
@@ -110,7 +112,10 @@ export class FileWatcher {
       if (this.closed) return;
       const timeSinceLastFire = Date.now() - this.lastWatcherFireTime;
       if (this.isStale() && timeSinceLastFire > this.staleThresholdMs) {
-        console.warn(`[WATCHER] ${this.label} stale (${Math.round(timeSinceLastFire / 1000)}s since last fire). Recovering.`);
+        if (!this.hasLoggedStaleRecovery) {
+          console.warn(`[WATCHER] ${this.label} stale (${Math.round(timeSinceLastFire / 1000)}s since last fire). Recovering.`);
+          this.hasLoggedStaleRecovery = true;
+        }
         this.onChange();
         this.restartWatcher();
       }
@@ -124,6 +129,5 @@ export class FileWatcher {
     }
     this.lastWatcherFireTime = Date.now();
     this.setupWatcher();
-    console.warn(`[WATCHER] ${this.label} watcher restarted`);
   }
 }
