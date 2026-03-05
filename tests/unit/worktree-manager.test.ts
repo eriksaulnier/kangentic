@@ -516,4 +516,13 @@ describe('isKangenticWorktree', () => {
     expect(isKangenticWorktree('C:/Users/dev/project/.kangentic/worktrees/fix-bug')).toBe(true);
     expect(isKangenticWorktree('/home/dev/project\\.kangentic\\worktrees\\fix-bug')).toBe(true);
   });
+
+  it('returns false for path nested INSIDE a worktree checkout (regression)', () => {
+    expect(isKangenticWorktree(
+      'C:\\Users\\dev\\kangentic\\.kangentic\\worktrees\\my-branch\\tests\\.tmp\\test-project',
+    )).toBe(false);
+    expect(isKangenticWorktree(
+      '/home/dev/kangentic/.kangentic/worktrees/my-branch/tests/.tmp/test-project',
+    )).toBe(false);
+  });
 });

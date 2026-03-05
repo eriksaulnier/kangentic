@@ -23,10 +23,20 @@ export function isInsideWorktree(projectPath: string): boolean {
   }
 }
 
-/** Check whether the project path lives inside a Kangentic-managed worktree directory. */
+/**
+ * Check whether the project path IS a Kangentic-managed worktree checkout.
+ *
+ * A preview project's path looks like `<parent>/.kangentic/worktrees/<slug>`.
+ * We check that the immediate parent dir is `worktrees` and its parent is
+ * `.kangentic`. This avoids false positives when the app itself runs from
+ * inside a worktree (e.g. the CWD contains `.kangentic/worktrees/` early
+ * in the path, but the project isn't itself a preview worktree).
+ */
 export function isKangenticWorktree(projectPath: string): boolean {
-  const normalized = path.normalize(projectPath).replace(/\\/g, '/');
-  return normalized.includes('/.kangentic/worktrees/');
+  const normalized = path.normalize(projectPath);
+  const parentDir = path.basename(path.dirname(normalized));
+  const grandparentDir = path.basename(path.dirname(path.dirname(normalized)));
+  return parentDir === 'worktrees' && grandparentDir === '.kangentic';
 }
 
 /** Check whether a file is tracked by git (committed or staged). */
