@@ -3,6 +3,7 @@ import path from 'node:path';
 import { PATHS, ensureDirs } from './paths';
 import type { AppConfig } from '../../shared/types';
 import { DEFAULT_CONFIG } from '../../shared/types';
+import { deepMerge } from '../../shared/object-utils';
 
 export class ConfigManager {
   private config: AppConfig | null = null;
@@ -14,7 +15,7 @@ export class ConfigManager {
     try {
       const raw = fs.readFileSync(PATHS.configFile, 'utf-8');
       const parsed = JSON.parse(raw);
-      this.config = this.merge(DEFAULT_CONFIG, parsed);
+      this.config = deepMerge(DEFAULT_CONFIG, parsed);
     } catch {
       this.config = { ...DEFAULT_CONFIG };
     }
@@ -31,7 +32,7 @@ export class ConfigManager {
 
   save(partial: Partial<AppConfig>): void {
     const current = this.load();
-    this.config = this.merge(current, partial);
+    this.config = deepMerge(current, partial);
     ensureDirs();
     fs.writeFileSync(PATHS.configFile, JSON.stringify(this.config, null, 2));
   }
@@ -60,20 +61,6 @@ export class ConfigManager {
     const overrides = this.loadProjectOverrides(projectPath);
     if (!overrides) return global;
 
-    return this.merge(global, overrides);
-  }
-
-  private merge<T extends Record<string, any>>(base: T, overrides: Partial<T>): T {
-    const result = { ...base };
-    for (const [key, value] of Object.entries(overrides)) {
-      if (value !== undefined && value !== null) {
-        if (typeof value === 'object' && !Array.isArray(value) && typeof (result as any)[key] === 'object') {
-          (result as any)[key] = this.merge((result as any)[key], value);
-        } else {
-          (result as any)[key] = value;
-        }
-      }
-    }
-    return result;
+    return deepMerge(global, overrides);
   }
 }

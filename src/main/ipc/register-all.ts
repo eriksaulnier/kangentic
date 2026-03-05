@@ -958,7 +958,8 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
   });
 
   // === Config ===
-  ipcMain.handle(IPC.CONFIG_GET, () => configManager.load());
+  ipcMain.handle(IPC.CONFIG_GET, () => configManager.getEffectiveConfig(currentProjectPath || undefined));
+  ipcMain.handle(IPC.CONFIG_GET_GLOBAL, () => configManager.load());
 
   ipcMain.handle(IPC.CONFIG_SET, (_, config) => {
     configManager.save(config);
@@ -976,6 +977,18 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.CONFIG_SET_PROJECT, (_, overrides) => {
     if (!currentProjectPath) throw new Error('No project open');
     configManager.saveProjectOverrides(currentProjectPath, overrides);
+  });
+
+  ipcMain.handle(IPC.CONFIG_GET_PROJECT_BY_PATH, (_, projectPath: string) => {
+    const known = projectRepo.list().some((p) => p.path === projectPath);
+    if (!known) throw new Error('Unknown project path');
+    return configManager.loadProjectOverrides(projectPath);
+  });
+
+  ipcMain.handle(IPC.CONFIG_SET_PROJECT_BY_PATH, (_, projectPath: string, overrides) => {
+    const known = projectRepo.list().some((p) => p.path === projectPath);
+    if (!known) throw new Error('Unknown project path');
+    configManager.saveProjectOverrides(projectPath, overrides);
   });
 
   // === Claude ===

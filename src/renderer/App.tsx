@@ -39,6 +39,7 @@ export function App() {
   useEffect(() => {
     if (currentProject) {
       loadBoard();
+      loadConfig(); // Re-fetch effective config (global + project overrides)
       useSessionStore.getState().syncSessions().then(() => {
         useSessionStore.getState().markIdleSessionsSeen(currentProject.id);
       });

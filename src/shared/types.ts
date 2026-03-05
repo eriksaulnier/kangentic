@@ -306,6 +306,11 @@ export const NAMED_THEMES: { id: ThemeMode; label: string; base: 'dark' | 'light
   { id: 'peach', label: 'Peach', base: 'light' },
 ];
 
+/** Recursively makes all properties optional. Arrays are kept whole (not element-partial). */
+export type DeepPartial<T> = {
+  [P in keyof T]?: T[P] extends (infer U)[] ? U[] : T[P] extends object ? DeepPartial<T[P]> : T[P];
+};
+
 export interface AppConfig {
   theme: ThemeMode;
   sidebarVisible: boolean;
@@ -342,6 +347,18 @@ export interface AppConfig {
   autoFocusIdleSession: boolean;
   notifyIdleOnInactiveProject: boolean;
 }
+
+/** Setting paths that cannot be overridden per-project (global-only). */
+export const GLOBAL_ONLY_PATHS = new Set([
+  'claude.maxConcurrentSessions',
+  'claude.queueOverflow',
+  'claude.cliPath',
+  'sidebarVisible',
+  'boardLayout',
+  'sidebar.width',
+  'terminal.panelHeight',
+  'terminal.showPreview',
+]);
 
 export const DEFAULT_CONFIG: AppConfig = {
   theme: 'dark',
@@ -553,9 +570,12 @@ export interface ElectronAPI {
   // Config
   config: {
     get: () => Promise<AppConfig>;
-    set: (config: Partial<AppConfig>) => Promise<void>;
-    getProjectOverrides: () => Promise<Partial<AppConfig> | null>;
-    setProjectOverrides: (overrides: Partial<AppConfig>) => Promise<void>;
+    getGlobal: () => Promise<AppConfig>;
+    set: (config: DeepPartial<AppConfig>) => Promise<void>;
+    getProjectOverrides: () => Promise<DeepPartial<AppConfig> | null>;
+    setProjectOverrides: (overrides: DeepPartial<AppConfig>) => Promise<void>;
+    getProjectOverridesByPath: (projectPath: string) => Promise<DeepPartial<AppConfig> | null>;
+    setProjectOverridesByPath: (projectPath: string, overrides: DeepPartial<AppConfig>) => Promise<void>;
   };
 
   // Claude detection

@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Bot, Check, ChevronDown, CircleAlert, GitBranch, Palette, SlidersHorizontal, Terminal, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, CircleAlert, GitBranch, Lock, Palette, RotateCcw, SlidersHorizontal, Terminal, X } from 'lucide-react';
 import { useConfigStore } from '../../stores/config-store';
+import { useProjectStore } from '../../stores/project-store';
 import { BranchPicker } from '../dialogs/BranchPicker';
-import type { PermissionMode, ThemeMode } from '../../../shared/types';
-import { NAMED_THEMES } from '../../../shared/types';
+import { ScopeSelector } from './ScopeSelector';
+import type { AppConfig, DeepPartial, PermissionMode, ThemeMode } from '../../../shared/types';
+import { GLOBAL_ONLY_PATHS, NAMED_THEMES } from '../../../shared/types';
+import { deepMergeConfig } from '../../../shared/object-utils';
 
 type Phase = 'entering' | 'visible' | 'exiting';
 type SettingsTab = 'appearance' | 'terminal' | 'agent' | 'git' | 'behavior';
@@ -17,12 +20,22 @@ const tabs: Array<{ id: SettingsTab; label: string; icon: React.ElementType }> =
 ];
 
 export function SettingsPanel() {
-  const config = useConfigStore((s) => s.config);
+  const globalConfig = useConfigStore((s) => s.globalConfig);
   const updateConfig = useConfigStore((s) => s.updateConfig);
   const claudeInfo = useConfigStore((s) => s.claudeInfo);
   const detectClaude = useConfigStore((s) => s.detectClaude);
   const setSettingsOpen = useConfigStore((s) => s.setSettingsOpen);
   const settingsInitialTab = useConfigStore((s) => s.settingsInitialTab);
+  const settingsScope = useConfigStore((s) => s.settingsScope);
+  const settingsScopeProjectPath = useConfigStore((s) => s.settingsScopeProjectPath);
+  const setSettingsScope = useConfigStore((s) => s.setSettingsScope);
+  const projectOverrides = useConfigStore((s) => s.projectOverrides);
+  const updateProjectOverride = useConfigStore((s) => s.updateProjectOverride);
+  const removeProjectOverride = useConfigStore((s) => s.removeProjectOverride);
+  const resetAllProjectOverrides = useConfigStore((s) => s.resetAllProjectOverrides);
+  const isOverridden = useConfigStore((s) => s.isOverridden);
+  const projects = useProjectStore((s) => s.projects);
+  const openProject = useProjectStore((s) => s.openProject);
   const [shells, setShells] = useState<Array<{ name: string; path: string }>>([]);
   const [phase, setPhase] = useState<Phase>('entering');
   const [activeTab, setActiveTab] = useState<SettingsTab>(
@@ -66,6 +79,32 @@ export function SettingsPanel() {
 
   const inputClass = 'bg-surface-hover border border-edge-input rounded px-3 py-1.5 text-sm text-fg w-full focus:outline-none focus:border-accent';
 
+  const isProjectScope = settingsScope === 'project';
+  const displayConfig = isProjectScope && projectOverrides
+    ? deepMergeConfig(globalConfig, projectOverrides as Record<string, unknown>)
+    : globalConfig;
+
+  /** Update handler: routes to project override or global config. */
+  const handleUpdate = (partial: DeepPartial<AppConfig>) => {
+    if (isProjectScope) {
+      updateProjectOverride(partial);
+    } else {
+      updateConfig(partial);
+    }
+  };
+
+  /** Shorthand for the 4 scope-related props every SettingRow needs. */
+  const settingProps = (keyPath: string) => ({
+    scope: settingsScope,
+    globalOnly: GLOBAL_ONLY_PATHS.has(keyPath),
+    isOverridden: isProjectScope && isOverridden(keyPath),
+    onReset: () => removeProjectOverride(keyPath),
+  });
+
+  /** Whether overrides contain any keys (for showing reset-all). */
+  const hasAnyOverrides = isProjectScope && projectOverrides != null
+    && Object.keys(projectOverrides).length > 0;
+
   return (
     <div
       className="fixed inset-0 bg-black/50 z-50"
@@ -84,7 +123,17 @@ export function SettingsPanel() {
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-edge flex-shrink-0">
-          <h2 className="text-base font-semibold text-fg">Settings</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-fg">Settings</h2>
+            <span className="text-fg-faint select-none">—</span>
+            <ScopeSelector
+              scope={settingsScope}
+              scopeProjectPath={settingsScopeProjectPath}
+              projects={projects}
+              onSelectGlobal={() => setSettingsScope('global')}
+              onSelectProject={(projectId, projectPath) => { openProject(projectId); setSettingsScope('project', projectPath); }}
+            />
+          </div>
           <button
             onClick={requestClose}
             className="p-1.5 text-fg-faint hover:text-fg-tertiary hover:bg-surface-hover rounded transition-colors"
@@ -121,10 +170,10 @@ export function SettingsPanel() {
           <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
             {activeTab === 'appearance' && (
               <>
-                <SettingRow label="Theme" description="Color scheme for the interface">
+                <SettingRow label="Theme" description="Color scheme for the interface" {...settingProps('theme')}>
                   <Select
-                    value={config.theme}
-                    onChange={(e) => updateConfig({ theme: e.target.value as ThemeMode })}
+                    value={displayConfig.theme}
+                    onChange={(e) => handleUpdate({ theme: e.target.value as ThemeMode })}
                   >
                     <optgroup label="Standard">
                       <option value="dark">Dark</option>
@@ -147,10 +196,10 @@ export function SettingsPanel() {
 
             {activeTab === 'terminal' && (
               <>
-                <SettingRow label="Shell" description="Terminal shell used for agent sessions">
+                <SettingRow label="Shell" description="Terminal shell used for agent sessions" {...settingProps('terminal.shell')}>
                   <Select
-                    value={config.terminal.shell || ''}
-                    onChange={(e) => updateConfig({ terminal: { ...config.terminal, shell: e.target.value || null } })}
+                    value={displayConfig.terminal.shell || ''}
+                    onChange={(e) => handleUpdate({ terminal: { shell: e.target.value || null } })}
                   >
                     <option value="">Auto-detect</option>
                     {shells.map((s) => (
@@ -158,21 +207,21 @@ export function SettingsPanel() {
                     ))}
                   </Select>
                 </SettingRow>
-                <SettingRow label="Font Size" description="Terminal text size in pixels">
+                <SettingRow label="Font Size" description="Terminal text size in pixels" {...settingProps('terminal.fontSize')}>
                   <input
                     type="number"
-                    value={config.terminal.fontSize}
-                    onChange={(e) => updateConfig({ terminal: { ...config.terminal, fontSize: Number(e.target.value) } })}
+                    value={displayConfig.terminal.fontSize}
+                    onChange={(e) => handleUpdate({ terminal: { fontSize: Number(e.target.value) } })}
                     min={8}
                     max={32}
                     className={inputClass}
                   />
                 </SettingRow>
-                <SettingRow label="Font Family" description="CSS font-family for the terminal">
+                <SettingRow label="Font Family" description="CSS font-family for the terminal" {...settingProps('terminal.fontFamily')}>
                   <input
                     type="text"
-                    value={config.terminal.fontFamily}
-                    onChange={(e) => updateConfig({ terminal: { ...config.terminal, fontFamily: e.target.value } })}
+                    value={displayConfig.terminal.fontFamily}
+                    onChange={(e) => handleUpdate({ terminal: { fontFamily: e.target.value } })}
                     className={inputClass}
                   />
                 </SettingRow>
@@ -181,41 +230,41 @@ export function SettingsPanel() {
 
             {activeTab === 'agent' && (
               <>
-                <SettingRow label="Permissions" description="How Claude handles tool approvals">
+                <SettingRow label="Permissions" description="How Claude handles tool approvals" {...settingProps('claude.permissionMode')}>
                   <Select
-                    value={config.claude.permissionMode}
-                    onChange={(e) => updateConfig({ claude: { ...config.claude, permissionMode: e.target.value as PermissionMode } })}
+                    value={displayConfig.claude.permissionMode}
+                    onChange={(e) => handleUpdate({ claude: { permissionMode: e.target.value as PermissionMode } })}
                   >
                     <option value="default">Default (Allowlist)</option>
                     <option value="acceptEdits">Accept Edits</option>
                     <option value="bypass-permissions">Bypass (Unsafe)</option>
                   </Select>
                 </SettingRow>
-                <SettingRow label="Max Concurrent Sessions" description="Limit how many agents can run at the same time">
+                <SettingRow label="Max Concurrent Sessions" description="Limit how many agents can run at the same time" {...settingProps('claude.maxConcurrentSessions')}>
                   <input
                     type="number"
-                    value={config.claude.maxConcurrentSessions}
-                    onChange={(e) => updateConfig({ claude: { ...config.claude, maxConcurrentSessions: Number(e.target.value) } })}
+                    value={displayConfig.claude.maxConcurrentSessions}
+                    onChange={(e) => handleUpdate({ claude: { maxConcurrentSessions: Number(e.target.value) } })}
                     min={1}
                     max={20}
                     className={inputClass}
                   />
                 </SettingRow>
-                <SettingRow label="When Max Sessions Reached" description="How new agent requests are handled when all slots are in use">
+                <SettingRow label="When Max Sessions Reached" description="How new agent requests are handled when all slots are in use" {...settingProps('claude.queueOverflow')}>
                   <Select
-                    value={config.claude.queueOverflow}
-                    onChange={(e) => updateConfig({ claude: { ...config.claude, queueOverflow: e.target.value as 'queue' | 'reject' } })}
+                    value={displayConfig.claude.queueOverflow}
+                    onChange={(e) => handleUpdate({ claude: { queueOverflow: e.target.value as 'queue' | 'reject' } })}
                   >
                     <option value="queue">Queue</option>
                     <option value="reject">Reject</option>
                   </Select>
                 </SettingRow>
-                <SettingRow label="CLI Path" description="Path to Claude CLI binary (auto-detected if empty)">
+                <SettingRow label="CLI Path" description="Path to Claude CLI binary (auto-detected if empty)" {...settingProps('claude.cliPath')}>
                   <div className="relative">
                     <input
                       type="text"
-                      value={config.claude.cliPath || ''}
-                      onChange={(e) => updateConfig({ claude: { ...config.claude, cliPath: e.target.value || null } })}
+                      value={displayConfig.claude.cliPath || ''}
+                      onChange={(e) => handleUpdate({ claude: { cliPath: e.target.value || null } })}
                       placeholder={claudeInfo?.found ? (claudeInfo.path ?? undefined) : 'Not found — enter path manually'}
                       className={`${inputClass} pr-8 ${claudeInfo?.found ? 'placeholder-fg-muted' : 'placeholder-red-400/70'}`}
                     />
@@ -233,43 +282,43 @@ export function SettingsPanel() {
 
             {activeTab === 'git' && (
               <>
-                <SettingRow label="Enable Worktrees" description="Create git worktrees for agent tasks">
+                <SettingRow label="Enable Worktrees" description="Create git worktrees for agent tasks" {...settingProps('git.worktreesEnabled')}>
                   <ToggleSwitch
-                    checked={config.git.worktreesEnabled}
-                    onChange={(v) => updateConfig({ git: { ...config.git, worktreesEnabled: v } })}
+                    checked={displayConfig.git.worktreesEnabled}
+                    onChange={(v) => handleUpdate({ git: { worktreesEnabled: v } })}
                   />
                 </SettingRow>
-                <SettingRow label="Auto-cleanup" description="Remove worktrees when tasks complete">
+                <SettingRow label="Auto-cleanup" description="Remove worktrees when tasks complete" {...settingProps('git.autoCleanup')}>
                   <ToggleSwitch
-                    checked={config.git.autoCleanup}
-                    onChange={(v) => updateConfig({ git: { ...config.git, autoCleanup: v } })}
+                    checked={displayConfig.git.autoCleanup}
+                    onChange={(v) => handleUpdate({ git: { autoCleanup: v } })}
                   />
                 </SettingRow>
-                <SettingRow label="Default Base Branch" description="Branch to create worktrees from">
+                <SettingRow label="Default Base Branch" description="Branch to create worktrees from" {...settingProps('git.defaultBaseBranch')}>
                   <BranchPicker
                     variant="input"
-                    value={config.git.defaultBaseBranch}
+                    value={displayConfig.git.defaultBaseBranch}
                     defaultBranch="main"
-                    onChange={(branch) => updateConfig({ git: { ...config.git, defaultBaseBranch: branch } })}
+                    onChange={(branch) => handleUpdate({ git: { defaultBaseBranch: branch } })}
                   />
                 </SettingRow>
-                <SettingRow label="Copy Files" description="Additional files copied into each worktree">
+                <SettingRow label="Copy Files" description="Additional files copied into each worktree" {...settingProps('git.copyFiles')}>
                   <input
                     type="text"
-                    value={config.git.copyFiles.join(', ')}
+                    value={displayConfig.git.copyFiles.join(', ')}
                     onChange={(e) => {
                       const files = e.target.value.split(',').map((f) => f.trim()).filter(Boolean);
-                      updateConfig({ git: { ...config.git, copyFiles: files } });
+                      handleUpdate({ git: { copyFiles: files } });
                     }}
                     placeholder=".env, .env.local"
                     className={`${inputClass} placeholder-fg-faint`}
                   />
                 </SettingRow>
-                <SettingRow label="Post-Worktree Script" description="Shell script to run after worktree creation">
+                <SettingRow label="Post-Worktree Script" description="Shell script to run after worktree creation" {...settingProps('git.initScript')}>
                   <input
                     type="text"
-                    value={config.git.initScript || ''}
-                    onChange={(e) => updateConfig({ git: { ...config.git, initScript: e.target.value || null } })}
+                    value={displayConfig.git.initScript || ''}
+                    onChange={(e) => handleUpdate({ git: { initScript: e.target.value || null } })}
                     placeholder="npm install"
                     className={`${inputClass} placeholder-fg-faint`}
                   />
@@ -279,19 +328,24 @@ export function SettingsPanel() {
 
             {activeTab === 'behavior' && (
               <>
-                <SettingRow label="Skip Task Delete Confirmation" description="Delete tasks immediately without a confirmation dialog">
+                <SettingRow label="Skip Task Delete Confirmation" description="Delete tasks immediately without a confirmation dialog" {...settingProps('skipDeleteConfirm')}>
                   <ToggleSwitch
-                    checked={config.skipDeleteConfirm}
-                    onChange={(v) => updateConfig({ skipDeleteConfirm: v })}
+                    checked={displayConfig.skipDeleteConfirm}
+                    onChange={(v) => handleUpdate({ skipDeleteConfirm: v })}
                   />
                 </SettingRow>
-                <SettingRow label="Auto-Focus Idle Sessions" description="Automatically switch the bottom panel to the most recently idle session">
+                <SettingRow label="Auto-Focus Idle Sessions" description="Automatically switch the bottom panel to the most recently idle session" {...settingProps('autoFocusIdleSession')}>
                   <ToggleSwitch
-                    checked={config.autoFocusIdleSession}
-                    onChange={(v) => updateConfig({ autoFocusIdleSession: v })}
+                    checked={displayConfig.autoFocusIdleSession}
+                    onChange={(v) => handleUpdate({ autoFocusIdleSession: v })}
                   />
                 </SettingRow>
               </>
+            )}
+
+            {/* Reset all project overrides */}
+            {isProjectScope && hasAnyOverrides && (
+              <ResetOverridesFooter onReset={resetAllProjectOverrides} />
             )}
           </div>
         </div>
@@ -306,16 +360,44 @@ function SettingRow({
   label,
   description,
   children,
+  scope,
+  globalOnly,
+  isOverridden,
+  onReset,
 }: {
   label: string;
   description: string;
   children: React.ReactNode;
+  scope?: 'global' | 'project';
+  globalOnly?: boolean;
+  isOverridden?: boolean;
+  onReset?: () => void;
 }) {
+  const isProjectScope = scope === 'project';
+  const isGlobalOnly = isProjectScope && globalOnly;
+
   return (
-    <div className="space-y-1.5">
-      <div>
-        <div className="text-sm font-medium text-fg-secondary">{label}</div>
-        <div className="text-xs text-fg-faint">{description}</div>
+    <div className={`space-y-1.5 ${isGlobalOnly ? 'opacity-40 pointer-events-none' : ''}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-1.5 text-sm font-medium text-fg-secondary">
+            {isGlobalOnly && <Lock size={13} className="text-fg-faint flex-shrink-0" />}
+            {label}
+          </div>
+          <div className="text-xs text-fg-faint">
+            {description}
+          </div>
+        </div>
+        {isOverridden && onReset && (
+          <button
+            onClick={onReset}
+            title="Reset to global default"
+            className="p-1 text-fg-faint hover:text-accent rounded transition-colors flex-shrink-0 mt-0.5"
+            data-testid="setting-reset"
+          >
+            <RotateCcw size={14} />
+          </button>
+        )}
       </div>
       {children}
     </div>
@@ -334,6 +416,41 @@ function Select({ children, ...props }: React.SelectHTMLAttributes<HTMLSelectEle
         {children}
       </select>
       <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-muted pointer-events-none" />
+    </div>
+  );
+}
+
+/* ── Helper: Reset Overrides Footer ── */
+
+function ResetOverridesFooter({ onReset }: { onReset: () => void }) {
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  return (
+    <div className="pt-4 border-t border-edge">
+      {showConfirm ? (
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-fg-muted">Reset all project overrides to global defaults?</span>
+          <button
+            onClick={() => { onReset(); setShowConfirm(false); }}
+            className="text-xs text-red-400 hover:text-red-300 font-medium"
+          >
+            Confirm
+          </button>
+          <button
+            onClick={() => setShowConfirm(false)}
+            className="text-xs text-fg-muted hover:text-fg-secondary"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowConfirm(true)}
+          className="text-xs text-fg-muted hover:text-fg-secondary transition-colors"
+        >
+          Reset all project overrides
+        </button>
+      )}
     </div>
   );
 }

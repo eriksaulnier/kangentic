@@ -74,7 +74,7 @@ test.describe('Settings Panel', () => {
     await openSettings();
     await page.locator('button:has-text("Agent")').click();
 
-    const select = page.locator('select').first();
+    const select = page.locator('.overflow-y-auto select').first();
     const options = select.locator('option');
     const texts = await options.allTextContents();
 

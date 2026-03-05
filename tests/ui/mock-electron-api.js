@@ -535,6 +535,9 @@
       get: async function () {
         return config;
       },
+      getGlobal: async function () {
+        return config;
+      },
       set: async function (partial) {
         config = deepMerge(config, partial);
       },
@@ -542,6 +545,10 @@
         return null;
       },
       setProjectOverrides: async function () {},
+      getProjectOverridesByPath: async function () {
+        return null;
+      },
+      setProjectOverridesByPath: async function () {},
     },
 
     claude: {

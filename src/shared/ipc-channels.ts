@@ -64,9 +64,12 @@ export const IPC = {
 
   // Config
   CONFIG_GET: 'config:get',
+  CONFIG_GET_GLOBAL: 'config:getGlobal',
   CONFIG_SET: 'config:set',
   CONFIG_GET_PROJECT: 'config:getProject',
   CONFIG_SET_PROJECT: 'config:setProject',
+  CONFIG_GET_PROJECT_BY_PATH: 'config:getProjectByPath',
+  CONFIG_SET_PROJECT_BY_PATH: 'config:setProjectByPath',
 
   // Claude
   CLAUDE_DETECT: 'claude:detect',
