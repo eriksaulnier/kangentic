@@ -136,9 +136,6 @@ export function ProjectSidebar({ onToggleSidebar }: ProjectSidebarProps) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="truncate font-medium">{project.name}</span>
-                      {!isActive && hasUnseenIdle && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse-amber flex-shrink-0" />
-                      )}
                     </div>
                     <div
                       className="truncate text-xs text-fg-faint mt-0.5"
@@ -148,30 +145,25 @@ export function ProjectSidebar({ onToggleSidebar }: ProjectSidebarProps) {
                     </div>
                   </div>
                 </div>
-                {(thinkingCount > 0 || (isActive && idleCount > 0)) && (
-                  <div className="flex items-center gap-1.5 flex-shrink-0 mr-1">
-                    {thinkingCount > 0 && (
-                      <span
-                        className="flex items-center gap-1 text-xs tabular-nums text-green-400"
-                        title={`${thinkingCount} thinking`}
-                      >
-                        <Loader2 size={10} className="animate-spin" />
-                        {thinkingCount}
-                      </span>
-                    )}
-                    {isActive && idleCount > 0 && (
-                      <span
-                        className={`flex items-center gap-1 text-xs tabular-nums ${
-                          hasUnseenIdle ? 'text-amber-400' : 'text-amber-400/50'
-                        } ${hasUnseenIdle ? 'rounded-full animate-pulse-amber' : ''}`}
-                        title={`${idleCount} idle — needs attention`}
-                      >
-                        <Mail size={10} />
-                        {idleCount}
-                      </span>
-                    )}
-                  </div>
-                )}
+                {idleCount > 0 ? (
+                  <span
+                    className={`flex items-center gap-1 text-xs tabular-nums flex-shrink-0 mr-1 ${
+                      hasUnseenIdle ? 'text-amber-400 animate-pulse-amber' : 'text-amber-400/50'
+                    }`}
+                    title={`${idleCount} idle — needs attention`}
+                  >
+                    <Mail size={10} />
+                    {idleCount}
+                  </span>
+                ) : thinkingCount > 0 ? (
+                  <span
+                    className="flex items-center gap-1 text-xs tabular-nums text-green-400 flex-shrink-0 mr-1"
+                    title={`${thinkingCount} thinking`}
+                  >
+                    <Loader2 size={10} className="animate-spin" />
+                    {thinkingCount}
+                  </span>
+                ) : null}
                 <div className="flex items-center gap-0.5 flex-shrink-0">
                   <button
                     onClick={(e) => handleOpenInExplorer(e, project)}
