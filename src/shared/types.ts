@@ -114,6 +114,7 @@ export type SessionStatus = 'running' | 'queued' | 'exited' | 'suspended';
 export interface Session {
   id: string;
   taskId: string;
+  projectId: string;
   pid: number | null;
   status: SessionStatus;
   shell: string;
@@ -459,6 +460,7 @@ export interface ProjectCreateInput {
 
 export interface SpawnSessionInput {
   taskId: string;
+  projectId: string;
   command: string;
   cwd: string;
   env?: Record<string, string>;

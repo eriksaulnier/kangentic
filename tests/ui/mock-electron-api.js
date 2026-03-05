@@ -472,6 +472,7 @@
         var newSession = {
           id: uuid(),
           taskId: taskId,
+          projectId: currentProjectId || '',
           pid: Math.floor(Math.random() * 10000),
           status: 'running',
           shell: 'bash',

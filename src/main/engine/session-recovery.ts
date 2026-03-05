@@ -415,6 +415,7 @@ export async function recoverSessions(
       // Spawn a new PTY
       const newSession = await sessionManager.spawn({
         taskId: task.id,
+        projectId,
         command,
         cwd: record.cwd,
         statusOutputPath,
@@ -613,6 +614,7 @@ export async function reconcileSessions(
 
         const session = await sessionManager.spawn({
           taskId: task.id,
+          projectId,
           command,
           cwd,
           statusOutputPath,

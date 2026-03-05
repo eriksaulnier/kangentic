@@ -42,7 +42,7 @@ export function App() {
       useSessionStore.getState().syncSessions();
     } else {
       useBoardStore.setState({ tasks: [], swimlanes: [], archivedTasks: [] });
-      useSessionStore.setState({ sessions: [], activeSessionId: null, sessionUsage: {}, sessionActivity: {}, sessionEvents: {} });
+      useSessionStore.setState({ activeSessionId: null });
     }
   }, [currentProject]);
 
@@ -68,12 +68,17 @@ export function App() {
         if (currentSession?.status === 'suspended') return;
 
         updateSessionStatus(sessionId, { status: 'exited', exitCode });
-        const task = useBoardStore.getState().tasks.find((t) => t.session_id === sessionId);
-        const label = task ? `"${task.title}"` : sessionId.slice(0, 8);
-        useToastStore.getState().addToast({
-          message: `Session ended for ${label} (exit ${exitCode})`,
-          variant: exitCode === 0 ? 'info' : 'warning',
-        });
+
+        // Only show toast if exited session belongs to current project
+        const activeProjectId = useProjectStore.getState().currentProject?.id;
+        if (currentSession?.projectId === activeProjectId) {
+          const task = useBoardStore.getState().tasks.find((t) => t.session_id === sessionId);
+          const label = task ? `"${task.title}"` : sessionId.slice(0, 8);
+          useToastStore.getState().addToast({
+            message: `Session ended for ${label} (exit ${exitCode})`,
+            variant: exitCode === 0 ? 'info' : 'warning',
+          });
+        }
       }));
     }
 
@@ -93,12 +98,14 @@ export function App() {
         const config = useConfigStore.getState().config;
         if (config.autoFocusIdleSession) {
           const store = useSessionStore.getState();
+          const activeProjectId = useProjectStore.getState().currentProject?.id;
+          const projectSessions = store.sessions.filter((s) => s.projectId === activeProjectId);
           const target = resolveAutoFocusTarget({
             sessionId,
             newState: state,
             currentActiveSessionId: store.activeSessionId,
             sessionActivity: store.sessionActivity,
-            sessions: store.sessions,
+            sessions: projectSessions,
           });
           if (target !== null) {
             store.setActiveSession(target);

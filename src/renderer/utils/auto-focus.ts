@@ -6,7 +6,8 @@ interface AutoFocusInput {
   newState: ActivityState;
   currentActiveSessionId: string | null;
   sessionActivity: Record<string, ActivityState>;
-  sessions: Array<{ id: string; status: SessionStatus }>;
+  // projectId is not used by auto-focus; optional so Session[] is assignable
+  sessions: Array<{ id: string; status: SessionStatus; projectId?: string }>;
 }
 
 /**

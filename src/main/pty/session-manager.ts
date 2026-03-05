@@ -15,6 +15,7 @@ const MAX_EVENTS_PER_SESSION = 500; // Cap rendered events in renderer
 interface ManagedSession {
   id: string;
   taskId: string;
+  projectId: string;
   pty: pty.IPty | null;
   status: SessionStatus;
   shell: string;
@@ -79,6 +80,7 @@ export class SessionManager extends EventEmitter {
       const session: ManagedSession = {
         id,
         taskId: input.taskId,
+        projectId: input.projectId,
         pty: null,
         status: 'queued',
         shell: '',
@@ -182,6 +184,7 @@ export class SessionManager extends EventEmitter {
       const failedSession: ManagedSession = {
         id,
         taskId: input.taskId,
+        projectId: input.projectId,
         pty: null,
         status: 'exited',
         shell,
@@ -215,6 +218,7 @@ export class SessionManager extends EventEmitter {
     const session: ManagedSession = {
       id,
       taskId: input.taskId,
+      projectId: existing?.projectId || input.projectId,
       pty: ptyProcess,
       status: 'running',
       shell,
@@ -479,6 +483,7 @@ export class SessionManager extends EventEmitter {
     return {
       id: s.id,
       taskId: s.taskId,
+      projectId: s.projectId,
       pid: s.pty?.pid ?? null,
       status: s.status,
       shell: s.shell,

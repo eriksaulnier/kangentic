@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { Activity, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { useSessionStore } from '../../stores/session-store';
 import { useBoardStore } from '../../stores/board-store';
+import { useProjectStore } from '../../stores/project-store';
 import { TerminalTab } from './TerminalTab';
 import { ActivityLog } from './ActivityLog';
 import { ContextBar } from './ContextBar';
@@ -15,7 +16,8 @@ interface TerminalPanelProps {
 }
 
 export function TerminalPanel({ collapsed = false, showContent = true, onToggleCollapse }: TerminalPanelProps) {
-  const sessions = useSessionStore((s) => s.sessions);
+  const allSessions = useSessionStore((s) => s.sessions);
+  const currentProjectId = useProjectStore((s) => s.currentProject?.id ?? null);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const setActiveSession = useSessionStore((s) => s.setActiveSession);
   const setOpenTaskId = useSessionStore((s) => s.setOpenTaskId);
@@ -27,8 +29,8 @@ export function TerminalPanel({ collapsed = false, showContent = true, onToggleC
   // Memoized to prevent downstream useMemo hooks (taskLabelMap, activeSessionIds)
   // from being defeated by a new array reference on every render.
   const activeSessions = useMemo(
-    () => sessions.filter((s) => s.status === 'running'),
-    [sessions],
+    () => allSessions.filter((s) => s.status === 'running' && s.projectId === currentProjectId),
+    [allSessions, currentProjectId],
   );
 
   const showActivityTab = activeSessions.length >= 1;

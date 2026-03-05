@@ -125,6 +125,7 @@ function createTransitionEngine(
         permissionMode: config.claude.permissionMode,
         claudePath: config.claude.cliPath,
         projectPath: currentProjectPath,
+        projectId: currentProjectId ?? '',
         gitConfig: config.git,
       };
     },
@@ -784,7 +785,10 @@ export function registerAllIpc(mainWindow: BrowserWindow): void {
   });
 
   // === Sessions ===
-  ipcMain.handle(IPC.SESSION_SPAWN, (_, input) => sessionManager.spawn(input));
+  ipcMain.handle(IPC.SESSION_SPAWN, (_, input) => {
+    if (!currentProjectId) throw new Error('Cannot spawn session: no project is currently open');
+    return sessionManager.spawn({ ...input, projectId: currentProjectId });
+  });
   ipcMain.handle(IPC.SESSION_KILL, (_, id) => sessionManager.kill(id));
   ipcMain.handle(IPC.SESSION_WRITE, (_, id, data) => sessionManager.write(id, data));
   ipcMain.handle(IPC.SESSION_RESIZE, (_, id, cols, rows) => sessionManager.resize(id, cols, rows));

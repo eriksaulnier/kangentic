@@ -73,6 +73,7 @@ function makePreConfig(opts: { sessionStatus: string; activity: string; withUsag
       state.sessions.push({
         id: '${SESSION_ID}',
         taskId: '${TASK_ID}',
+        projectId: '${PROJECT_ID}',
         pid: 9999,
         status: '${opts.sessionStatus}',
         shell: 'bash',

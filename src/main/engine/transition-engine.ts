@@ -21,7 +21,7 @@ export class TransitionEngine {
     private taskRepo: TaskRepository,
     private claudeDetector: ClaudeDetector,
     private commandBuilder: CommandBuilder,
-    private getConfig: () => { permissionMode: string; claudePath: string | null; projectPath: string | null; gitConfig: AppConfig['git'] },
+    private getConfig: () => { permissionMode: string; claudePath: string | null; projectPath: string | null; projectId: string; gitConfig: AppConfig['git'] },
     private sessionRepo?: SessionRepository,
     private attachmentRepo?: AttachmentRepository,
   ) {}
@@ -186,6 +186,7 @@ export class TransitionEngine {
 
     const session = await this.sessionManager.spawn({
       taskId: task.id,
+      projectId: appConfig.projectId,
       command,
       cwd,
       statusOutputPath,
@@ -248,6 +249,7 @@ export class TransitionEngine {
 
     await this.sessionManager.spawn({
       taskId: task.id + '-script',
+      projectId: appConfig.projectId,
       command: script,
       cwd,
     });

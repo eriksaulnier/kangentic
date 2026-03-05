@@ -8,7 +8,7 @@ import { formatTokenCount } from '../../utils/format-tokens';
 import { useValuePulse } from '../../hooks/useValuePulse';
 
 export function StatusBar() {
-  const sessions = useSessionStore((s) => s.sessions);
+  const allSessions = useSessionStore((s) => s.sessions);
   const sessionUsage = useSessionStore((s) => s.sessionUsage);
   const claudeInfo = useConfigStore((s) => s.claudeInfo);
   const claudeVersionLabel = useConfigStore((s) => s.claudeVersionLabel);
@@ -16,8 +16,9 @@ export function StatusBar() {
   const swimlanes = useBoardStore((s) => s.swimlanes);
   const currentProject = useProjectStore((s) => s.currentProject);
 
-  const activeSessions = sessions.filter((s) => s.status === 'running').length;
-  const queued = sessions.filter((s) => s.status === 'queued').length;
+  const projectSessions = allSessions.filter((s) => s.projectId === currentProject?.id);
+  const activeSessions = projectSessions.filter((s) => s.status === 'running').length;
+  const queued = projectSessions.filter((s) => s.status === 'queued').length;
 
   // Count tasks not in "done" role swimlanes
   const doneSwimlaneIds = new Set(
@@ -25,8 +26,11 @@ export function StatusBar() {
   );
   const activeTasks = tasks.filter((t) => !doneSwimlaneIds.has(t.swimlane_id)).length;
 
-  // Aggregate token usage across all sessions
-  const usageValues = Object.values(sessionUsage);
+  // Aggregate token usage across current project's sessions
+  const projectSessionIds = new Set(projectSessions.map((s) => s.id));
+  const usageValues = Object.entries(sessionUsage)
+    .filter(([id]) => projectSessionIds.has(id))
+    .map(([, usage]) => usage);
   const hasUsage = usageValues.length > 0;
   const totalInput = usageValues.reduce((sum, u) => sum + u.contextWindow.totalInputTokens, 0);
   const totalOutput = usageValues.reduce((sum, u) => sum + u.contextWindow.totalOutputTokens, 0);
