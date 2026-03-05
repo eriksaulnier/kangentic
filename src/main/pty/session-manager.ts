@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import { v4 as uuidv4 } from 'uuid';
 import { ShellResolver } from './shell-resolver';
 import { SessionQueue } from './session-queue';
+import { FileWatcher } from './file-watcher';
 import { ClaudeStatusParser } from '../agent/claude-status-parser';
 import { adaptCommandForShell } from '../../shared/paths';
 import { EventType, EventTypeActivity, ClaudeTool } from '../../shared/types';
@@ -26,11 +27,11 @@ interface ManagedSession {
   flushScheduled: boolean;
   scrollback: string;
   statusOutputPath: string | null;
-  statusWatcher: fs.FSWatcher | null;
   eventsOutputPath: string | null;
-  eventsWatcher: fs.FSWatcher | null;
   eventsFileOffset: number;
   mergedSettingsPath: string | null;
+  statusFileWatcher: FileWatcher | null;
+  eventsFileWatcher: FileWatcher | null;
 }
 
 export class SessionManager extends EventEmitter {
@@ -92,11 +93,11 @@ export class SessionManager extends EventEmitter {
         flushScheduled: false,
         scrollback: '',
         statusOutputPath: input.statusOutputPath || null,
-        statusWatcher: null,
         eventsOutputPath: input.eventsOutputPath || null,
-        eventsWatcher: null,
         eventsFileOffset: 0,
         mergedSettingsPath: null,
+        statusFileWatcher: null,
+        eventsFileWatcher: null,
       };
       this.sessions.set(id, session);
       this.sessionQueue.enqueue(input, id);
@@ -121,13 +122,11 @@ export class SessionManager extends EventEmitter {
     }
 
     // Stop any existing watchers for this task
-    if (existing?.statusWatcher) {
-      existing.statusWatcher.close();
-      existing.statusWatcher = null;
-    }
-    if (existing?.eventsWatcher) {
-      existing.eventsWatcher.close();
-      existing.eventsWatcher = null;
+    if (existing) {
+      existing.statusFileWatcher?.close();
+      existing.statusFileWatcher = null;
+      existing.eventsFileWatcher?.close();
+      existing.eventsFileWatcher = null;
     }
 
     // Null out file paths on the old session object to prevent its
@@ -196,11 +195,11 @@ export class SessionManager extends EventEmitter {
         flushScheduled: false,
         scrollback: previousScrollback,
         statusOutputPath: input.statusOutputPath || null,
-        statusWatcher: null,
         eventsOutputPath: input.eventsOutputPath || null,
-        eventsWatcher: null,
         eventsFileOffset: 0,
         mergedSettingsPath: null,
+        statusFileWatcher: null,
+        eventsFileWatcher: null,
       };
       this.sessions.set(id, failedSession);
       this.emit('exit', id, -1);
@@ -230,11 +229,11 @@ export class SessionManager extends EventEmitter {
       flushScheduled: false,
       scrollback: previousScrollback,
       statusOutputPath: input.statusOutputPath || null,
-      statusWatcher: null,
       eventsOutputPath: input.eventsOutputPath || null,
-      eventsWatcher: null,
       eventsFileOffset: 0,
       mergedSettingsPath,
+      statusFileWatcher: null,
+      eventsFileWatcher: null,
     };
 
     this.sessions.set(id, session);
@@ -372,14 +371,10 @@ export class SessionManager extends EventEmitter {
     if (!session) return;
 
     // Close watchers — no longer need real-time updates
-    if (session.statusWatcher) {
-      session.statusWatcher.close();
-      session.statusWatcher = null;
-    }
-    if (session.eventsWatcher) {
-      session.eventsWatcher.close();
-      session.eventsWatcher = null;
-    }
+    session.statusFileWatcher?.close();
+    session.statusFileWatcher = null;
+    session.eventsFileWatcher?.close();
+    session.eventsFileWatcher = null;
 
     // Null out file paths BEFORE killing so the onExit handler's
     // cleanupSessionFiles() skips file deletion — files persist for resume
@@ -502,61 +497,154 @@ export class SessionManager extends EventEmitter {
   // ---------------------------------------------------------------------------
 
   /**
-   * Start watching a session's status output file for usage data updates.
-   * Claude Code writes JSON to this file via our bridge script on each
-   * status line update.
+   * Read and emit usage data from a session's status output file.
+   * Shared by both the fs.watch callback and polling fallback.
    */
+  private readAndEmitUsage(session: ManagedSession): void {
+    if (!session.statusOutputPath) return;
+    try {
+      const raw = fs.readFileSync(session.statusOutputPath, 'utf-8');
+      const usage = ClaudeStatusParser.parseStatus(raw);
+      if (!usage) return;
+
+      this.usageCache.set(session.id, usage);
+      this.emit('usage', session.id, usage);
+    } catch {
+      // File may not exist yet — ignore
+    }
+  }
+
   private startUsageWatcher(session: ManagedSession): void {
     if (!session.statusOutputPath) return;
+    session.statusFileWatcher = new FileWatcher({
+      filePath: session.statusOutputPath,
+      onChange: () => this.readAndEmitUsage(session),
+      label: `Usage:${session.id.slice(0, 8)}`,
+      debounceMs: 100,
+    });
+  }
 
-    // Debounce: fs.watch can fire multiple events for a single write
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const readAndEmit = () => {
-      try {
-        const raw = fs.readFileSync(session.statusOutputPath!, 'utf-8');
-        const usage = ClaudeStatusParser.parseStatus(raw);
-        if (!usage) return;
-
-        this.usageCache.set(session.id, usage);
-        this.emit('usage', session.id, usage);
-      } catch {
-        // File may not exist yet — ignore
-      }
-    };
-
+  /**
+   * Read new lines from a session's events JSONL file and process them.
+   * Shared by both the fs.watch callback and polling fallback.
+   * Uses eventsFileOffset as cursor — safe to call from multiple triggers.
+   */
+  private readAndProcessEvents(session: ManagedSession): void {
+    if (!session.eventsOutputPath) return;
     try {
-      const watcher = fs.watch(session.statusOutputPath, () => {
-        if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(readAndEmit, 100);
-      });
+      const stat = fs.statSync(session.eventsOutputPath);
+      if (stat.size <= session.eventsFileOffset) return;
 
-      watcher.on('error', () => {
-        // Watcher may fail if file is deleted — that's OK
-      });
+      const fd = fs.openSync(session.eventsOutputPath, 'r');
+      const buf = Buffer.alloc(stat.size - session.eventsFileOffset);
+      fs.readSync(fd, buf, 0, buf.length, session.eventsFileOffset);
+      fs.closeSync(fd);
+      session.eventsFileOffset = stat.size;
 
-      session.statusWatcher = watcher;
-    } catch {
-      // File may not exist yet; try polling on the directory instead
-      const dir = session.statusOutputPath.replace(/[/\\][^/\\]+$/, '');
-      try {
-        const watcher = fs.watch(dir, (eventType, filename) => {
-          if (!filename) return;
-          const expected = session.statusOutputPath!.replace(/^.*[/\\]/, '');
-          if (filename === expected) {
-            if (debounceTimer) clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(readAndEmit, 100);
-          }
-        });
+      const chunk = buf.toString('utf-8');
+      const lines = chunk.split('\n').filter(Boolean);
 
-        watcher.on('error', () => {
-          // ignore
-        });
-
-        session.statusWatcher = watcher;
-      } catch {
-        // Can't watch — no usage data for this session
+      // Get or create event cache for this session
+      let events = this.eventCache.get(session.id);
+      if (!events) {
+        events = [];
+        this.eventCache.set(session.id, events);
       }
+
+      for (const line of lines) {
+        const event = ClaudeStatusParser.parseEvent(line);
+        if (event) {
+          events.push(event);
+          this.emit('event', session.id, event);
+
+          // Detect ExitPlanMode → emit plan-exit
+          // Uses ToolStart (PreToolUse) because ExitPlanMode is a mode-transition
+          // tool that may not fire PostToolUse (ToolEnd).
+          if (event.type === EventType.ToolStart && event.tool === ClaudeTool.ExitPlanMode) {
+            this.emit('plan-exit', session.id);
+          }
+
+          // Track subagent nesting depth so we can distinguish main-agent
+          // tool events from subagent tool events during idle state.
+          if (event.type === EventType.SubagentStart) {
+            const currentDepth = this.subagentDepth.get(session.id) || 0;
+            this.subagentDepth.set(session.id, currentDepth + 1);
+          } else if (event.type === EventType.SubagentStop) {
+            const currentDepth = this.subagentDepth.get(session.id) || 0;
+            const newDepth = Math.max(0, currentDepth - 1);
+            this.subagentDepth.set(session.id, newDepth);
+
+            // Emit deferred idle when the last subagent finishes
+            if (newDepth === 0 && this.pendingIdleWhileSubagent.get(session.id)) {
+              this.pendingIdleWhileSubagent.delete(session.id);
+              if (this.activityCache.get(session.id) !== 'idle') {
+                this.activityCache.set(session.id, 'idle');
+                this.emit('activity', session.id, 'idle');
+              }
+            }
+          }
+
+          // Derive activity state from events via declarative lookup.
+          // Only emit when state actually changes (dedup defense-in-depth
+          // against multiple hooks firing the same state, e.g. Stop +
+          // PermissionRequest both emitting idle).
+          const newActivity = EventTypeActivity[event.type];
+
+          // Clear pending idle flag when the main agent resumes thinking
+          // (prompt or subagent_start), even if deduped. This prevents a
+          // stale deferred idle from firing when subagents finish.
+          // Only prompt/subagent_start are reliable main-agent signals;
+          // tool_start at depth > 0 could be from a subagent.
+          if (newActivity === 'thinking'
+              && (event.type === EventType.Prompt
+                  || event.type === EventType.SubagentStart
+                  || (this.subagentDepth.get(session.id) || 0) === 0)) {
+            this.pendingIdleWhileSubagent.delete(session.id);
+          }
+
+          if (newActivity && this.activityCache.get(session.id) !== newActivity) {
+            // Subagent-aware transition guard: when transitioning from
+            // idle → thinking, suppress the transition if it's caused by
+            // a subagent's tool event (not the main agent resuming).
+            // - `prompt` always transitions (user responded)
+            // - `subagent_start` always transitions (main agent spawning)
+            // - depth 0 means no subagents, so the tool_start is from the
+            //   main agent resuming after permission approval
+            // - depth > 0 means subagents are running and this tool_start
+            //   is likely from a subagent, not the main agent
+            const currentActivity = this.activityCache.get(session.id);
+            const depth = this.subagentDepth.get(session.id) || 0;
+            if (currentActivity === 'idle' && newActivity === 'thinking'
+                && event.type !== EventType.Prompt
+                && event.type !== EventType.SubagentStart
+                && depth > 0) {
+              // Suppress: subagent tool event while main agent is idle
+              continue;
+            }
+
+            // Guard 2: thinking → idle suppression while subagents are active.
+            // When the main agent fires Stop (idle) while subagents are running,
+            // defer the idle transition until the last subagent finishes.
+            if (currentActivity === 'thinking' && newActivity === 'idle'
+                && event.type !== EventType.Interrupted
+                && depth > 0) {
+              this.pendingIdleWhileSubagent.set(session.id, true);
+              continue;
+            }
+
+            this.activityCache.set(session.id, newActivity);
+            this.emit('activity', session.id, newActivity);
+          }
+        }
+      }
+
+      // Cap cached events per session
+      if (events.length > MAX_EVENTS_PER_SESSION) {
+        const trimmed = events.slice(-MAX_EVENTS_PER_SESSION);
+        this.eventCache.set(session.id, trimmed);
+      }
+    } catch {
+      // File may not exist yet, or be partially written — ignore
     }
   }
 
@@ -568,8 +656,6 @@ export class SessionManager extends EventEmitter {
   private startEventWatcher(session: ManagedSession): void {
     if (!session.eventsOutputPath) return;
 
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
     // Truncate existing file on resume — historical events aren't needed
     try {
       fs.writeFileSync(session.eventsOutputPath, '');
@@ -577,166 +663,31 @@ export class SessionManager extends EventEmitter {
       // File may not exist yet — that's OK, bridge will create it
     }
 
-    const readNewLines = () => {
-      if (!session.eventsOutputPath) return;
-      try {
-        const stat = fs.statSync(session.eventsOutputPath);
-        if (stat.size <= session.eventsFileOffset) return;
-
-        const fd = fs.openSync(session.eventsOutputPath, 'r');
-        const buf = Buffer.alloc(stat.size - session.eventsFileOffset);
-        fs.readSync(fd, buf, 0, buf.length, session.eventsFileOffset);
-        fs.closeSync(fd);
-        session.eventsFileOffset = stat.size;
-
-        const chunk = buf.toString('utf-8');
-        const lines = chunk.split('\n').filter(Boolean);
-
-        // Get or create event cache for this session
-        let events = this.eventCache.get(session.id);
-        if (!events) {
-          events = [];
-          this.eventCache.set(session.id, events);
+    const eventsPath = session.eventsOutputPath;
+    session.eventsFileWatcher = new FileWatcher({
+      filePath: eventsPath,
+      onChange: () => this.readAndProcessEvents(session),
+      label: `Event:${session.id.slice(0, 8)}`,
+      debounceMs: 50,
+      isStale: () => {
+        try {
+          const stat = fs.statSync(eventsPath);
+          return stat.size > session.eventsFileOffset;
+        } catch {
+          return false;
         }
-
-        for (const line of lines) {
-          const event = ClaudeStatusParser.parseEvent(line);
-          if (event) {
-            events.push(event);
-            this.emit('event', session.id, event);
-
-            // Detect ExitPlanMode → emit plan-exit
-            // Uses ToolStart (PreToolUse) because ExitPlanMode is a mode-transition
-            // tool that may not fire PostToolUse (ToolEnd).
-            if (event.type === EventType.ToolStart && event.tool === ClaudeTool.ExitPlanMode) {
-              this.emit('plan-exit', session.id);
-            }
-
-            // Track subagent nesting depth so we can distinguish main-agent
-            // tool events from subagent tool events during idle state.
-            if (event.type === EventType.SubagentStart) {
-              const currentDepth = this.subagentDepth.get(session.id) || 0;
-              this.subagentDepth.set(session.id, currentDepth + 1);
-            } else if (event.type === EventType.SubagentStop) {
-              const currentDepth = this.subagentDepth.get(session.id) || 0;
-              const newDepth = Math.max(0, currentDepth - 1);
-              this.subagentDepth.set(session.id, newDepth);
-
-              // Emit deferred idle when the last subagent finishes
-              if (newDepth === 0 && this.pendingIdleWhileSubagent.get(session.id)) {
-                this.pendingIdleWhileSubagent.delete(session.id);
-                if (this.activityCache.get(session.id) !== 'idle') {
-                  this.activityCache.set(session.id, 'idle');
-                  this.emit('activity', session.id, 'idle');
-                }
-              }
-            }
-
-            // Derive activity state from events via declarative lookup.
-            // Only emit when state actually changes (dedup defense-in-depth
-            // against multiple hooks firing the same state, e.g. Stop +
-            // PermissionRequest both emitting idle).
-            const newActivity = EventTypeActivity[event.type];
-
-            // Clear pending idle flag when the main agent resumes thinking
-            // (prompt or subagent_start), even if deduped. This prevents a
-            // stale deferred idle from firing when subagents finish.
-            // Only prompt/subagent_start are reliable main-agent signals;
-            // tool_start at depth > 0 could be from a subagent.
-            if (newActivity === 'thinking'
-                && (event.type === EventType.Prompt
-                    || event.type === EventType.SubagentStart
-                    || (this.subagentDepth.get(session.id) || 0) === 0)) {
-              this.pendingIdleWhileSubagent.delete(session.id);
-            }
-
-            if (newActivity && this.activityCache.get(session.id) !== newActivity) {
-              // Subagent-aware transition guard: when transitioning from
-              // idle → thinking, suppress the transition if it's caused by
-              // a subagent's tool event (not the main agent resuming).
-              // - `prompt` always transitions (user responded)
-              // - `subagent_start` always transitions (main agent spawning)
-              // - depth 0 means no subagents, so the tool_start is from the
-              //   main agent resuming after permission approval
-              // - depth > 0 means subagents are running and this tool_start
-              //   is likely from a subagent, not the main agent
-              const currentActivity = this.activityCache.get(session.id);
-              const depth = this.subagentDepth.get(session.id) || 0;
-              if (currentActivity === 'idle' && newActivity === 'thinking'
-                  && event.type !== EventType.Prompt
-                  && event.type !== EventType.SubagentStart
-                  && depth > 0) {
-                // Suppress: subagent tool event while main agent is idle
-                continue;
-              }
-
-              // Guard 2: thinking → idle suppression while subagents are active.
-              // When the main agent fires Stop (idle) while subagents are running,
-              // defer the idle transition until the last subagent finishes.
-              if (currentActivity === 'thinking' && newActivity === 'idle'
-                  && event.type !== EventType.Interrupted
-                  && depth > 0) {
-                this.pendingIdleWhileSubagent.set(session.id, true);
-                continue;
-              }
-
-              this.activityCache.set(session.id, newActivity);
-              this.emit('activity', session.id, newActivity);
-            }
-          }
-        }
-
-        // Cap cached events per session
-        if (events.length > MAX_EVENTS_PER_SESSION) {
-          const trimmed = events.slice(-MAX_EVENTS_PER_SESSION);
-          this.eventCache.set(session.id, trimmed);
-        }
-      } catch {
-        // File may not exist yet, or be partially written — ignore
-      }
-    };
-
-    try {
-      const watcher = fs.watch(session.eventsOutputPath, () => {
-        if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(readNewLines, 50);
-      });
-
-      watcher.on('error', () => {});
-      session.eventsWatcher = watcher;
-    } catch {
-      // File may not exist yet; try polling on the directory instead
-      const dir = session.eventsOutputPath.replace(/[/\\][^/\\]+$/, '');
-      try {
-        const watcher = fs.watch(dir, (eventType, filename) => {
-          if (!filename) return;
-          const expected = session.eventsOutputPath!.replace(/^.*[/\\]/, '');
-          if (filename === expected) {
-            if (debounceTimer) clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(readNewLines, 50);
-          }
-        });
-
-        watcher.on('error', () => {});
-        session.eventsWatcher = watcher;
-      } catch {
-        // Can't watch — no events data for this session
-      }
-    }
+      },
+    });
   }
 
   /**
    * Stop watchers and clean up status + events + merged settings files.
    */
   private cleanupSessionFiles(session: ManagedSession): void {
-    if (session.statusWatcher) {
-      session.statusWatcher.close();
-      session.statusWatcher = null;
-    }
-    if (session.eventsWatcher) {
-      session.eventsWatcher.close();
-      session.eventsWatcher = null;
-    }
+    session.statusFileWatcher?.close();
+    session.statusFileWatcher = null;
+    session.eventsFileWatcher?.close();
+    session.eventsFileWatcher = null;
     // Clean up status JSON file
     if (session.statusOutputPath) {
       try { fs.unlinkSync(session.statusOutputPath); } catch { /* may not exist */ }
@@ -804,16 +755,12 @@ export class SessionManager extends EventEmitter {
       await new Promise((resolve) => setTimeout(resolve, timeoutMs));
     }
     for (const session of this.sessions.values()) {
-      // Close watchers but preserve session files — sessions will be
-      // resumed on next app launch via session recovery
-      if (session.statusWatcher) {
-        session.statusWatcher.close();
-        session.statusWatcher = null;
-      }
-      if (session.eventsWatcher) {
-        session.eventsWatcher.close();
-        session.eventsWatcher = null;
-      }
+      // Close watchers but preserve session files —
+      // sessions will be resumed on next app launch via session recovery
+      session.statusFileWatcher?.close();
+      session.statusFileWatcher = null;
+      session.eventsFileWatcher?.close();
+      session.eventsFileWatcher = null;
 
       if (session.pty) {
         const ptyRef = session.pty;
