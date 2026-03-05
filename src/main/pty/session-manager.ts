@@ -41,6 +41,7 @@ export class SessionManager extends EventEmitter {
   private usageCache = new Map<string, SessionUsage>();
   private activityCache = new Map<string, ActivityState>();
   private subagentDepth = new Map<string, number>();
+  private pendingIdleWhileSubagent = new Map<string, boolean>();
   private eventCache = new Map<string, SessionEvent[]>();
 
   constructor() {
@@ -255,6 +256,7 @@ export class SessionManager extends EventEmitter {
     // feedback during startup (before usage data arrives).
     this.activityCache.set(id, 'idle');
     this.subagentDepth.delete(id);
+    this.pendingIdleWhileSubagent.delete(id);
     this.emit('activity', id, 'idle');
 
     // Batched data output (~60fps)
@@ -338,6 +340,7 @@ export class SessionManager extends EventEmitter {
     this.usageCache.delete(sessionId);
     this.activityCache.delete(sessionId);
     this.subagentDepth.delete(sessionId);
+    this.pendingIdleWhileSubagent.delete(sessionId);
     this.eventCache.delete(sessionId);
   }
 
@@ -389,6 +392,7 @@ export class SessionManager extends EventEmitter {
 
     // Clear subagent depth — session is no longer active
     this.subagentDepth.delete(sessionId);
+    this.pendingIdleWhileSubagent.delete(sessionId);
 
     // Mark suspended BEFORE killing so the async onExit handler preserves it
     session.status = 'suspended';
@@ -615,7 +619,17 @@ export class SessionManager extends EventEmitter {
               this.subagentDepth.set(session.id, currentDepth + 1);
             } else if (event.type === EventType.SubagentStop) {
               const currentDepth = this.subagentDepth.get(session.id) || 0;
-              this.subagentDepth.set(session.id, Math.max(0, currentDepth - 1));
+              const newDepth = Math.max(0, currentDepth - 1);
+              this.subagentDepth.set(session.id, newDepth);
+
+              // Emit deferred idle when the last subagent finishes
+              if (newDepth === 0 && this.pendingIdleWhileSubagent.get(session.id)) {
+                this.pendingIdleWhileSubagent.delete(session.id);
+                if (this.activityCache.get(session.id) !== 'idle') {
+                  this.activityCache.set(session.id, 'idle');
+                  this.emit('activity', session.id, 'idle');
+                }
+              }
             }
 
             // Derive activity state from events via declarative lookup.
@@ -623,6 +637,19 @@ export class SessionManager extends EventEmitter {
             // against multiple hooks firing the same state, e.g. Stop +
             // PermissionRequest both emitting idle).
             const newActivity = EventTypeActivity[event.type];
+
+            // Clear pending idle flag when the main agent resumes thinking
+            // (prompt or subagent_start), even if deduped. This prevents a
+            // stale deferred idle from firing when subagents finish.
+            // Only prompt/subagent_start are reliable main-agent signals;
+            // tool_start at depth > 0 could be from a subagent.
+            if (newActivity === 'thinking'
+                && (event.type === EventType.Prompt
+                    || event.type === EventType.SubagentStart
+                    || (this.subagentDepth.get(session.id) || 0) === 0)) {
+              this.pendingIdleWhileSubagent.delete(session.id);
+            }
+
             if (newActivity && this.activityCache.get(session.id) !== newActivity) {
               // Subagent-aware transition guard: when transitioning from
               // idle → thinking, suppress the transition if it's caused by
@@ -640,6 +667,16 @@ export class SessionManager extends EventEmitter {
                   && event.type !== EventType.SubagentStart
                   && depth > 0) {
                 // Suppress: subagent tool event while main agent is idle
+                continue;
+              }
+
+              // Guard 2: thinking → idle suppression while subagents are active.
+              // When the main agent fires Stop (idle) while subagents are running,
+              // defer the idle transition until the last subagent finishes.
+              if (currentActivity === 'thinking' && newActivity === 'idle'
+                  && event.type !== EventType.Interrupted
+                  && depth > 0) {
+                this.pendingIdleWhileSubagent.set(session.id, true);
                 continue;
               }
 

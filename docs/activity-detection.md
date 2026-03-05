@@ -95,15 +95,31 @@ The SessionManager tracks a `subagentDepth` counter per session:
 - `subagent_stop` → decrement depth (floor 0)
 - Cleared on session kill/suspend
 
-### Transition Guard
+### Transition Guards
 
-When transitioning from `idle` → `thinking`, the guard checks:
+Two guards protect against incorrect state transitions when subagents are running:
+
+**Guard 1: idle → thinking suppression** (prevents subagent tool events from overriding idle)
 
 | Condition | Result | Why |
 |-----------|--------|-----|
 | Event is `prompt` | **Allow** | User responded — always reliable |
+| Event is `subagent_start` | **Allow** | Main agent spawning — always reliable |
 | Subagent depth = 0 | **Allow** | No subagents running, so this `tool_start` is from the main agent |
 | Subagent depth > 0 | **Suppress** | The `tool_start` is likely from a still-running subagent |
+
+**Guard 2: thinking → idle suppression** (prevents main agent Stop from showing idle while subagents work)
+
+| Condition | Result | Why |
+|-----------|--------|-----|
+| Event is `interrupted` | **Allow** | User pressed Escape — always goes through |
+| Subagent depth = 0 | **Allow** | No subagents running, genuine idle |
+| Subagent depth > 0 | **Defer** | Set `pendingIdleWhileSubagent` flag, emit idle when last subagent finishes |
+
+**Deferred idle mechanism:**
+- When Guard 2 suppresses an idle transition, it sets a `pendingIdleWhileSubagent` flag
+- On `subagent_stop`, if depth reaches 0 and the flag is set, emit idle
+- The flag is cleared when the main agent resumes thinking (`prompt`, `subagent_start`, or `tool_start` at depth 0)
 
 ### Scenarios
 
@@ -111,6 +127,11 @@ When transitioning from `idle` → `thinking`, the guard checks:
 2. **Permission approved + subagents finished:** Next `tool_start` transitions to thinking (correct)
 3. **Permission approved + subagents still running:** Stays idle briefly until subagents finish, then next `tool_start` transitions (conservative but correct — better idle than false active)
 4. **User sends new message:** `prompt` always transitions regardless of depth (correct)
+5. **Main agent spawns subagent then fires Stop:** Idle suppressed, card stays thinking while subagent works (correct)
+6. **Last subagent finishes after deferred idle:** Card transitions to idle when depth reaches 0 (correct)
+7. **User presses Escape while subagents run:** `interrupted` always goes through, card shows idle immediately (correct)
+8. **Prompt fires while idle is deferred:** Pending flag cleared, no stale idle emitted when subagents finish (correct)
+9. **Nested subagents with deferred idle:** Idle only emits when ALL subagents finish (depth 0), not on intermediate stops (correct)
 
 ## Hook Configuration
 

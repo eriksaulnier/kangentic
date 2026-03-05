@@ -596,18 +596,18 @@ describe('Event-derived activity state', () => {
     appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Explore' });
     await waitForWatcher();
 
-    // 3. Permission request fires → idle
+    // 3. Stop fires → idle suppressed (depth > 0), pending idle set
     appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
     await waitForWatcher();
-    expect(manager.getActivityCache()[session.id]).toBe('idle');
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
-    // 4. Subagent fires tool_start while main agent is idle — should be suppressed
+    // 4. Subagent fires tool_start — deduped (already thinking)
     appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
     await waitForWatcher();
 
-    // Still idle — subagent tool_start was suppressed
-    expect(manager.getActivityCache()[session.id]).toBe('idle');
-    expect(states).toEqual(['thinking', 'idle']);
+    // Still thinking — both idle and subagent tool_start were suppressed
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+    expect(states).toEqual(['thinking']);
   });
 
   it('idle transitions to thinking when subagents finish and main agent resumes', async () => {
@@ -622,16 +622,17 @@ describe('Event-derived activity state', () => {
     appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Explore' });
     await waitForWatcher();
 
-    // 3. Permission request → idle
+    // 3. Stop fires → idle suppressed (depth > 0), pending idle set
     appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 4. Subagent finishes (depth → 0) → deferred idle emits
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStop, detail: 'Explore' });
     await waitForWatcher();
     expect(manager.getActivityCache()[session.id]).toBe('idle');
 
-    // 4. Subagent finishes (depth → 0)
-    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStop, detail: 'Explore' });
-    await waitForWatcher();
-
-    // 5. Main agent resumes with tool_start — now allowed (depth 0)
+    // 5. Main agent resumes with tool_start → thinking
     appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Edit' });
     await waitForWatcher();
 
@@ -651,17 +652,348 @@ describe('Event-derived activity state', () => {
     appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Explore' });
     await waitForWatcher();
 
-    // 3. Permission request → idle
+    // 3. Stop fires → idle suppressed (depth > 0), pending idle set
     appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
     await waitForWatcher();
-    expect(manager.getActivityCache()[session.id]).toBe('idle');
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
 
-    // 4. User sends a new message → prompt always transitions regardless of depth
+    // 4. User sends a new message → prompt is thinking, but already thinking
+    //    so it's deduped. However, it clears the pending idle flag.
     appendEvent(eventsPath, { ts: Date.now(), type: EventType.Prompt });
     await waitForWatcher();
 
     expect(manager.getActivityCache()[session.id]).toBe('thinking');
+    expect(states).toEqual(['thinking']);
+  });
+
+  // --- Guard 2: thinking → idle suppression while subagents are active ---
+
+  it('thinking is not overridden by idle while subagent is active', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    // 1. Agent working → thinking
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Bash' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 2. Subagent starts (depth → 1)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Explore' });
+    await waitForWatcher();
+
+    // 3. Main agent fires Stop → idle suppressed (depth > 0)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
+    await waitForWatcher();
+
+    // Card stays thinking — subagent is still working
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+    expect(states).toEqual(['thinking']);
+  });
+
+  it('deferred idle emits when last subagent finishes', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    // 1. Agent working → thinking
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Bash' });
+    await waitForWatcher();
+
+    // 2. Subagent starts (depth → 1)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Explore' });
+    await waitForWatcher();
+
+    // 3. Stop fires → idle suppressed, pending flag set
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 4. Subagent finishes (depth → 0) → deferred idle emits
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStop, detail: 'Explore' });
+    await waitForWatcher();
+
+    expect(manager.getActivityCache()[session.id]).toBe('idle');
+    expect(states).toEqual(['thinking', 'idle']);
+  });
+
+  it('interrupted overrides thinking even with active subagents', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    // 1. Agent working → thinking
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Bash' });
+    await waitForWatcher();
+
+    // 2. Subagent starts (depth → 1)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Explore' });
+    await waitForWatcher();
+
+    // 3. User presses Escape → interrupted always goes through
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Interrupted, tool: 'Bash' });
+    await waitForWatcher();
+
+    expect(manager.getActivityCache()[session.id]).toBe('idle');
+    expect(states).toEqual(['thinking', 'idle']);
+  });
+
+  it('pending idle cleared when agent resumes thinking before subagent finishes', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    // 1. Agent working → thinking
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Bash' });
+    await waitForWatcher();
+
+    // 2. Subagent starts (depth → 1)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Explore' });
+    await waitForWatcher();
+
+    // 3. Stop fires → idle suppressed, pending flag set
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 4. User sends prompt → clears pending flag (already thinking, deduped)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Prompt });
+    await waitForWatcher();
+
+    // 5. Subagent finishes — but pending flag was cleared, so no deferred idle
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStop, detail: 'Explore' });
+    await waitForWatcher();
+
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+    expect(states).toEqual(['thinking']);
+  });
+
+  it('nested subagents: idle deferred until all subagents finish', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    // 1. Agent working → thinking
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Bash' });
+    await waitForWatcher();
+
+    // 2. First subagent starts (depth → 1)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Explore' });
+    await waitForWatcher();
+
+    // 3. Second subagent starts (depth → 2)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Plan' });
+    await waitForWatcher();
+
+    // 4. Stop fires → idle suppressed
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 5. First subagent finishes (depth → 1) — still > 0, no deferred idle
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStop, detail: 'Explore' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 6. Second subagent finishes (depth → 0) → deferred idle emits
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStop, detail: 'Plan' });
+    await waitForWatcher();
+
+    expect(manager.getActivityCache()[session.id]).toBe('idle');
+    expect(states).toEqual(['thinking', 'idle']);
+  });
+
+  it('full bug scenario: idle suppressed during 77s of subagent work', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    // Reproduces the exact sequence from the bug report (events.jsonl lines 136-149)
+    // 136: tool_start Agent → thinking
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Agent' });
+    await waitForWatcher();
+    expect(states).toEqual(['thinking']);
+
+    // 137: subagent_start → depth 1 (deduped, already thinking)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Explore' });
+    await waitForWatcher();
+
+    // 138: tool_start Bash (subagent's tool) → deduped
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Bash' });
+    await waitForWatcher();
+
+    // 139: idle (Stop fires on main agent) → SUPPRESSED (depth > 0)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 140: notification → no change
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Notification, detail: 'Context getting full' });
+    await waitForWatcher();
+
+    // 141-147: subagent tools (Bash end, Grep, Bash, Read) — all deduped
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolEnd, tool: 'Bash' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Grep' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolEnd, tool: 'Grep' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Bash' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolEnd, tool: 'Bash' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolEnd, tool: 'Read' });
+    await waitForWatcher();
+
+    // Still thinking — all subagent work was correctly suppressed/deduped
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 148: subagent_stop → depth 0, deferred idle emits
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStop, detail: 'Explore' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('idle');
+
+    // 149: tool_end Agent → no change
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolEnd, tool: 'Agent' });
+    await waitForWatcher();
+
+    expect(manager.getActivityCache()[session.id]).toBe('idle');
+    expect(states).toEqual(['thinking', 'idle']);
+  });
+
+  it('prompt overrides idle at depth > 0 (via interrupted)', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    // 1. tool_start → thinking
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Agent' });
+    await waitForWatcher();
+
+    // 2. subagent_start → depth 1
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Explore' });
+    await waitForWatcher();
+
+    // 3. interrupted → idle (bypasses Guard 2)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Interrupted, tool: 'Bash' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('idle');
+
+    // 4. prompt → thinking (Guard 1 allows prompt at any depth)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Prompt });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
     expect(states).toEqual(['thinking', 'idle', 'thinking']);
+  });
+
+  it('subagent_start clears pending idle flag', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    // 1. tool_start → thinking
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Agent' });
+    await waitForWatcher();
+
+    // 2. subagent_start → depth 1
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Explore' });
+    await waitForWatcher();
+
+    // 3. idle → suppressed (pending set)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 4. subagent_start → depth 2 (clears pending flag)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Explore' });
+    await waitForWatcher();
+
+    // 5. subagent_stop → depth 1 (no deferred idle — flag was cleared)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStop, detail: 'Explore' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 6. subagent_stop → depth 0 (no deferred idle — flag was cleared)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStop, detail: 'Explore' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    expect(states).toEqual(['thinking']);
+  });
+
+  it('multiple idle events at depth > 0 are idempotent', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    // 1. tool_start → thinking
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
+    await waitForWatcher();
+
+    // 2. subagent_start → depth 1
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Explore' });
+    await waitForWatcher();
+
+    // 3. idle → suppressed (pending = true)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 4. idle → suppressed again (pending still true, idempotent)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 5. subagent_stop → depth 0 → deferred idle emits once
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStop, detail: 'Explore' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('idle');
+
+    expect(states).toEqual(['thinking', 'idle']);
+  });
+
+  it('interrupted after suppressed idle does not cause duplicate idle on subagent_stop', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    // 1. tool_start → thinking
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Agent' });
+    await waitForWatcher();
+
+    // 2. subagent_start → depth 1
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStart, detail: 'Explore' });
+    await waitForWatcher();
+
+    // 3. idle → suppressed (pending set)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 4. interrupted → idle (bypasses Guard 2, pending NOT cleared)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Interrupted, tool: 'Bash' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('idle');
+
+    // 5. subagent_stop → depth 0, pending is true, but already idle → no duplicate
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStop, detail: 'Explore' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('idle');
+
+    // Only one idle transition, not two
+    expect(states).toEqual(['thinking', 'idle']);
+  });
+
+  it('orphan subagent_stop at depth 0 does not emit spurious idle', async () => {
+    const { session, eventsPath } = await spawnWithEvents();
+    const states = collectActivity(manager, session.id);
+
+    // 1. tool_start → thinking
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 2. orphan subagent_stop with no prior subagent_start — depth clamped to 0
+    //    No pending idle flag was ever set, so deferred idle check is skipped
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.SubagentStop, detail: 'Explore' });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('thinking');
+
+    // 3. normal idle → idle (standard transition, not deferred)
+    appendEvent(eventsPath, { ts: Date.now(), type: EventType.Idle });
+    await waitForWatcher();
+    expect(manager.getActivityCache()[session.id]).toBe('idle');
+
+    // Only two transitions: thinking from step 1, idle from step 3
+    // Step 2 (orphan stop) must not produce any state change
+    expect(states).toEqual(['thinking', 'idle']);
   });
 
   it('notification after idle does not change state', async () => {
