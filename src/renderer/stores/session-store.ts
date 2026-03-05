@@ -42,21 +42,38 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   sessionEvents: {},
 
   syncSessions: async () => {
-    const sessions = await window.electronAPI.sessions.list();
-    const currentActive = get().activeSessionId;
-    const stillExists = currentActive && sessions.some((s) => s.id === currentActive);
-
-    // Restore cached data from main process (survives renderer reloads)
+    const freshSessions = await window.electronAPI.sessions.list();
     const cachedUsage = await window.electronAPI.sessions.getUsage();
     const cachedActivity = await window.electronAPI.sessions.getActivity();
     const cachedEvents = await window.electronAPI.sessions.getEventsCache();
 
+    // Single snapshot of current store state — prevents interleaved reads
+    // if a synchronous store update lands between multiple get() calls.
+    const currentState = get();
+
+    const stillExists = currentState.activeSessionId
+      && freshSessions.some((s) => s.id === currentState.activeSessionId);
+
+    // Merge sessions: prefer store's copy (preserves IPC-delivered status
+    // updates that arrived during the async calls above). Sessions only in
+    // the fresh list are newly discovered and get added as-is.
+    const currentSessionMap = new Map(currentState.sessions.map((session) => [session.id, session]));
+    const mergedSessions = freshSessions.map((freshSession) => {
+      const currentSession = currentSessionMap.get(freshSession.id);
+      if (currentSession) {
+        return currentSession;
+      }
+      return freshSession;
+    });
+
+    // Spread cached data first, then store data on top — IPC-delivered
+    // updates already in the store take precedence over the snapshot.
     set({
-      sessions,
-      activeSessionId: stillExists ? currentActive : null,
-      sessionUsage: { ...get().sessionUsage, ...cachedUsage },
-      sessionActivity: { ...get().sessionActivity, ...cachedActivity },
-      sessionEvents: { ...get().sessionEvents, ...cachedEvents },
+      sessions: mergedSessions,
+      activeSessionId: stillExists ? currentState.activeSessionId : null,
+      sessionUsage: { ...cachedUsage, ...currentState.sessionUsage },
+      sessionActivity: { ...cachedActivity, ...currentState.sessionActivity },
+      sessionEvents: { ...cachedEvents, ...currentState.sessionEvents },
     });
   },
 
