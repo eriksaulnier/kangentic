@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AppLayout } from './components/layout/AppLayout';
 import { useProjectStore } from './stores/project-store';
 import { useBoardStore } from './stores/board-store';
@@ -18,6 +18,8 @@ export function App() {
   const updateUsage = useSessionStore((s) => s.updateUsage);
   const updateActivity = useSessionStore((s) => s.updateActivity);
   const addEvent = useSessionStore((s) => s.addEvent);
+
+  const debouncedSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadConfig();
@@ -57,9 +59,23 @@ export function App() {
     const sessions = window.electronAPI?.sessions;
     if (!sessions) return;
 
+    // Debounced re-sync: when an IPC event arrives for a session ID not yet in
+    // the store (e.g. background sessions spawned by activateAllProjects before
+    // the renderer had a chance to sync), schedule a full syncSessions() call.
+    const scheduleSyncIfUnknown = (sessionId: string) => {
+      const exists = useSessionStore.getState().sessions.some((s) => s.id === sessionId);
+      if (exists) return;
+      if (debouncedSyncRef.current) clearTimeout(debouncedSyncRef.current);
+      debouncedSyncRef.current = setTimeout(() => {
+        useSessionStore.getState().syncSessions();
+        debouncedSyncRef.current = null;
+      }, 300);
+    };
+
     // Session status transitions (queued → running)
     if (sessions.onStatus) {
       cleanups.push(sessions.onStatus((sessionId, status) => {
+        scheduleSyncIfUnknown(sessionId);
         updateSessionStatus(sessionId, { status });
       }));
     }
@@ -96,6 +112,7 @@ export function App() {
     // Session activity state (thinking/idle)
     if (sessions.onActivity) {
       cleanups.push(sessions.onActivity((sessionId, state) => {
+        scheduleSyncIfUnknown(sessionId);
         updateActivity(sessionId, state);
 
         const config = useConfigStore.getState().config;
@@ -154,7 +171,10 @@ export function App() {
       }));
     }
 
-    return () => cleanups.forEach((fn) => fn());
+    return () => {
+      cleanups.forEach((fn) => fn());
+      if (debouncedSyncRef.current) clearTimeout(debouncedSyncRef.current);
+    };
   }, []);
 
   return <AppLayout />;
