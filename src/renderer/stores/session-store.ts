@@ -14,8 +14,10 @@ interface SessionStore {
   sessionActivity: Record<string, ActivityState>;
   sessionEvents: Record<string, SessionEvent[]>;
   seenIdleSessions: Record<string, boolean>;
+  _syncGeneration: number;
 
   syncSessions: () => Promise<void>;
+  _bumpSyncGeneration: () => number;
   spawnSession: (input: SpawnSessionInput) => Promise<Session>;
   killSession: (id: string) => Promise<void>;
   suspendSession: (taskId: string) => Promise<void>;
@@ -44,9 +46,21 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   sessionActivity: {},
   sessionEvents: {},
   seenIdleSessions: {},
+  _syncGeneration: 0,
+
+  _bumpSyncGeneration: () => {
+    const next = get()._syncGeneration + 1;
+    set({ _syncGeneration: next });
+    return next;
+  },
 
   syncSessions: async () => {
+    const generation = get()._syncGeneration;
     const currentProjectId = useProjectStore.getState().currentProject?.id;
+
+    // Snapshot session references before async gap — used to detect
+    // IPC-delivered updates that arrive during the gap.
+    const preAsyncSessions = new Map(get().sessions.map((s) => [s.id, s]));
 
     // Sessions list is always unscoped — sidebar needs cross-project data
     const freshSessions = await window.electronAPI.sessions.list();
@@ -57,27 +71,30 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const cachedActivity = await window.electronAPI.sessions.getActivity();
     const cachedEvents = await window.electronAPI.sessions.getEventsCache(currentProjectId);
 
-    // Single snapshot of current store state — prevents interleaved reads
-    // if a synchronous store update lands between multiple get() calls.
+    // Stale guard: discard if a project switch bumped the generation
+    if (get()._syncGeneration !== generation) return;
+
     const currentState = get();
+    const postAsyncSessions = new Map(currentState.sessions.map((s) => [s.id, s]));
 
-    const stillExists = currentState.activeSessionId
-      && freshSessions.some((s) => s.id === currentState.activeSessionId);
-
-    // Merge sessions: prefer store's copy (preserves IPC-delivered status
-    // updates that arrived during the async calls above). Sessions only in
-    // the fresh list are newly discovered and get added as-is.
-    const currentSessionMap = new Map(currentState.sessions.map((session) => [session.id, session]));
+    // Merge: use server data as base, but preserve IPC-delivered updates
+    // that arrived during the async gap (detected by reference change).
     const mergedSessions = freshSessions.map((freshSession) => {
-      const currentSession = currentSessionMap.get(freshSession.id);
-      if (currentSession) {
-        return currentSession;
+      const preAsync = preAsyncSessions.get(freshSession.id);
+      const postAsync = postAsyncSessions.get(freshSession.id);
+      // If the store's reference changed during the async gap,
+      // an IPC listener updated this session — keep the fresher version.
+      if (postAsync && preAsync && postAsync !== preAsync) {
+        return postAsync;
       }
       return freshSession;
     });
 
-    // Spread cached data first, then store data on top — IPC-delivered
-    // updates already in the store take precedence over the snapshot.
+    const stillExists = currentState.activeSessionId
+      && mergedSessions.some((s) => s.id === currentState.activeSessionId);
+
+    // For usage/activity/events: keep store on top — IPC-delivered updates
+    // are strictly more recent than the cache snapshot.
     set({
       sessions: mergedSessions,
       activeSessionId: stillExists ? currentState.activeSessionId : null,

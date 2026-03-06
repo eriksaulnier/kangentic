@@ -40,22 +40,42 @@ export function App() {
 
   useEffect(() => {
     if (currentProject) {
+      // Cancel any pending debounced sync from the previous project
+      if (debouncedSyncRef.current) {
+        clearTimeout(debouncedSyncRef.current);
+        debouncedSyncRef.current = null;
+      }
+
       loadBoard();
       loadConfig(); // Re-fetch effective config (global + project overrides)
-      // Clear per-view state before syncing — prevents stale data from the
-      // previous project leaking into the new project's terminal/events.
+
+      // Invalidate any in-flight syncSessions() calls from the previous project
+      useSessionStore.getState()._bumpSyncGeneration();
+
+      // Clear all per-project view state before syncing — prevents stale data
+      // from the previous project leaking into the new project's terminal/events.
       // Do NOT clear sessionActivity or sessions — sidebar badges need cross-project data.
       useSessionStore.setState({
         activeSessionId: null,
+        dialogSessionId: null,
+        openTaskId: null,
         sessionUsage: {},
         sessionEvents: {},
       });
+
+      const generationBeforeSync = useSessionStore.getState()._syncGeneration;
       useSessionStore.getState().syncSessions().then(() => {
+        // If project switched again while syncing, don't mark sessions seen
+        if (useSessionStore.getState()._syncGeneration !== generationBeforeSync) return;
         useSessionStore.getState().markIdleSessionsSeen(currentProject.id);
       });
     } else {
       useBoardStore.setState({ tasks: [], swimlanes: [], archivedTasks: [] });
-      useSessionStore.setState({ activeSessionId: null });
+      useSessionStore.setState({
+        activeSessionId: null,
+        dialogSessionId: null,
+        openTaskId: null,
+      });
     }
   }, [currentProject]);
 
