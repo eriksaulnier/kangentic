@@ -112,6 +112,12 @@ All channels defined in `src/shared/ipc-channels.ts`. The preload bridge in `src
 | `config:getProject` | invoke | Fetch project-level config overrides |
 | `config:setProject` | invoke | Update project-level overrides |
 
+### Notifications (2 channels)
+| Channel | Pattern | Purpose |
+|---------|---------|---------|
+| `notification:show` | send | Show native OS notification with Kangentic icon |
+| `notification:clicked` | on | User clicked a notification (includes projectId, taskId) |
+
 ### Claude, Shell, Dialog, Window (8 channels)
 | Channel | Pattern | Purpose |
 |---------|---------|---------|

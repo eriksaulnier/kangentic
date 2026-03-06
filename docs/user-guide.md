@@ -193,9 +193,9 @@ The sidebar shows all your projects. Click to switch between them. Each project 
 
 When an agent goes idle (waiting for input or stopped) on a non-active project, the sidebar shows a badge. This helps you notice when agents need attention across projects.
 
-### Window Flash
+### Desktop Notifications
 
-On Windows, the taskbar icon flashes when an agent goes idle on a non-active project (configurable via `notifyIdleOnInactiveProject`).
+When an agent goes idle on a non-active project, a native OS notification appears showing the project name, task title, and the Kangentic icon. Clicking the notification brings the window to the foreground, switches to the correct project, and opens the task detail dialog. The taskbar also flashes on Windows. Configurable via `notifyIdleOnInactiveProject`.
 
 ## CLI
 

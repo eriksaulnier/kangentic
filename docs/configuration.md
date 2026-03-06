@@ -41,7 +41,7 @@ These settings CANNOT be overridden per-project (defined in `GLOBAL_ONLY_PATHS`)
 | `boardLayout` | `'horizontal'` \| `'vertical'` | `'horizontal'` | Board scroll direction. Global-only. |
 | `skipDeleteConfirm` | boolean | `false` | Skip confirmation dialog on task delete |
 | `autoFocusIdleSession` | boolean | `true` | Auto-switch to session tab when agent goes idle |
-| `notifyIdleOnInactiveProject` | boolean | `true` | Flash taskbar/dock and show badge when an agent goes idle on a non-active project |
+| `notifyIdleOnInactiveProject` | boolean | `true` | Show native OS notification and flash taskbar when an agent goes idle on a non-active project. Clicking the notification switches to the project and opens the task detail dialog. |
 | `activateAllProjectsOnStartup` | boolean | `true` | Open all projects on app launch (not just the last one). Global-only. |
 
 ### terminal.*
