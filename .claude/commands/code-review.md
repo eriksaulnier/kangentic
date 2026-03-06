@@ -42,6 +42,34 @@ All commands below run from the **current working directory** — never use `cd 
 - IPC channels defined in `src/shared/ipc-channels.ts`
 - All dialogs use global `useEffect` Escape key listener
 
+### Domain-Specific Checks
+
+After identifying changed files in Step 2, read the relevant skill files to load domain context. Then apply the domain-specific checks below in addition to the general criteria.
+
+**IPC files** (`ipc-channels.ts`, `types.ts`, `preload.ts`, `handlers/`, `mock-electron-api.js`):
+- Read `.claude/skills/ipc-bridge/SKILL.md` before reviewing these changes
+- Verify all 7 IPC layers are consistent: channel constant, types, preload, handler, service, store, mock
+- Check push event subscriptions return unsubscribe functions
+- Check push event callbacks filter by `projectId`
+- Check `!mainWindow.isDestroyed()` guard on broadcasts
+
+**Session/PTY/terminal files** (`session-manager.ts`, `session-queue.ts`, `transition-engine.ts`, `tasks.ts` handleTaskMove, `session-store.ts`, `TerminalPanel.tsx`):
+- Read `.claude/skills/session-lifecycle/SKILL.md` before reviewing these changes
+- Verify state transitions follow the legal state machine
+- Check `commandInjector.cancel()` is called before session state changes in handleTaskMove
+- Check generation counter / reference comparison guards are preserved
+- Check terminal ownership handoff: one xterm per session, `dialogSessionId` exclusion
+- Check `status` is not overwritten after suspend (exit handler must check current status)
+
+**Shell/agent/path files** (`shell-resolver.ts`, `command-builder.ts`, `worktree-manager.ts`, `paths.ts`, `useTerminal.ts`):
+- Read `.claude/skills/cross-platform/SKILL.md` before reviewing these changes
+- Check for Unicode em-dashes (must use ASCII `--`)
+- Check PowerShell quoting: prompts replace `"` with `'` before `quoteArg()`
+- Check Windows file ops use `{ force: true }` on `rmSync`
+- Check `git -C <path>` instead of `cd && git`
+- Check xterm WebGL context loss handling
+- Check PTY resize debouncing is preserved
+
 ## Output Format
 
 ### Findings Table
