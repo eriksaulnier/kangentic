@@ -77,6 +77,17 @@ This pushes the rebased commits directly to the remote source branch. After a su
 2. Suggest re-running `/merge-back` to fetch the latest and rebase again.
 3. Stop — do not force-push.
 
+## Step 4.5 — Update Documentation
+
+Run `/update-docs` to review and update documentation for any source changes in this commit.
+
+If `/update-docs` makes changes:
+1. The docs updates will appear as unstaged changes
+2. Stage and commit them: `git add docs/` then commit with message "Update docs for <summary>"
+3. Push the docs commit: `git push origin HEAD:<sourceBranch>`
+
+If `/update-docs` reports no changes needed, proceed to Step 5.
+
 ## Step 5 — Report
 
 Summarize:

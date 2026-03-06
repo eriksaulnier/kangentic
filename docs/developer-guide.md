@@ -231,6 +231,15 @@ npm run test:unit                 # Unit (separate runner)
 - [Worktree Strategy](worktree-strategy.md) — Branch naming, sparse-checkout, hook delivery
 - [User Guide](user-guide.md) — End-user feature walkthrough
 
+## Documentation Maintenance
+
+Run `/update-docs` to review and update documentation after code changes. This command:
+- Maps changed source files to affected docs using the source-to-doc mapping in `.claude/skills/docs-maintenance/SKILL.md`
+- Checks for stale facts (schema, config keys, constants, types)
+- Updates docs in-place and reports what changed
+
+This runs automatically as part of `/merge-back` (Step 4.5). To run manually: `/update-docs`.
+
 ## Packaging
 
 Electron Forge handles platform-specific packaging via `forge.config.ts`:
