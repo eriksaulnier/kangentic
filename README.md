@@ -113,3 +113,7 @@ Copyright (c) 2025-2026 VORPAHL LLC. All rights reserved.
 Kangentic is open source under the [GNU Affero General Public License v3.0](LICENSE).
 
 For organizations that need a commercial license (e.g., to keep proprietary modifications private), contact licensing@kangentic.com for licensing options.
+
+---
+
+<sub>General inquiries: hello@kangentic.com</sub>
