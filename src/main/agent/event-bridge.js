@@ -99,6 +99,9 @@ process.stdin.on('end', () => {
       const detail = ctx.agent || ctx.teammate || ctx.name;
       if (detail) event.detail = String(detail).slice(0, 200);
     } catch { /* best effort */ }
+  } else if (eventType === 'idle') {
+    const reason = process.argv[4];
+    if (reason) event.detail = String(reason).slice(0, 200);
   }
 
   try {

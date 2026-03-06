@@ -68,6 +68,15 @@ describe('event-bridge', () => {
     const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
     expect(line.type).toBe('idle');
     expect(line.tool).toBeUndefined();
+    expect(line.detail).toBeUndefined();
+  });
+
+  it('idle event with permission detail from argv[4]', () => {
+    runBridge('{}', [outputFile, 'idle', 'permission']);
+
+    const line = JSON.parse(fs.readFileSync(outputFile, 'utf-8').trim());
+    expect(line.type).toBe('idle');
+    expect(line.detail).toBe('permission');
   });
 
   it('prompt event', () => {

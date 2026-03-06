@@ -668,9 +668,15 @@ export class SessionManager extends EventEmitter {
             // defer the idle transition until the last subagent finishes.
             if (currentActivity === 'thinking' && newActivity === 'idle'
                 && event.type !== EventType.Interrupted
+                && event.detail !== 'permission'
                 && depth > 0) {
               this.pendingIdleWhileSubagent.set(session.id, true);
               continue;
+            }
+
+            // Clear stale pending idle when permission idle bypasses Guard 2
+            if (newActivity === 'idle' && event.detail === 'permission') {
+              this.pendingIdleWhileSubagent.delete(session.id);
             }
 
             this.activityCache.set(session.id, newActivity);

@@ -72,7 +72,7 @@ export function buildEventHooks(
     ],
     [HookEvent.PermissionRequest]: [
       ...(existingHooks[HookEvent.PermissionRequest] || []),
-      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.Idle}` }] },
+      { matcher: '', hooks: [{ type: 'command', command: `node "${eventBridge}" "${eventsPath}" ${EventType.Idle} permission` }] },
     ],
     [HookEvent.SessionStart]: [
       ...(existingHooks[HookEvent.SessionStart] || []),
