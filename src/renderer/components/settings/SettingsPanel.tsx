@@ -340,7 +340,7 @@ export function SettingsPanel() {
                     onChange={(v) => handleUpdate({ autoFocusIdleSession: v })}
                   />
                 </SettingRow>
-                <SettingRow label="Notify When Background Agents Go Idle" description="Show a desktop notification when an agent needs attention on a non-active project" {...settingProps('notifyIdleOnInactiveProject')}>
+                <SettingRow label="Desktop Notifications for Idle Agents" description="Show a native notification when an agent needs attention on a non-active project. Click to jump to the task." {...settingProps('notifyIdleOnInactiveProject')}>
                   <ToggleSwitch
                     checked={displayConfig.notifyIdleOnInactiveProject}
                     onChange={(v) => handleUpdate({ notifyIdleOnInactiveProject: v })}
