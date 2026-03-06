@@ -70,7 +70,12 @@ function resolveBackgroundColor(): string {
 const createWindow = () => {
   const isTest = process.env.NODE_ENV === 'test';
 
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.png')
+    : path.join(app.getAppPath(), 'resources', 'icon.png');
+
   mainWindow = new BrowserWindow({
+    icon: iconPath,
     width: 1400,
     height: 900,
     minWidth: 900,
