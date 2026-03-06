@@ -113,6 +113,7 @@ Two guards protect against incorrect state transitions when subagents are runnin
 | Condition | Result | Why |
 |-----------|--------|-----|
 | Event is `interrupted` | **Allow** | User pressed Escape -- always goes through |
+| Event detail is `permission` | **Allow** | Permission prompt blocks everything -- user must see idle immediately |
 | Subagent depth = 0 | **Allow** | No subagents running, genuine idle |
 | Subagent depth > 0 | **Defer** | Set `pendingIdleWhileSubagent` flag, emit idle when last subagent finishes |
 
@@ -120,10 +121,11 @@ Two guards protect against incorrect state transitions when subagents are runnin
 - When Guard 2 suppresses an idle transition, it sets a `pendingIdleWhileSubagent` flag
 - On `subagent_stop`, if depth reaches 0 and the flag is set, emit idle
 - The flag is cleared when the main agent resumes thinking (`prompt`, `subagent_start`, or `tool_start` at depth 0)
+- Permission idles (`detail: 'permission'`) also clear the pending flag to prevent stale deferred idles after approval
 
 ### Scenarios
 
-1. **Permission prompt + subagents running:** Subagent `tool_start` events are suppressed → card stays idle (correct)
+1. **Permission prompt + subagents running:** Permission idle bypasses Guard 2 → card shows idle immediately. Subagent `tool_start` events are suppressed by Guard 1 → card stays idle (correct)
 2. **Permission approved + subagents finished:** Next `tool_start` transitions to thinking (correct)
 3. **Permission approved + subagents still running:** Stays idle briefly until subagents finish, then next `tool_start` transitions (conservative but correct -- better idle than false active)
 4. **User sends new message:** `prompt` always transitions regardless of depth (correct)
@@ -158,7 +160,7 @@ Stop:
   "" (blank)         → idle          # Agent stopped naturally
 
 PermissionRequest:
-  "" (blank)         → idle          # Agent hit a permission wall
+  "" (blank)         → idle (detail: permission)  # Agent hit a permission wall
 ```
 
 Matcher priority: Claude Code evaluates specific matchers before blank matchers. When `AskUserQuestion` fires, both the specific matcher (`→ idle`) and the blank matcher (`→ tool_start`) run. The specific matcher's event is appended after the blank matcher's event, so the final derived state is `idle` (correct).
