@@ -277,7 +277,7 @@ State: `sessions`, `activeSessionId`, `openTaskId`, `dialogSessionId`, `sessionU
 
 - **Terminal ownership handoff** — `dialogSessionId` ensures the bottom panel and task detail dialog never render xterm simultaneously. When the dialog opens, the panel unmounts its xterm. On close, the panel recreates from scrollback.
 - **Cache restoration** — `syncSessions()` fetches usage/activity/events from main process memory, surviving renderer reloads (Vite HMR). Usage and events are scoped to the current project; activity is fetched unscoped so sidebar badges work across all projects.
-- **Project switch cleanup** — On project switch, `activeSessionId`, `sessionUsage`, and `sessionEvents` are cleared before re-syncing. `sessionActivity` and `sessions` are preserved for sidebar badge rendering.
+- **Project switch cleanup** — On project switch, `activeSessionId`, `dialogSessionId`, `openTaskId`, `sessionUsage`, and `sessionEvents` are cleared before re-syncing. A generation counter invalidates in-flight syncs from the previous project. `sessionActivity` and `sessions` are preserved for sidebar badge rendering.
 - **Event capping** — max 500 events per session to bound DOM size in ActivityLog.
 - **Queue position** — `getQueuePosition()` returns 1-indexed position sorted by startedAt.
 
