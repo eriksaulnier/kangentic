@@ -39,7 +39,7 @@ To roll back to a previous version, run `npx kangentic@X.Y.Z` with the desired v
 ### Release Sequencing
 
 1. **`/deploy patch`** (or `minor`/`major`) -- bumps version in root `package.json` + `packages/launcher/package.json`, generates changelog, commits, tags, pushes.
-2. **Tag push triggers `release.yml`** -- builds all platforms (Linux x64, Windows x64, macOS arm64, macOS x64), signs binaries (when cert secrets are configured), creates a **draft** GitHub Release with artifacts attached.
+2. **Tag push triggers `release.yml`** -- builds all platforms (Linux x64, Windows x64, macOS arm64, macOS x64), signs binaries (when signing secrets are configured), creates a **draft** GitHub Release with artifacts attached.
 3. **Review and publish the draft release** at [github.com/Kangentic/kangentic/releases](https://github.com/Kangentic/kangentic/releases). Publishing is a manual gate.
 4. **Publishing triggers `npm-publish.yml`** -- publishes the launcher package to npm.
 5. **`npx kangentic`** now downloads the new version's signed binaries.
@@ -54,8 +54,12 @@ Signing only activates when the corresponding env vars are present. Local dev bu
 | `APPLE_ID` | Apple ID email |
 | `APPLE_PASSWORD` | App-specific password (not account password) |
 | `APPLE_TEAM_ID` | Apple Developer Team ID |
-| `WINDOWS_CERTIFICATE_BASE64` | Base64-encoded .pfx certificate |
-| `WINDOWS_CERTIFICATE_PASSWORD` | PFX password |
+| `AZURE_TENANT_ID` | Azure AD tenant ID |
+| `AZURE_CLIENT_ID` | App registration (service principal) client ID |
+| `AZURE_CLIENT_SECRET` | App registration client secret |
+| `AZURE_SIGNING_ENDPOINT` | Regional endpoint (e.g., `https://eus.codesigning.azure.net/`) |
+| `AZURE_SIGNING_ACCOUNT` | Trusted Signing account name |
+| `AZURE_CERT_PROFILE` | Certificate profile name |
 | `NPM_TOKEN` | npm access token for publishing launcher |
 
 ### macOS Auto-Update Requires Signing

@@ -9,6 +9,7 @@ import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives';
 import { PublisherGithub } from '@electron-forge/publisher-github';
+import { windowsSign } from './windowsSign';
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -17,6 +18,7 @@ const config: ForgeConfig = {
     executableName: 'kangentic',
     icon: './resources/icon',
     extraResource: ['./resources/icon.png', './resources/icon.ico'],
+    ...(process.env.AZURE_CODE_SIGNING_DLIB ? { windowsSign } : {}),
     ...(process.env.APPLE_IDENTITY ? {
       osxSign: {},
       osxNotarize: {
@@ -38,10 +40,8 @@ const config: ForgeConfig = {
       name: 'Kangentic',
       setupIcon: './resources/icon.ico',
       setupAppId: 'com.kangentic.app',
-      ...(process.env.WINDOWS_CERTIFICATE_FILE ? {
-        certificateFile: process.env.WINDOWS_CERTIFICATE_FILE,
-        certificatePassword: process.env.WINDOWS_CERTIFICATE_PASSWORD,
-      } : {}),
+      // @ts-expect-error - incorrect types exported by MakerSquirrel
+      ...(process.env.AZURE_CODE_SIGNING_DLIB ? { windowsSign } : {}),
     }),
     new MakerDMG({
       name: 'Kangentic',
