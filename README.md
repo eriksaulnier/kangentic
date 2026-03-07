@@ -99,6 +99,6 @@ For organizations that need a commercial license (e.g., to keep proprietary modi
 
 Copyright (c) 2025-2026 VORPAHL LLC. All rights reserved.
 
----
+## Anything Else?
 
-<sub>General inquiries: hello@kangentic.com</sub>
+Questions, feedback, or just want to say hi? Reach out at hello@kangentic.com.
