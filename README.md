@@ -18,8 +18,9 @@
 
 One board to manage all your Claude Code agents. Drag tasks to spawn sessions, see real-time status, and ship work in parallel -- all from native terminals on your desktop.
 
-<!-- TODO: Replace with a GIF showing the Kanban board in action -->
-<!-- ![Kangentic Board](path/to/demo.gif) -->
+<p align="center">
+  <img src="resources/kanban-demo.png" alt="Kangentic Kanban Board" width="800" />
+</p>
 
 ## The Problem
 
