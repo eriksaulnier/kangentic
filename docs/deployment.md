@@ -38,11 +38,25 @@ To roll back to a previous version, run `npx kangentic@X.Y.Z` with the desired v
 
 ### Release Sequencing
 
-1. **`/deploy patch`** (or `minor`/`major`) -- bumps version in root `package.json` + `packages/launcher/package.json`, generates changelog, commits, tags, pushes.
-2. **Tag push triggers `release.yml`** -- builds all platforms (Linux x64, Windows x64, macOS arm64, macOS x64), signs binaries (when signing secrets are configured), creates a **draft** GitHub Release with artifacts attached.
-3. **Review and publish the draft release** at [github.com/Kangentic/kangentic/releases](https://github.com/Kangentic/kangentic/releases). Publishing is a manual gate.
+1. **`/release patch`** (or `minor`/`major`) -- analyzes conventional commits, bumps version in root `package.json` + `packages/launcher/package.json`, generates CHANGELOG entry + user-friendly release notes, commits, tags, pushes.
+2. **Tag push triggers `release.yml`** -- requires approval from the `release` environment (Settings > Environments). Builds all platforms (Linux x64, Windows x64, macOS arm64), signs binaries (when signing secrets are configured), creates a **draft** GitHub Release with artifacts attached.
+3. **Review and publish the draft release** at [github.com/Kangentic/kangentic/releases](https://github.com/Kangentic/kangentic/releases). Paste the release notes from `/release` output. Publishing is a manual gate.
 4. **Publishing triggers `npm-publish.yml`** -- publishes the launcher package to npm.
 5. **`npx kangentic`** now downloads the new version's signed binaries.
+
+### Commit Conventions
+
+All commits must use [Conventional Commits](https://www.conventionalcommits.org/) format. A husky commit-msg hook runs commitlint to enforce this. `/merge-back` auto-generates conventional commit messages from diffs.
+
+Common prefixes: `feat:`, `fix:`, `refactor:`, `chore:`, `docs:`, `test:`, `perf:`, `ci:`, `build:`. Add `!` after the type for breaking changes (e.g., `feat!:`).
+
+### Release Permissions
+
+Releases require two things:
+- **Write** role (minimum) to trigger the workflow or push a tag
+- **`release` environment reviewer** to approve the workflow run
+
+Configure the `release` environment in Settings > Environments with required reviewers. Even Admin users cannot bypass environment approval.
 
 ### Code Signing Secrets
 
@@ -78,22 +92,21 @@ Electron's `autoUpdater` on macOS only works with signed apps (Electron docs: "m
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `build.yml` | Push to main, PRs | Build validation on all platforms |
-| `release.yml` | Tag push (`v*`) | Build + sign + create draft GitHub Release |
+| `ci.yml` | Push to main, PRs | Typecheck, unit tests, UI tests |
+| `release.yml` | Tag push (`v*`) or `workflow_dispatch` | Build + sign + create draft GitHub Release |
 | `npm-publish.yml` | Release published | Publish launcher to npm |
 
 ### CI Build Matrix
 
-The release workflow produces 4 builds:
+The release workflow produces 3 builds:
 
 | Runner | Platform | Artifacts |
 |--------|----------|-----------|
 | `ubuntu-latest` | linux-x64 | `.deb`, `.rpm` |
 | `windows-latest` | windows-x64 | `Setup.exe`, `.nupkg` |
 | `macos-latest` | macos-arm64 | `.dmg`, `.zip` |
-| `macos-13` | macos-x64 | `.dmg`, `.zip` |
 
-Linux arm64 is not built in v1. Documented in the [Installation Guide](installation.md).
+Linux arm64 and macOS x64 are not built in v1. Documented in the [Installation Guide](installation.md).
 
 ### Local Testing
 

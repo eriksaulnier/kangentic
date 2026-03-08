@@ -1,24 +1,20 @@
-name: Build
+name: CI
 
-# DISABLED: Previously ran `npm run make` on 4 OS runners per push/PR, which
-# hung for ~7 hours on Windows and exhausted all GitHub Actions credits.
-# To re-enable, uncomment the push/pull_request triggers below.
 on:
-  workflow_dispatch:
-#   push:
-#     branches: [main]
-#   pull_request:
-#     branches: [main]
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
-  group: build-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  validate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -37,3 +33,9 @@ jobs:
       - run: npm run typecheck
 
       - run: npm run test:unit
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run UI tests
+        run: npx playwright test --project=ui

@@ -4,12 +4,50 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.2.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
+  # When triggered manually, create and push the tag first.
+  # Requires approval from the 'release' environment (Settings > Environments).
+  create-tag:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 5
+    outputs:
+      tag: v${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify version matches package.json
+        shell: bash
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PKG_VERSION" != "${{ inputs.version }}" ]; then
+            echo "::error::Input version (${{ inputs.version }}) does not match package.json ($PKG_VERSION)"
+            exit 1
+          fi
+
+      - name: Create and push tag
+        run: |
+          git tag -a "v${{ inputs.version }}" -m "Release v${{ inputs.version }}"
+          git push origin "v${{ inputs.version }}"
+
   release:
+    needs: [create-tag]
+    if: always() && (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
+    environment: release
     strategy:
       matrix:
         include:
@@ -24,6 +62,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-tags: true
 
       - uses: actions/setup-node@v4
         with:
@@ -33,16 +73,20 @@ jobs:
       - run: npm ci
 
       # Extract changelog section for this version to use as release body.
-      # Looks for the ## [vX.Y.Z] header and captures everything until the next ## header.
+      # Handles both tag-push (GITHUB_REF) and workflow_dispatch (inputs.version).
       - name: Extract changelog
         id: changelog
         shell: bash
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          VERSION="${TAG#v}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG#v}"
+          fi
           SECTION=$(awk "/^## \\[v${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" CHANGELOG.md)
           if [ -z "$SECTION" ]; then
-            SECTION="Release ${TAG}"
+            SECTION="Release v${VERSION}"
           fi
           {
             echo "body<<CHANGELOG_EOF"

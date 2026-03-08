@@ -41,8 +41,33 @@ Run `npm run typecheck`. If it fails, report the type errors and stop — do not
 If there are uncommitted changes (non-empty `git status --porcelain` output):
 
 1. Show the user `git status` and `git diff --stat` for a summary of changes.
-2. If `$ARGUMENTS` is non-empty, use it as the commit message.
-3. Otherwise, read the full diff (`git diff`), draft a concise commit message summarizing the changes.
+2. **Determine the commit message:**
+   - If `$ARGUMENTS` is non-empty:
+     - Check if it already starts with a conventional commit prefix (`feat:`, `fix:`, `refactor:`, `chore:`, `docs:`, `test:`, `style:`, `perf:`, `ci:`, `build:`, or any of these with `!` before the colon).
+     - If it does, use it as-is.
+     - If it does not, analyze the diff to determine the appropriate type prefix and prepend it. For example: `/merge-back added dark mode` becomes `feat: added dark mode`.
+   - If `$ARGUMENTS` is empty:
+     - Read the full diff (`git diff`), draft a concise commit message.
+     - The message **MUST** use conventional commit format.
+     - Determine the primary change type from the diff:
+       - `feat:` -- new features or capabilities
+       - `fix:` -- bug fixes
+       - `refactor:` -- restructuring without behavior change
+       - `chore:` -- maintenance (deps, config, tooling)
+       - `docs:` -- documentation-only changes
+       - `test:` -- test-only changes
+       - `style:` -- formatting-only changes
+       - `perf:` -- performance improvements
+       - `ci:` -- CI/CD changes
+       - `build:` -- build system changes
+     - If the change is breaking, add `!` after the type (e.g., `feat!:`)
+     - Scope is optional but encouraged for multi-area changes (e.g., `feat(pty):`, `fix(db):`)
+3. **Update documentation before staging** — review docs inline (do NOT invoke `/update-docs` as a skill call):
+   a. Identify changed source files (exclude `docs/`, `.claude/`, `tests/`).
+   b. If no source files changed, skip to step 4.
+   c. Search `docs/` for references to changed code (function names, types, descriptions that may be stale).
+   d. Read relevant doc sections and compare against the updated source.
+   e. Edit any stale docs inline using the `Edit` tool.
 4. Stage changes: `git add -A`
 5. Write the commit message using the **Write tool** to the relative path `.kangentic/COMMIT_MSG.tmp` (resolved from CWD — do NOT resolve an absolute path, do NOT use the system temp directory, do NOT use `os.tmpdir()`).
    `.kangentic/` is gitignored, so `git add -A` won't stage it and no cleanup is needed.
@@ -98,7 +123,7 @@ This pushes the rebased commits directly to the remote source branch. After a su
 
 If docs were updated:
 1. Stage: `git add docs/`
-2. Commit with message "Update docs for <summary>" (use Write tool for `.kangentic/COMMIT_MSG.tmp`, then `git commit -F .kangentic/COMMIT_MSG.tmp`)
+2. Commit with message "docs: update for <summary>" (use Write tool for `.kangentic/COMMIT_MSG.tmp`, then `git commit -F .kangentic/COMMIT_MSG.tmp`)
 3. Push: `git push origin HEAD:<sourceBranch>`
 4. **Continue to Step 5.**
 
