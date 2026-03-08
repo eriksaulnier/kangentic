@@ -266,7 +266,7 @@ export class CommandBuilder {
     try {
       fs.mkdirSync(sessionDir, { recursive: true });
     } catch (err) {
-      console.error(`Failed to create session directory: ${sessionDir}`, err);
+      console.error(`[spawn_agent] Failed to create session directory: ${sessionDir}`, err);
       throw new Error(`Cannot create session directory at ${sessionDir}: ${(err as Error).message}`);
     }
     const mergedPath = path.join(sessionDir, 'settings.json');

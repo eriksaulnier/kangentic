@@ -104,7 +104,7 @@ export class WorktreeManager {
     try {
       fs.mkdirSync(worktreesDir, { recursive: true });
     } catch (err) {
-      console.error(`Failed to create worktrees directory: ${worktreesDir}`, err);
+      console.error(`[WORKTREE] Failed to create worktrees directory: ${worktreesDir}`, err);
       throw new Error(`Cannot create worktrees directory at ${worktreesDir}: ${(err as Error).message}`);
     }
 
@@ -139,7 +139,7 @@ export class WorktreeManager {
       await wtGit.raw(['sparse-checkout', 'init', '--no-cone']);
       await wtGit.raw(['sparse-checkout', 'set', '/*', '!/.claude/commands/', '!/.claude/skills/']);
     } catch (sparseError) {
-      console.warn('git sparse-checkout not available (requires git 2.25+), skipping:', sparseError);
+      console.warn('[WORKTREE] Sparse-checkout not available (requires git 2.25+), skipping:', sparseError);
     }
 
     // Copy specified files into the worktree (skip .claude/ entries --
@@ -178,7 +178,7 @@ export class WorktreeManager {
       await this.git.raw(['branch', '-m', oldBranchName, newBranchName]);
       return newBranchName;
     } catch (err) {
-      console.error('Branch rename failed:', err);
+      console.error('[WORKTREE] Branch rename failed:', err);
       return null;
     }
   }

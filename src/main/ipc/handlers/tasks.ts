@@ -133,7 +133,7 @@ export async function handleTaskMove(
   try {
     await engine.executeTransition(task, fromSwimlaneId, input.targetSwimlaneId, toLane?.permission_strategy);
   } catch (err) {
-    console.error('Transition engine error:', err);
+    console.error('[TASK_MOVE] Transition engine error:', err);
   }
 
   // Re-read task from DB -- transition engine may have spawned a session
@@ -146,7 +146,7 @@ export async function handleTaskMove(
       await engine.resumeSuspendedSession(finalTask, toLane.permission_strategy);
       finalTask = tasks.getById(task.id);
     } catch (err) {
-      console.error('Failed to start session:', err);
+      console.error('[TASK_MOVE] Failed to start session:', err);
     }
   }
 
@@ -272,7 +272,7 @@ export function registerTaskHandlers(context: IpcContext): void {
         try {
           await engine.executeTransition(task, doneLane.id, input.targetSwimlaneId, toLane?.permission_strategy);
         } catch (err) {
-          console.error('Transition engine error during unarchive:', err);
+          console.error('[TASK_UNARCHIVE] Transition engine error:', err);
         }
 
         // Re-read task; if still no session, resume suspended or spawn fresh.
@@ -283,7 +283,7 @@ export function registerTaskHandlers(context: IpcContext): void {
             await engine.resumeSuspendedSession(finalTask, toLane.permission_strategy);
             finalTask = tasks.getById(task.id);
           } catch (err) {
-            console.error('Failed to start session during unarchive:', err);
+            console.error('[TASK_UNARCHIVE] Failed to start session:', err);
           }
         }
 

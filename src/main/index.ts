@@ -19,10 +19,10 @@ mark('process_start');
 
 // Global error handlers -- keep the app running through transient IPC/PTY errors
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception:', err);
+  console.error('[APP] Uncaught exception:', err);
 });
 process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled rejection:', reason);
+  console.error('[APP] Unhandled rejection:', reason);
 });
 
 // Handle Squirrel.Windows lifecycle events (install/update/uninstall shortcuts)
@@ -114,8 +114,8 @@ function loadReactDevTools(): void {
   if (!latest) return;
 
   session.defaultSession.extensions.loadExtension(path.join(extensionDir, latest))
-    .then(() => console.log('React DevTools loaded'))
-    .catch((err) => console.log('Failed to load React DevTools:', err));
+    .then(() => console.log('[APP] React DevTools loaded'))
+    .catch((err) => console.log('[APP] Failed to load React DevTools:', err));
 }
 
 const createWindow = () => {
@@ -254,7 +254,7 @@ const createWindow = () => {
         mainWindow.webContents.send(IPC.PROJECT_AUTO_OPENED, project);
       } catch (err) {
         endPhase('openProjectByPath');
-        console.error('Failed to auto-open project:', err);
+        console.error('[APP] Failed to auto-open project:', err);
       }
     }
 
@@ -271,7 +271,7 @@ const createWindow = () => {
           mainWindow.webContents.send(IPC.PROJECT_AUTO_OPENED, project);
         } catch (err) {
           endPhase('openProjectByPath');
-          console.error('Failed to auto-open last project:', err);
+          console.error('[APP] Failed to auto-open last project:', err);
         }
       } else {
         finishStartupTimer();
@@ -284,7 +284,7 @@ const createWindow = () => {
     setTimeout(() => {
       phase('activateAllProjects');
       activateAllProjects()
-        .catch((err) => console.error('Failed to activate all projects:', err))
+        .catch((err) => console.error('[APP] Failed to activate all projects:', err))
         .finally(() => { endPhase('activateAllProjects'); });
     }, 5000);
   });
@@ -320,7 +320,7 @@ app.whenReady().then(async () => {
   if (!isEphemeral && !app.isPackaged) {
     phase('pruneStaleWorktreeProjects');
     pruneStaleWorktreeProjects()
-      .catch((err) => console.error('Failed to prune stale worktree projects:', err))
+      .catch((err) => console.error('[APP] Failed to prune stale worktree projects:', err))
       .finally(() => { endPhase('pruneStaleWorktreeProjects'); });
   }
 });

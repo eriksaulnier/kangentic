@@ -67,7 +67,7 @@ export class TransitionEngine {
     try {
       config = JSON.parse(action.config_json);
     } catch (err) {
-      console.error(`Failed to parse config for action ${action.id}:`, err);
+      console.error(`[TRANSITION] Failed to parse config for action ${action.id}:`, err);
       return; // skip action with malformed config
     }
     const attachmentPaths = this.attachmentRepo?.getPathsForTask(task.id) ?? [];
@@ -165,7 +165,7 @@ export class TransitionEngine {
     try {
       fs.mkdirSync(sessionDir, { recursive: true });
     } catch (err) {
-      console.error(`Failed to create session directory: ${sessionDir}`, err);
+      console.error(`[spawn_agent] Failed to create session directory: ${sessionDir}`, err);
       throw new Error(`Cannot create session directory at ${sessionDir}: ${(err as Error).message}`);
     }
     const { statusOutputPath, eventsOutputPath } = sessionOutputPaths(sessionDir);
@@ -294,7 +294,7 @@ export class TransitionEngine {
         body,
       });
     } catch (err) {
-      console.error('Webhook failed:', err);
+      console.error('[TRANSITION] Webhook failed:', err);
     }
   }
 

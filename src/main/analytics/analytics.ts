@@ -32,7 +32,7 @@ export function initAnalytics(): void {
   // Fire-and-forget: the SDK internally queues any trackEvent calls
   // made before initialization completes, then flushes them once ready.
   aptabaseInit(APTABASE_APP_KEY).catch((error) => {
-    console.error('Failed to initialize analytics:', error);
+    console.error('[ANALYTICS] Failed to initialize analytics:', error);
     enabled = false;
   });
 }

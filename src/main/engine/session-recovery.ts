@@ -241,7 +241,7 @@ export async function recoverSessions(
   const duplicatesRetired = allRecords.length - toRecover.length;
   if (duplicatesRetired > 0) {
     console.log(
-      `Session recovery: retired ${duplicatesRetired} duplicate record(s)`,
+      `[SESSION_RECOVERY] Retired ${duplicatesRetired} duplicate record(s)`,
     );
   }
 
@@ -290,7 +290,7 @@ export async function recoverSessions(
   if (toProcess.length === 0) {
     if (skipped > 0) {
       console.log(
-        `Session recovery: skipped ${skipped} of ${toRecover.length} task(s) -- all in non-auto-spawn columns or deleted`,
+        `[SESSION_RECOVERY] Skipped ${skipped} of ${toRecover.length} task(s) -- all in non-auto-spawn columns or deleted`,
       );
     }
     if (!app.isPackaged) console.timeEnd(timerLabel);
@@ -306,7 +306,7 @@ export async function recoverSessions(
   const claude = await claudeDetector.detect(config.claude.cliPath);
   if (!claude.found || !claude.path) {
     console.warn(
-      'Session recovery: Claude CLI not found -- skipping',
+      '[SESSION_RECOVERY] Claude CLI not found -- skipping',
       toProcess.length,
       'session(s)',
     );
@@ -339,7 +339,7 @@ export async function recoverSessions(
           taskRepo.update({ id: task.id, worktree_path: null, branch_name: null });
         }
         console.log(
-          `Session recovery: cwd ${record.cwd} missing -- marking exited`,
+          `[SESSION_RECOVERY] CWD ${record.cwd} missing -- marking exited`,
         );
         sessionRepo.updateStatus(record.id, 'exited', { exited_at: now });
         skipped++;
@@ -382,7 +382,7 @@ export async function recoverSessions(
           try {
             actionConfig = JSON.parse(action.config_json) as ActionConfig;
           } catch {
-            console.error(`Session recovery: malformed config for action ${action.id} -- using defaults`);
+            console.error(`[SESSION_RECOVERY] Malformed config for action ${action.id} -- using defaults`);
           }
         }
 
@@ -428,13 +428,13 @@ export async function recoverSessions(
       });
     } catch (err) {
       console.error(
-        `Session recovery: preparation failed for session ${record.id} (task ${record.task_id}):`,
+        `[SESSION_RECOVERY] Preparation failed for session ${record.id} (task ${record.task_id}):`,
         err,
       );
       try {
         sessionRepo.updateStatus(record.id, 'exited', { exited_at: now });
       } catch (updateErr) {
-        console.error(`Failed to mark session ${record.id} as exited:`, updateErr);
+        console.error(`[SESSION_RECOVERY] Failed to mark session ${record.id} as exited:`, updateErr);
       }
     }
   }
@@ -487,20 +487,20 @@ export async function recoverSessions(
     } else {
       const input = spawnInputs[resultIndex];
       console.error(
-        `Session recovery failed for session ${input.record.id} (task ${input.record.task_id}):`,
+        `[SESSION_RECOVERY] Spawn failed for session ${input.record.id} (task ${input.record.task_id}):`,
         result.reason,
       );
       try {
         sessionRepo.updateStatus(input.record.id, 'exited', { exited_at: now });
       } catch (updateErr) {
-        console.error(`Failed to mark session ${input.record.id} as exited:`, updateErr);
+        console.error(`[SESSION_RECOVERY] Failed to mark session ${input.record.id} as exited:`, updateErr);
       }
     }
   }
 
   if (recovered > 0 || skipped > 0) {
     console.log(
-      `Session recovery: resumed ${recovered}, skipped ${skipped} (of ${toRecover.length} unique tasks, ${allRecords.length} total records)`,
+      `[SESSION_RECOVERY] Resumed ${recovered}, skipped ${skipped} (of ${toRecover.length} unique tasks, ${allRecords.length} total records)`,
     );
   }
   if (!app.isPackaged) console.timeEnd(timerLabel);
@@ -556,7 +556,7 @@ export async function reconcileSessions(
   const claude = await claudeDetector.detect(config.claude.cliPath);
   if (!claude.found || !claude.path) {
     console.warn(
-      'Session reconciliation: Claude CLI not found -- skipping all tasks',
+      '[SESSION_RECONCILE] Claude CLI not found -- skipping all tasks',
     );
     if (!app.isPackaged) console.timeEnd(reconcileTimerLabel);
     return;
@@ -603,7 +603,7 @@ export async function reconcileSessions(
             try {
               actionConfig = JSON.parse(action.config_json);
             } catch {
-              console.error(`Session reconciliation: malformed config for action ${action.id} -- using defaults`);
+              console.error(`[SESSION_RECONCILE] Malformed config for action ${action.id} -- using defaults`);
             }
           }
         }
@@ -615,13 +615,13 @@ export async function reconcileSessions(
 
         // Guard: CWD must still exist -- fall back to projectPath if worktree was deleted
         if (task.worktree_path && !fs.existsSync(task.worktree_path)) {
-          console.log(`Session reconciliation: worktree missing for task ${task.id} -- falling back to project path`);
+          console.log(`[SESSION_RECONCILE] Worktree missing for task ${task.id} -- falling back to project path`);
           taskRepo.update({ id: task.id, worktree_path: null, branch_name: null });
           cwd = projectPath;
         }
         if (!fs.existsSync(cwd)) {
           console.log(
-            `Session reconciliation: cwd ${cwd} missing -- skipping task ${task.id}`,
+            `[SESSION_RECONCILE] CWD ${cwd} missing -- skipping task ${task.id}`,
           );
           continue;
         }
@@ -673,7 +673,7 @@ export async function reconcileSessions(
         });
       } catch (err) {
         console.error(
-          `Session reconciliation: preparation failed for task ${task.id}:`,
+          `[SESSION_RECONCILE] Preparation failed for task ${task.id}:`,
           err,
         );
       }
@@ -728,7 +728,7 @@ export async function reconcileSessions(
     } else {
       const input = spawnInputs[resultIndex];
       console.error(
-        `Session reconciliation failed for task ${input.task.id}:`,
+        `[SESSION_RECONCILE] Spawn failed for task ${input.task.id}:`,
         result.reason,
       );
     }
@@ -736,7 +736,7 @@ export async function reconcileSessions(
 
   if (reconciled > 0) {
     console.log(
-      `Session reconciliation: spawned ${reconciled} session(s) for tasks without agents`,
+      `[SESSION_RECONCILE] Spawned ${reconciled} session(s) for tasks without agents`,
     );
   }
   if (!app.isPackaged) console.timeEnd(reconcileTimerLabel);

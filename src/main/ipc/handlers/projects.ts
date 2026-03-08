@@ -220,9 +220,9 @@ export async function openProjectByPath(context: IpcContext, projectPath: string
     // Fire-and-forget: the board renders immediately with last-known task state;
     // sessions appear reactively as PTYs come online via existing IPC status events.
     recoverSessions(project.id, project.path, context.sessionManager, context.claudeDetector, context.commandBuilder, context.configManager)
-      .catch((err) => console.error('Background session recovery failed:', err))
+      .catch((err) => console.error('[PROJECT_OPEN] Session recovery failed:', err))
       .then(() => reconcileSessions(project.id, project.path, context.sessionManager, context.claudeDetector, context.commandBuilder, context.configManager))
-      .catch((err) => console.error('Background session reconciliation failed:', err));
+      .catch((err) => console.error('[PROJECT_OPEN] Session reconciliation failed:', err));
   }
 
   return project;
@@ -255,7 +255,7 @@ export async function activateAllProjects(context: IpcContext): Promise<void> {
 
   for (let index = 0; index < results.length; index++) {
     if (results[index].status === 'rejected') {
-      console.error(`Failed to activate project ${otherProjects[index].name}:`, (results[index] as PromiseRejectedResult).reason);
+      console.error(`[PROJECT_OPEN] Failed to activate project ${otherProjects[index].name}:`, (results[index] as PromiseRejectedResult).reason);
     }
   }
 }
@@ -312,9 +312,9 @@ export function registerProjectHandlers(context: IpcContext): void {
       // Fire-and-forget: the board renders immediately with last-known task state;
       // sessions appear reactively as PTYs come online via existing IPC status events.
       recoverSessions(id, project.path, context.sessionManager, context.claudeDetector, context.commandBuilder, context.configManager)
-        .catch((err) => console.error('Background session recovery failed:', err))
+        .catch((err) => console.error('[PROJECT_OPEN] Session recovery failed:', err))
         .then(() => reconcileSessions(id, project.path, context.sessionManager, context.claudeDetector, context.commandBuilder, context.configManager))
-        .catch((err) => console.error('Background session reconciliation failed:', err));
+        .catch((err) => console.error('[PROJECT_OPEN] Session reconciliation failed:', err));
     }
   });
 

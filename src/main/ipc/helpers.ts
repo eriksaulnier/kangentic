@@ -53,7 +53,7 @@ export function ensureGitignore(projectPath: string): void {
     }
   } catch (err) {
     // Non-fatal: log and continue. Project may be read-only or on a network drive.
-    console.warn(`Could not update .gitignore at ${projectPath}:`, err);
+    console.warn(`[PROJECT_OPEN] Could not update .gitignore at ${projectPath}:`, err);
   }
 }
 
@@ -84,7 +84,7 @@ export async function ensureTaskWorktree(context: IpcContext, task: Task, tasks:
       Object.assign(task, tasks.getById(task.id));
     }
   } catch (err) {
-    console.error('Worktree creation failed:', err);
+    console.error('[WORKTREE] Creation failed:', err);
   }
 }
 
@@ -198,7 +198,7 @@ export async function cleanupTaskResources(
         }
       }
     } catch (err) {
-      console.error(`Failed to clean up worktree for task ${task.id.slice(0, 8)}:`, err);
+      console.error(`[WORKTREE] Failed to clean up worktree for task ${task.id.slice(0, 8)}:`, err);
     }
     tasks.update({ id: task.id, worktree_path: null, branch_name: null });
   }
