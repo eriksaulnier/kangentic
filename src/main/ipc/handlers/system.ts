@@ -1,18 +1,9 @@
-import { ipcMain, Notification, dialog, shell, nativeImage, type NativeImage } from 'electron';
+import { ipcMain, Notification, dialog, shell } from 'electron';
 import { IPC } from '../../../shared/ipc-channels';
 import { WorktreeManager, isGitRepo } from '../../git/worktree-manager';
-import { resolveIconPath } from '../../index';
 import { deepMergeConfig } from '../../../shared/object-utils';
 import type { NotificationInput } from '../../../shared/types';
 import type { IpcContext } from '../ipc-context';
-
-let cachedNotificationIcon: NativeImage | null = null;
-function getNotificationIcon(): NativeImage {
-  if (!cachedNotificationIcon) {
-    cachedNotificationIcon = nativeImage.createFromPath(resolveIconPath());
-  }
-  return cachedNotificationIcon;
-}
 
 export function registerSystemHandlers(context: IpcContext): void {
   // === Config ===
@@ -108,7 +99,6 @@ export function registerSystemHandlers(context: IpcContext): void {
     const notification = new Notification({
       title: input.title,
       body: input.body,
-      icon: getNotificationIcon(),
     });
 
     notification.on('click', () => {

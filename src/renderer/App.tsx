@@ -191,8 +191,8 @@ export function App() {
             const projectName = project?.name ?? 'A project';
             const notificationTaskTitle = taskTitle ?? 'A task';
             window.electronAPI.notifications.show({
-              title: `${projectName} -- Idle`,
-              body: `${notificationTaskTitle} needs attention`,
+              title: notificationTaskTitle,
+              body: projectName,
               projectId: session.projectId,
               taskId: taskId ?? '',
             });
