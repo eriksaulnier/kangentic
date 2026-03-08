@@ -13,6 +13,7 @@ import {
   pruneStaleWorktreeProjects as pruneStaleWorktreeProjectsImpl,
   openProjectByPath as openProjectByPathImpl,
   activateAllProjects as activateAllProjectsImpl,
+  getLastOpenedProject as getLastOpenedProjectImpl,
 } from './handlers/projects';
 import { registerTaskHandlers } from './handlers/tasks';
 import { registerSessionHandlers } from './handlers/sessions';
@@ -105,4 +106,8 @@ export async function openProjectByPath(projectPath: string) {
 
 export async function activateAllProjects(): Promise<void> {
   return activateAllProjectsImpl(requireContext());
+}
+
+export function getLastOpenedProject() {
+  return getLastOpenedProjectImpl(requireContext());
 }

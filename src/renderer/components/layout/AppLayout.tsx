@@ -5,6 +5,7 @@ import { ProjectSidebar } from '../sidebar/ProjectSidebar';
 import { KanbanBoard } from '../board/KanbanBoard';
 import { TerminalPanel } from '../terminal/TerminalPanel';
 import { SettingsPanel } from '../settings/SettingsPanel';
+import { WelcomeScreen } from './WelcomeScreen';
 import { useConfigStore } from '../../stores/config-store';
 import { useProjectStore } from '../../stores/project-store';
 import { ToastContainer } from './ToastContainer';
@@ -15,6 +16,7 @@ export function AppLayout() {
   const settingsOpen = useConfigStore((s) => s.settingsOpen);
   const config = useConfigStore((s) => s.config);
   const currentProject = useProjectStore((s) => s.currentProject);
+  const projects = useProjectStore((s) => s.projects);
 
   const sidebar = useSidebarResize(config);
   const terminal = useTerminalResize(config);
@@ -72,11 +74,12 @@ export function AppLayout() {
                 />
               </div>
             </>
+          ) : projects.length === 0 ? (
+            <WelcomeScreen />
           ) : (
             <div className="flex-1 flex items-center justify-center text-fg-faint">
               <div className="text-center">
-                <div className="text-4xl mb-4">&#9776;</div>
-                <div className="text-lg">Select or create a project to get started</div>
+                <div className="text-lg">Select a project from the sidebar</div>
               </div>
             </div>
           )}

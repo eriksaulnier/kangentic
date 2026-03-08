@@ -10,7 +10,7 @@ import { stripKangenticHooks } from '../../agent/hook-manager';
 import { getProjectDb, closeProjectDb } from '../../db/database';
 import { PATHS } from '../../config/paths';
 import { ensureGitignore, getProjectRepos } from '../helpers';
-import type { Task } from '../../../shared/types';
+import type { Project, Task } from '../../../shared/types';
 import type { IpcContext } from '../ipc-context';
 
 /**
@@ -249,6 +249,10 @@ export async function activateAllProjects(context: IpcContext): Promise<void> {
       console.error(`Failed to activate project ${project.name}:`, err);
     }
   }
+}
+
+export function getLastOpenedProject(context: IpcContext): Project | undefined {
+  return context.projectRepo.getLastOpened();
 }
 
 export function registerProjectHandlers(context: IpcContext): void {

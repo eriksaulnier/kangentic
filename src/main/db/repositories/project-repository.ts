@@ -38,6 +38,13 @@ export class ProjectRepository {
     return project;
   }
 
+  getLastOpened(): Project | undefined {
+    const db = getGlobalDb();
+    return db.prepare(
+      'SELECT * FROM projects ORDER BY last_opened DESC LIMIT 1'
+    ).get() as Project | undefined;
+  }
+
   updateLastOpened(id: string): void {
     const db = getGlobalDb();
     db.prepare('UPDATE projects SET last_opened = ? WHERE id = ?').run(new Date().toISOString(), id);

@@ -11,6 +11,7 @@ interface ProjectStore {
   createProject: (input: ProjectCreateInput) => Promise<Project>;
   deleteProject: (id: string) => Promise<void>;
   openProject: (id: string) => Promise<void>;
+  openProjectByPath: (folderPath: string) => Promise<Project>;
   reorderProjects: (ids: string[]) => Promise<void>;
   loadCurrent: () => Promise<void>;
 }
@@ -45,6 +46,24 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     const project = get().projects.find((p) => p.id === id) || await window.electronAPI.projects.getCurrent();
     set({ currentProject: project });
     useSessionStore.getState().markIdleSessionsSeen(id);
+  },
+
+  openProjectByPath: async (folderPath) => {
+    const { projects } = get();
+    const normalized = folderPath.replace(/\\/g, '/');
+    const existing = projects.find(
+      (project) => project.path.replace(/\\/g, '/') === normalized,
+    );
+
+    if (existing) {
+      await get().openProject(existing.id);
+      return existing;
+    }
+
+    const project = await window.electronAPI.projects.openByPath(folderPath);
+    await get().loadProjects();
+    await get().loadCurrent();
+    return project;
   },
 
   reorderProjects: async (ids) => {

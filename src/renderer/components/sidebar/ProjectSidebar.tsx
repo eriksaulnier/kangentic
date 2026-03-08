@@ -137,30 +137,20 @@ export function ProjectSidebar({ onToggleSidebar }: ProjectSidebarProps) {
   const sessionActivity = useSessionStore((s) => s.sessionActivity);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
+  const openProjectByPath = useProjectStore((s) => s.openProjectByPath);
+
   const handleNewProject = async () => {
     const selectedPath = await window.electronAPI.dialog.selectFolder();
     if (!selectedPath) return;
 
-    // Check if this path already has a project
-    const existing = projects.find(
+    const project = await openProjectByPath(selectedPath);
+    const wasExisting = projects.some(
       (p) => p.path.replace(/\\/g, '/') === selectedPath.replace(/\\/g, '/'),
     );
-
-    if (existing) {
-      await openProject(existing.id);
-      useToastStore.getState().addToast({
-        message: `Opened project "${existing.name}"`,
-        variant: 'info',
-      });
-    } else {
-      const project = await window.electronAPI.projects.openByPath(selectedPath);
-      await useProjectStore.getState().loadProjects();
-      await useProjectStore.getState().loadCurrent();
-      useToastStore.getState().addToast({
-        message: `Created project "${project.name}"`,
-        variant: 'info',
-      });
-    }
+    useToastStore.getState().addToast({
+      message: wasExisting ? `Opened project "${project.name}"` : `Created project "${project.name}"`,
+      variant: 'info',
+    });
   };
 
   const handleOpenInExplorer = (e: React.MouseEvent, project: Project) => {

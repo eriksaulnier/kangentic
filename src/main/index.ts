@@ -2,7 +2,7 @@ import { app, BrowserWindow, Menu, nativeImage, session } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { registerAllIpc, getSessionManager, getCommandInjector, getCurrentProjectId, openProjectByPath, cleanupProject, deleteProjectFromIndex, pruneStaleWorktreeProjects, activateAllProjects } from './ipc/register-all';
+import { registerAllIpc, getSessionManager, getCommandInjector, getCurrentProjectId, openProjectByPath, cleanupProject, deleteProjectFromIndex, pruneStaleWorktreeProjects, activateAllProjects, getLastOpenedProject } from './ipc/register-all';
 import { closeAll, getProjectDb } from './db/database';
 import { SessionRepository } from './db/repositories/session-repository';
 import { IPC } from '../shared/ipc-channels';
@@ -223,6 +223,19 @@ const createWindow = () => {
         mainWindow.webContents.send(IPC.PROJECT_AUTO_OPENED, project);
       } catch (err) {
         console.error('Failed to auto-open project:', err);
+      }
+    }
+
+    // Auto-open the last activated project if no --cwd was provided
+    if (!cwd && mainWindow) {
+      const lastProject = getLastOpenedProject();
+      if (lastProject) {
+        try {
+          const project = await openProjectByPath(lastProject.path);
+          mainWindow.webContents.send(IPC.PROJECT_AUTO_OPENED, project);
+        } catch (err) {
+          console.error('Failed to auto-open last project:', err);
+        }
       }
     }
 
