@@ -87,6 +87,22 @@ Windows resolves taskbar icons by matching the running window's AppUserModelID (
 
 Both `app.setAppUserModelId()` in `src/main/index.ts` and `setupAppId` in `forge.config.ts` must use `com.squirrel.Kangentic.kangentic` to match the Squirrel shortcut. A mismatch causes Windows to fall back to the Electron default icon and app name. Note: `BrowserWindow.setIcon()` does not control the Windows taskbar icon -- only the AUMID match does.
 
+## macOS Title Bar
+
+`BrowserWindow` uses `titleBarStyle: 'hidden'` with `trafficLightPosition: { x: 12, y: 12 }` to position the native traffic lights within the custom TitleBar. The renderer detects macOS via `window.electronAPI.platform === 'darwin'` and applies `pl-20` (80px left padding) to prevent content from rendering under the traffic lights. On Windows/Linux, the custom TitleBar renders its own minimize/maximize/close buttons instead.
+
+## macOS Code Signing
+
+macOS builds use hardened runtime with `entitlements.plist` providing JIT, unsigned executable memory, and dyld environment variable entitlements (required by node-pty). Notarization uses `notarytool` via `osxNotarize` in `forge.config.ts`, gated on the `APPLE_IDENTITY` environment variable.
+
+## Linux System Dependencies
+
+The deb package declares `depends` on Electron's required system libraries (`libnss3`, `libatk-bridge2.0-0`, `libgtk-3-0`, `libgbm1`, `libasound2`, `libdrm2`, `libxshmfence1`). The rpm package uses equivalent `requires` (`nss`, `atk`, `gtk3`, `mesa-libgbm`, `alsa-lib`, `libdrm`, `libXShmfence`). Without these, the app crashes on launch on fresh Linux installations.
+
+## Auto-Update Platform Guard
+
+Auto-update via `update-electron-app` is disabled on Linux (`process.platform !== 'linux'`). Linux has no Squirrel/autoUpdater backend -- users update via the launcher package (`npx kangentic`). Similarly, `electron-squirrel-startup` only calls `app.quit()` on Windows.
+
 ## Security Fuses
 
 Electron fuses enabled for production builds:

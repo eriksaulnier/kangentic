@@ -52,6 +52,8 @@ This means worktrees get all files including `.claude/settings.json` (so Claude 
 
 Sparse-checkout was chosen over `skip-worktree` because skip-worktree flags get lost during rebase and merge operations. Sparse-checkout survives all git operations.
 
+Sparse-checkout requires git 2.25+. On older git versions (some Linux distros), the commands fail gracefully -- worktrees still work but `.claude/commands/` and `.claude/skills/` will be present, which may cause duplicate slash command discovery.
+
 ## Hook Delivery
 
 Two bridge scripts integrate Claude Code's hook system with Kangentic's UI.
