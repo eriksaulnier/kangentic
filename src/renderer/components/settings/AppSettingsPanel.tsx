@@ -206,7 +206,7 @@ export function AppSettingsPanel() {
               onChange={(value) => handleAppUpdate({ autoFocusIdleSession: value })}
             />
           </SettingRow>
-          <SettingRow label="Desktop Notifications for Idle Agents" description="Show a native notification when an agent needs attention on a non-active project">
+          <SettingRow label="Desktop Notifications" description="Show native notifications when agents need attention on non-visible projects">
             <ToggleSwitch
               checked={globalConfig.notifyIdleOnInactiveProject}
               onChange={(value) => handleAppUpdate({ notifyIdleOnInactiveProject: value })}

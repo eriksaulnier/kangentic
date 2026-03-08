@@ -121,6 +121,31 @@ export function App() {
       }));
     }
 
+    // Notification helpers -- shared by idle, exit, and auto-move handlers.
+    const notificationCooldowns = new Map<string, number>();
+    const NOTIFICATION_COOLDOWN_MS = 10_000;
+
+    async function shouldNotify(key: string, sessionProjectId: string): Promise<boolean> {
+      const notifyConfig = useConfigStore.getState().config;
+      if (!notifyConfig.notifyIdleOnInactiveProject) return false;
+
+      const lastNotified = notificationCooldowns.get(key) ?? 0;
+      if (Date.now() - lastNotified < NOTIFICATION_COOLDOWN_MS) return false;
+
+      const focused = await window.electronAPI.window.isFocused();
+      const activeProjectId = useProjectStore.getState().currentProject?.id;
+      // Skip if window focused AND viewing the session's project
+      if (focused && sessionProjectId === activeProjectId) return false;
+
+      return true;
+    }
+
+    function sendNotification(key: string, title: string, body: string, notifyProjectId: string, notifyTaskId: string) {
+      notificationCooldowns.set(key, Date.now());
+      window.electronAPI.notifications.show({ title, body, projectId: notifyProjectId, taskId: notifyTaskId });
+      window.electronAPI.window.flashFrame(true);
+    }
+
     // Session exit events
     if (sessions.onExit) {
       cleanups.push(sessions.onExit((sessionId, exitCode, projectId) => {
@@ -140,6 +165,21 @@ export function App() {
             variant: exitCode === 0 ? 'info' : 'warning',
           });
         }
+
+        // Desktop notification for non-zero exit on non-visible projects
+        if (exitCode !== 0) {
+          const resolvedProjectId = projectId ?? currentSession?.projectId;
+          if (resolvedProjectId) {
+            shouldNotify(sessionId, resolvedProjectId).then((notify) => {
+              if (!notify) return;
+              const project = useProjectStore.getState().projects.find((p) => p.id === resolvedProjectId);
+              const task = useBoardStore.getState().tasks.find((t) => t.session_id === sessionId)
+                ?? useBoardStore.getState().tasks.find((t) => t.id === currentSession?.taskId);
+              const label = task?.title ?? sessionId.slice(0, 8);
+              sendNotification(sessionId, `Session crashed: ${label}`, project?.name ?? 'A project', resolvedProjectId, task?.id ?? '');
+            });
+          }
+        }
       }));
     }
 
@@ -157,7 +197,7 @@ export function App() {
     // ALWAYS update activity (sidebar badges need cross-project data),
     // but only run auto-focus for current project.
     if (sessions.onActivity) {
-      cleanups.push(sessions.onActivity((sessionId, state, projectId, taskId, taskTitle) => {
+      cleanups.push(sessions.onActivity((sessionId, state, projectId, taskId, taskTitle, isPermission) => {
         updateActivity(sessionId, state);
 
         const activeProjectId = useProjectStore.getState().currentProject?.id;
@@ -184,20 +224,18 @@ export function App() {
           }
         }
 
-        // OS notification + taskbar flash for idle on non-active projects
-        if (state === 'idle' && config.notifyIdleOnInactiveProject) {
+        // OS notification + taskbar flash for idle sessions not visible to the user
+        if (state === 'idle') {
           const session = sessionStore.sessions.find((s) => s.id === sessionId);
-          if (session && session.projectId !== activeProjectId) {
-            const project = useProjectStore.getState().projects.find((p) => p.id === session.projectId);
-            const projectName = project?.name ?? 'A project';
-            const notificationTaskTitle = taskTitle ?? 'A task';
-            window.electronAPI.notifications.show({
-              title: notificationTaskTitle,
-              body: projectName,
-              projectId: session.projectId,
-              taskId: taskId ?? '',
+          if (session) {
+            shouldNotify(sessionId, session.projectId).then((notify) => {
+              if (!notify) return;
+              const project = useProjectStore.getState().projects.find((p) => p.id === session.projectId);
+              const projectName = project?.name ?? 'A project';
+              const label = taskTitle ?? 'A task';
+              const body = isPermission ? `Needs permission -- ${projectName}` : projectName;
+              sendNotification(sessionId, label, body, session.projectId, taskId ?? '');
             });
-            window.electronAPI.window.flashFrame(true);
           }
         }
       }));
@@ -233,13 +271,22 @@ export function App() {
     // Task auto-moved (plan exit → next column)
     const tasks = window.electronAPI?.tasks;
     if (tasks?.onAutoMoved) {
-      cleanups.push(tasks.onAutoMoved((_taskId, _targetSwimlaneId, taskTitle) => {
+      cleanups.push(tasks.onAutoMoved((autoMovedTaskId, _targetSwimlaneId, taskTitle, autoMoveProjectId) => {
         useBoardStore.getState().loadBoard();
         useSessionStore.getState().syncSessions();
         useToastStore.getState().addToast({
           message: `Plan complete -- moved "${taskTitle}" to next column`,
           variant: 'success',
         });
+
+        // Desktop notification for auto-moves on non-visible projects
+        if (autoMoveProjectId) {
+          shouldNotify(`automove:${autoMovedTaskId}`, autoMoveProjectId).then((notify) => {
+            if (!notify) return;
+            const project = useProjectStore.getState().projects.find((p) => p.id === autoMoveProjectId);
+            sendNotification(`automove:${autoMovedTaskId}`, `Plan complete: ${taskTitle}`, project?.name ?? 'A project', autoMoveProjectId, autoMovedTaskId);
+          });
+        }
       }));
     }
 

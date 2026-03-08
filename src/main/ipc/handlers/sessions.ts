@@ -103,7 +103,7 @@ export function registerSessionHandlers(context: IpcContext): void {
     }
   });
 
-  context.sessionManager.on('activity', (sessionId: string, state: string) => {
+  context.sessionManager.on('activity', (sessionId: string, state: string, isPermission: boolean) => {
     if (!context.mainWindow.isDestroyed()) {
       const projectId = context.sessionManager.getSessionProjectId(sessionId);
       const taskId = context.sessionManager.getSessionTaskId(sessionId);
@@ -117,7 +117,7 @@ export function registerSessionHandlers(context: IpcContext): void {
           // Project DB may not exist yet -- skip title lookup
         }
       }
-      context.mainWindow.webContents.send(IPC.SESSION_ACTIVITY, sessionId, state, projectId, taskId, taskTitle);
+      context.mainWindow.webContents.send(IPC.SESSION_ACTIVITY, sessionId, state, projectId, taskId, taskTitle, isPermission);
     }
   });
 
@@ -208,7 +208,7 @@ export function registerSessionHandlers(context: IpcContext): void {
       await handleTaskMove(context, { taskId: task.id, targetSwimlaneId: target.id, targetPosition: position }, resolvedProjectId, resolvedProjectPath);
 
       if (!context.mainWindow.isDestroyed()) {
-        context.mainWindow.webContents.send(IPC.TASK_AUTO_MOVED, task.id, target.id, task.title);
+        context.mainWindow.webContents.send(IPC.TASK_AUTO_MOVED, task.id, target.id, task.title, resolvedProjectId);
       }
       console.log(`[plan-exit] Auto-moved "${task.title}" -> "${target.name}"`);
     } catch (err) {

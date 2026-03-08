@@ -510,7 +510,7 @@ export interface ElectronAPI {
     move: (input: TaskMoveInput) => Promise<void>;
     listArchived: () => Promise<Task[]>;
     unarchive: (input: TaskUnarchiveInput) => Promise<Task>;
-    onAutoMoved: (callback: (taskId: string, targetSwimlaneId: string, taskTitle: string) => void) => () => void;
+    onAutoMoved: (callback: (taskId: string, targetSwimlaneId: string, taskTitle: string, projectId?: string) => void) => () => void;
   };
 
   // Attachments
@@ -561,7 +561,7 @@ export interface ElectronAPI {
     onStatus: (callback: (sessionId: string, status: SessionStatus, projectId?: string) => void) => () => void;
     onUsage: (callback: (sessionId: string, data: SessionUsage, projectId?: string) => void) => () => void;
     getActivity: (projectId?: string) => Promise<Record<string, ActivityState>>;
-    onActivity: (callback: (sessionId: string, state: ActivityState, projectId?: string, taskId?: string, taskTitle?: string) => void) => () => void;
+    onActivity: (callback: (sessionId: string, state: ActivityState, projectId?: string, taskId?: string, taskTitle?: string, isPermission?: boolean) => void) => () => void;
     getEvents: (sessionId: string) => Promise<SessionEvent[]>;
     getEventsCache: (projectId?: string) => Promise<Record<string, SessionEvent[]>>;
     onEvent: (callback: (sessionId: string, event: SessionEvent, projectId?: string) => void) => () => void;
@@ -614,6 +614,7 @@ export interface ElectronAPI {
     maximize: () => void;
     close: () => void;
     flashFrame: (flash: boolean) => void;
+    isFocused: () => Promise<boolean>;
   };
 
   // Platform

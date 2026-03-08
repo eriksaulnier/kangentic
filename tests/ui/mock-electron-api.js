@@ -635,6 +635,7 @@
       maximize: noop,
       close: noop,
       flashFrame: noop,
+      isFocused: function () { return Promise.resolve(true); },
     },
 
     platform: 'win32',

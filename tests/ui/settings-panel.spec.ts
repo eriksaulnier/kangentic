@@ -57,7 +57,7 @@ test.describe('App Settings Panel', () => {
     await page.getByRole('button', { name: 'Behavior' }).click();
     await expect(page.locator('text=Skip Task Delete Confirmation')).toBeVisible();
     await expect(page.locator('text=Auto-Focus Idle Sessions')).toBeVisible();
-    await expect(page.locator('text=Desktop Notifications for Idle Agents')).toBeVisible();
+    await expect(page.locator('text=Desktop Notifications')).toBeVisible();
     await expect(page.locator('text=Launch All Projects on Startup')).toBeVisible();
     await closeSettings();
   });

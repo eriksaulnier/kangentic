@@ -27,8 +27,8 @@ const api: ElectronAPI = {
     listArchived: () => ipcRenderer.invoke(IPC.TASK_LIST_ARCHIVED),
     unarchive: (input) => ipcRenderer.invoke(IPC.TASK_UNARCHIVE, input),
     onAutoMoved: (callback) => {
-      const handler = (_event: Electron.IpcRendererEvent, taskId: string, targetSwimlaneId: string, taskTitle: string) =>
-        callback(taskId, targetSwimlaneId, taskTitle);
+      const handler = (_event: Electron.IpcRendererEvent, taskId: string, targetSwimlaneId: string, taskTitle: string, projectId?: string) =>
+        callback(taskId, targetSwimlaneId, taskTitle, projectId);
       ipcRenderer.on(IPC.TASK_AUTO_MOVED, handler);
       return () => ipcRenderer.removeListener(IPC.TASK_AUTO_MOVED, handler);
     },
@@ -94,7 +94,7 @@ const api: ElectronAPI = {
     },
     getActivity: (projectId?) => ipcRenderer.invoke(IPC.SESSION_GET_ACTIVITY, projectId),
     onActivity: (callback) => {
-      const handler = (_event: Electron.IpcRendererEvent, sessionId: string, state: ActivityState, projectId?: string, taskId?: string, taskTitle?: string) => callback(sessionId, state, projectId, taskId, taskTitle);
+      const handler = (_event: Electron.IpcRendererEvent, sessionId: string, state: ActivityState, projectId?: string, taskId?: string, taskTitle?: string, isPermission?: boolean) => callback(sessionId, state, projectId, taskId, taskTitle, isPermission);
       ipcRenderer.on(IPC.SESSION_ACTIVITY, handler);
       return () => ipcRenderer.removeListener(IPC.SESSION_ACTIVITY, handler);
     },
@@ -151,6 +151,7 @@ const api: ElectronAPI = {
     maximize: () => ipcRenderer.send(IPC.WINDOW_MAXIMIZE),
     close: () => ipcRenderer.send(IPC.WINDOW_CLOSE),
     flashFrame: (flash: boolean) => ipcRenderer.send(IPC.WINDOW_FLASH_FRAME, flash),
+    isFocused: () => ipcRenderer.invoke(IPC.WINDOW_IS_FOCUSED),
   },
 
   platform: process.platform,

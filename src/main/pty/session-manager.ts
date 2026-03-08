@@ -258,7 +258,7 @@ export class SessionManager extends EventEmitter {
     this.subagentDepth.delete(id);
     this.pendingIdleWhileSubagent.delete(id);
     this.lastIdleWasPermission.delete(id);
-    this.emit('activity', id, 'idle');
+    this.emit('activity', id, 'idle', false);
 
     // Batched data output (~60fps)
     ptyProcess.onData((data: string) => {
@@ -633,7 +633,7 @@ export class SessionManager extends EventEmitter {
               this.pendingIdleWhileSubagent.delete(session.id);
               if (this.activityCache.get(session.id) !== 'idle') {
                 this.activityCache.set(session.id, 'idle');
-                this.emit('activity', session.id, 'idle');
+                this.emit('activity', session.id, 'idle', false);
               }
             }
           }
@@ -698,7 +698,7 @@ export class SessionManager extends EventEmitter {
             if (newActivity === 'thinking') {
               this.lastIdleWasPermission.delete(session.id);
             }
-            this.emit('activity', session.id, newActivity);
+            this.emit('activity', session.id, newActivity, newActivity === 'idle' && event.detail === 'permission');
           }
         }
       }

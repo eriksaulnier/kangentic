@@ -93,6 +93,7 @@ export function registerSystemHandlers(context: IpcContext): void {
   });
   ipcMain.on(IPC.WINDOW_CLOSE, () => context.mainWindow.close());
   ipcMain.on(IPC.WINDOW_FLASH_FRAME, (_event, flash: boolean) => context.mainWindow.flashFrame(flash));
+  ipcMain.handle(IPC.WINDOW_IS_FOCUSED, () => context.mainWindow.isFocused());
 
   // === Notifications ===
   ipcMain.on(IPC.NOTIFICATION_SHOW, (_event, input: NotificationInput) => {
