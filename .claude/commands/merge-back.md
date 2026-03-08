@@ -79,17 +79,22 @@ This pushes the rebased commits directly to the remote source branch. After a su
 
 ## Step 4.5 — Update Documentation
 
-**IMPORTANT: This is NOT the final step. After this step completes, you MUST continue to Step 5 (Report) and Step 6 (Update Local Source Branch). Do not stop here.**
+**Do NOT invoke `/update-docs` as a skill call** — that returns control to the user and breaks the merge-back flow. Instead, perform the docs review inline within this same execution:
 
-Run `/update-docs` to review and update documentation for any source changes in this commit.
+1. Get the changed source files from the commit just pushed (e.g., `git diff --name-only HEAD~1` or from memory of Step 1).
+2. Filter out non-source files (`docs/`, `.claude/`, `tests/`).
+3. If no source files changed, skip to Step 5.
+4. Search `docs/` for references to changed code (function names, types, descriptions that may be stale).
+5. Read relevant doc sections and compare against the updated source.
+6. Edit any stale docs inline using the `Edit` tool.
 
-If `/update-docs` makes changes:
-1. The docs updates will appear as unstaged changes
-2. Stage and commit them: `git add docs/` then commit with message "Update docs for <summary>"
-3. Push the docs commit: `git push origin HEAD:<sourceBranch>`
+If docs were updated:
+1. Stage: `git add docs/`
+2. Commit with message "Update docs for <summary>" (use Write tool for `.kangentic/COMMIT_MSG.tmp`, then `git commit -F .kangentic/COMMIT_MSG.tmp`)
+3. Push: `git push origin HEAD:<sourceBranch>`
 4. **Continue to Step 5.**
 
-If `/update-docs` reports no changes needed, **continue to Step 5.**
+If no docs need updating, **continue to Step 5.**
 
 ## Step 5 — Report (always runs after Step 4.5)
 
