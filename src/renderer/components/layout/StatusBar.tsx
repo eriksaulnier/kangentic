@@ -11,7 +11,7 @@ export function StatusBar() {
   const allSessions = useSessionStore((s) => s.sessions);
   const sessionUsage = useSessionStore((s) => s.sessionUsage);
   const claudeInfo = useConfigStore((s) => s.claudeInfo);
-  const claudeVersionLabel = useConfigStore((s) => s.claudeVersionLabel);
+  const appVersion = useConfigStore((s) => s.appVersion);
   const tasks = useBoardStore((s) => s.tasks);
   const swimlanes = useBoardStore((s) => s.swimlanes);
   const currentProject = useProjectStore((s) => s.currentProject);
@@ -81,12 +81,11 @@ export function StatusBar() {
       <div className="flex-1" />
 
       <div className="flex items-center gap-4">
-        {claudeInfo && (
-          claudeInfo.found ? (
-            <span className="px-2 py-1 rounded bg-surface-raised text-fg-faint">{claudeVersionLabel}</span>
-          ) : (
-            <span className="text-red-400">claude not found</span>
-          )
+        {claudeInfo && !claudeInfo.found && (
+          <span className="text-red-400">claude not found</span>
+        )}
+        {appVersion && (
+          <span className="px-2 py-1 rounded bg-surface-raised text-fg-faint">Kangentic v{appVersion}</span>
         )}
       </div>
     </div>

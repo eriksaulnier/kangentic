@@ -13,6 +13,7 @@ export function App() {
   const currentProject = useProjectStore((s) => s.currentProject);
   const loadBoard = useBoardStore((s) => s.loadBoard);
   const loadConfig = useConfigStore((s) => s.loadConfig);
+  const loadAppVersion = useConfigStore((s) => s.loadAppVersion);
   const detectClaude = useConfigStore((s) => s.detectClaude);
   const updateSessionStatus = useSessionStore((s) => s.updateSessionStatus);
   const updateUsage = useSessionStore((s) => s.updateUsage);
@@ -26,6 +27,7 @@ export function App() {
       performance.mark('renderer-mount-start');
     }
     loadConfig();
+    loadAppVersion();
     detectClaude();
     loadProjects();
     // Restore the current project after a page reload (e.g. Vite HMR).

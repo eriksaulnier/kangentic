@@ -16,9 +16,12 @@ interface ConfigStore {
   loadConfig: () => Promise<void>;
   updateConfig: (partial: DeepPartial<AppConfig>) => Promise<void>;
 
+  // -- App version --
+  appVersion: string | null;
+  loadAppVersion: () => Promise<void>;
+
   // -- Claude CLI detection --
   claudeInfo: { found: boolean; path: string | null; version: string | null } | null;
-  claudeVersionLabel: string;
   claudeVersionNumber: string | null;
   detectClaude: () => Promise<void>;
 
@@ -55,8 +58,8 @@ async function refreshConfigs(): Promise<{ config: AppConfig; globalConfig: AppC
 export const useConfigStore = create<ConfigStore>((set, get) => ({
   config: DEFAULT_CONFIG,
   globalConfig: DEFAULT_CONFIG,
+  appVersion: null,
   claudeInfo: null,
-  claudeVersionLabel: 'Claude Code',
   claudeVersionNumber: null,
   loading: false,
   settingsOpen: false,
@@ -76,12 +79,16 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     set(configs);
   },
 
+  loadAppVersion: async () => {
+    const appVersion = await window.electronAPI.app.getVersion();
+    set({ appVersion });
+  },
+
   detectClaude: async () => {
     const claudeInfo = await window.electronAPI.claude.detect();
     const version = parseClaudeVersion(claudeInfo?.version ?? null);
     set({
       claudeInfo,
-      claudeVersionLabel: version ? `Claude Code | v${version}` : 'Claude Code',
       claudeVersionNumber: version,
     });
   },

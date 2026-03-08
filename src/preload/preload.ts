@@ -154,6 +154,10 @@ const api: ElectronAPI = {
     isFocused: () => ipcRenderer.invoke(IPC.WINDOW_IS_FOCUSED),
   },
 
+  app: {
+    getVersion: () => ipcRenderer.invoke(IPC.APP_GET_VERSION),
+  },
+
   platform: process.platform,
 };
 

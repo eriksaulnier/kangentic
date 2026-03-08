@@ -591,6 +591,12 @@
       },
     },
 
+    app: {
+      getVersion: async function () {
+        return '0.1.0';
+      },
+    },
+
     shell: {
       getAvailable: async function () {
         return [];

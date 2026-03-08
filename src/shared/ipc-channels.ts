@@ -97,6 +97,9 @@ export const IPC = {
   WINDOW_FLASH_FRAME: 'window:flashFrame',
   WINDOW_IS_FOCUSED: 'window:isFocused',
 
+  // App
+  APP_GET_VERSION: 'app:getVersion',
+
   // Notifications
   NOTIFICATION_SHOW: 'notification:show',
   NOTIFICATION_CLICKED: 'notification:clicked',

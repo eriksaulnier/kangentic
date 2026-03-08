@@ -617,6 +617,11 @@ export interface ElectronAPI {
     isFocused: () => Promise<boolean>;
   };
 
+  // App
+  app: {
+    getVersion: () => Promise<string>;
+  };
+
   // Platform
   platform: string;
 }

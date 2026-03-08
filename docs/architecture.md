@@ -285,9 +285,10 @@ State: `sessions`, `activeSessionId`, `openTaskId`, `dialogSessionId`, `sessionU
 
 ### ConfigStore (`config-store.ts`)
 
-State: `config` (AppConfig), `claudeInfo`, `claudeVersionLabel`, `settingsOpen`
+State: `config` (AppConfig), `appVersion`, `claudeInfo`, `claudeVersionNumber`, `settingsOpen`
 
 - **Theme subscription** -- watches theme changes, updates `<html>` class for CSS variables.
+- **App version** -- `loadAppVersion()` fetches the Electron app version via IPC.
 - **Claude detection** -- `detectClaude()` finds CLI path and parses version string.
 
 ### ProjectStore (`project-store.ts`)
