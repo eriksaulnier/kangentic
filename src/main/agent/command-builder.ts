@@ -79,7 +79,14 @@ function resolveBridgeScript(name: string): string {
     path.resolve(__dirname, '..', '..', 'src', 'main', 'agent', `${name}.js`),
     path.resolve(process.cwd(), 'src', 'main', 'agent', `${name}.js`),
   ];
-  return candidates.find(p => fs.existsSync(p)) || candidates[0];
+  const resolved = candidates.find(p => fs.existsSync(p)) || candidates[0];
+  // Bridge scripts run in an external node process (Claude Code hooks), which
+  // cannot read files inside an asar archive. In production builds the scripts
+  // are unpacked via asarUnpack, so rewrite the path to the unpacked location.
+  if (resolved.includes('app.asar')) {
+    return resolved.replace('app.asar', 'app.asar.unpacked');
+  }
+  return resolved;
 }
 
 export class CommandBuilder {

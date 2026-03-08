@@ -15,6 +15,7 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: {
       unpack: '**/node-pty/prebuilds/**',
+      unpackDir: '.vite/build',
     },
     name: 'Kangentic',
     executableName: 'kangentic',
