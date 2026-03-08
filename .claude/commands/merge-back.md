@@ -79,16 +79,19 @@ This pushes the rebased commits directly to the remote source branch. After a su
 
 ## Step 4.5 — Update Documentation
 
+**IMPORTANT: This is NOT the final step. After this step completes, you MUST continue to Step 5 (Report) and Step 6 (Update Local Source Branch). Do not stop here.**
+
 Run `/update-docs` to review and update documentation for any source changes in this commit.
 
 If `/update-docs` makes changes:
 1. The docs updates will appear as unstaged changes
 2. Stage and commit them: `git add docs/` then commit with message "Update docs for <summary>"
 3. Push the docs commit: `git push origin HEAD:<sourceBranch>`
+4. **Continue to Step 5.**
 
-If `/update-docs` reports no changes needed, proceed to Step 5.
+If `/update-docs` reports no changes needed, **continue to Step 5.**
 
-## Step 5 — Report
+## Step 5 — Report (always runs after Step 4.5)
 
 Summarize:
 - Mode (worktree or main repo)
@@ -97,7 +100,7 @@ Summarize:
 - Number of commits landed (from `git log origin/<sourceBranch>@{1}..origin/<sourceBranch> --oneline` or similar)
 - **Worktree mode only:** Remind the user they can clean up the worktree by moving the task to Done on the board (which triggers `cleanup_worktree`) or manually
 
-## Step 6 — Update Local Source Branch (worktree mode only)
+## Step 6 — Update Local Source Branch (worktree mode only, always runs after Step 5)
 
 **Skip this step entirely in main repo mode** — you're already on the branch.
 
