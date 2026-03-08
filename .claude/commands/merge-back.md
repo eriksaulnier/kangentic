@@ -70,6 +70,7 @@ If there are uncommitted changes (non-empty `git status --porcelain` output):
    e. Edit any stale docs inline using the `Edit` tool.
 4. Stage changes: `git add -A`
 5. Write the commit message using the **Write tool** to the relative path `.kangentic/COMMIT_MSG.tmp` (resolved from CWD — do NOT resolve an absolute path, do NOT use the system temp directory, do NOT use `os.tmpdir()`).
+
    `.kangentic/` is gitignored, so `git add -A` won't stage it and no cleanup is needed.
    Then commit: `git commit -F .kangentic/COMMIT_MSG.tmp`
    **Never write to `.git/`** — in worktrees `.git` is a file, not a directory.
@@ -110,26 +111,7 @@ This pushes the rebased commits directly to the remote source branch. After a su
 2. Suggest re-running `/merge-back` to fetch the latest and rebase again.
 3. Stop — do not force-push.
 
-## Step 4.5 — Update Documentation
-
-**Do NOT invoke `/update-docs` as a skill call** — that returns control to the user and breaks the merge-back flow. Instead, perform the docs review inline within this same execution:
-
-1. Get the changed source files from the commit just pushed (e.g., `git diff --name-only HEAD~1` or from memory of Step 1).
-2. Filter out non-source files (`docs/`, `.claude/`, `tests/`).
-3. If no source files changed, skip to Step 5.
-4. Search `docs/` for references to changed code (function names, types, descriptions that may be stale).
-5. Read relevant doc sections and compare against the updated source.
-6. Edit any stale docs inline using the `Edit` tool.
-
-If docs were updated:
-1. Stage: `git add docs/`
-2. Commit with message "docs: update for <summary>" (use Write tool for `.kangentic/COMMIT_MSG.tmp`, then `git commit -F .kangentic/COMMIT_MSG.tmp`)
-3. Push: `git push origin HEAD:<sourceBranch>`
-4. **Continue to Step 5.**
-
-If no docs need updating, **continue to Step 5.**
-
-## Step 5 — Report (always runs after Step 4.5)
+## Step 5 — Report
 
 Summarize:
 - Mode (worktree or main repo)
