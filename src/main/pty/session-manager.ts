@@ -43,6 +43,8 @@ export class SessionManager extends EventEmitter {
   private activityCache = new Map<string, ActivityState>();
   private subagentDepth = new Map<string, number>();
   private pendingIdleWhileSubagent = new Map<string, boolean>();
+  private permissionIdle = new Map<string, boolean>();
+  private idleTimestamp = new Map<string, number>();
 
   private eventCache = new Map<string, SessionEvent[]>();
 
@@ -257,6 +259,8 @@ export class SessionManager extends EventEmitter {
     this.activityCache.set(id, 'idle');
     this.subagentDepth.delete(id);
     this.pendingIdleWhileSubagent.delete(id);
+    this.permissionIdle.delete(id);
+    this.idleTimestamp.set(id, Date.now());
 
     this.emit('activity', id, 'idle', false);
 
@@ -347,6 +351,8 @@ export class SessionManager extends EventEmitter {
     this.activityCache.delete(sessionId);
     this.subagentDepth.delete(sessionId);
     this.pendingIdleWhileSubagent.delete(sessionId);
+    this.permissionIdle.delete(sessionId);
+    this.idleTimestamp.delete(sessionId);
 
     this.eventCache.delete(sessionId);
   }
@@ -396,6 +402,8 @@ export class SessionManager extends EventEmitter {
     // Clear subagent depth -- session is no longer active
     this.subagentDepth.delete(sessionId);
     this.pendingIdleWhileSubagent.delete(sessionId);
+    this.permissionIdle.delete(sessionId);
+    this.idleTimestamp.delete(sessionId);
 
 
     // Mark suspended BEFORE killing so the async onExit handler preserves it
@@ -562,8 +570,28 @@ export class SessionManager extends EventEmitter {
       const usage = ClaudeStatusParser.parseStatus(raw);
       if (!usage) return;
 
+      const previousUsage = this.usageCache.get(session.id);
+
       this.usageCache.set(session.id, usage);
       this.emit('usage', session.id, usage);
+
+      // Heartbeat recovery: if tokens increased while idle for >1s, agent resumed work.
+      // During any true idle, the model is blocked and token counts are frozen.
+      // Only when work genuinely resumes do tokens climb. The 1-second grace period
+      // prevents race conditions from status updates arriving slightly after an idle event.
+      if (previousUsage && this.activityCache.get(session.id) === 'idle') {
+        const previousTokens = previousUsage.contextWindow.totalInputTokens
+                             + previousUsage.contextWindow.totalOutputTokens;
+        const currentTokens = usage.contextWindow.totalInputTokens
+                            + usage.contextWindow.totalOutputTokens;
+        const idleStart = this.idleTimestamp.get(session.id);
+        if (currentTokens > previousTokens && idleStart && (Date.now() - idleStart) > 1000) {
+          this.activityCache.set(session.id, 'thinking');
+          this.idleTimestamp.delete(session.id);
+          this.permissionIdle.delete(session.id);
+          this.emit('activity', session.id, 'thinking', false);
+        }
+      }
     } catch {
       // File may not exist yet -- ignore
     }
@@ -674,15 +702,18 @@ export class SessionManager extends EventEmitter {
             //   main agent resuming after permission approval
             // - depth > 0 means subagents are running and this tool_start
             //   is likely from a subagent, not the main agent
-            // Permission idle is "sticky" during subagent work -- recovery
-            // happens naturally when depth reaches 0 (next tool_start allowed).
+            // Permission idle bypasses suppression via `permissionIdle` flag --
+            // the first event after approval proves the CLI unblocked.
             const currentActivity = this.activityCache.get(session.id);
             const depth = this.subagentDepth.get(session.id) || 0;
             if (currentActivity === 'idle' && newActivity === 'thinking'
                 && event.type !== EventType.Prompt
                 && event.type !== EventType.SubagentStart
-                && depth > 0) {
+                && depth > 0
+                && !this.permissionIdle.get(session.id)) {
               // Suppress: subagent tool event while main agent is idle
+              // Exception: permissionIdle bypass -- the first event after a
+              // permission approval proves the CLI unblocked, so allow it
               continue;
             }
 
@@ -703,6 +734,16 @@ export class SessionManager extends EventEmitter {
             }
 
             this.activityCache.set(session.id, newActivity);
+
+            // Track permission-idle flag and idle timestamp for recovery
+            if (newActivity === 'idle') {
+              this.permissionIdle.set(session.id, event.detail === 'permission');
+              this.idleTimestamp.set(session.id, Date.now());
+            } else if (newActivity === 'thinking') {
+              this.permissionIdle.delete(session.id);
+              this.idleTimestamp.delete(session.id);
+            }
+
             this.emit('activity', session.id, newActivity, newActivity === 'idle' && event.detail === 'permission');
           }
         }

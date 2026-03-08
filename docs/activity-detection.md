@@ -106,9 +106,10 @@ Two guards protect against incorrect state transitions when subagents are runnin
 | Event is `prompt` | **Allow** | User responded -- always reliable |
 | Event is `subagent_start` | **Allow** | Main agent spawning -- always reliable |
 | Subagent depth = 0 | **Allow** | No subagents running, so this `tool_start` is from the main agent |
+| `permissionIdle` flag set | **Allow** | Permission was just approved -- first event proves CLI unblocked |
 | Subagent depth > 0 | **Suppress** | The `tool_start` is likely from a still-running subagent |
 
-Permission idle is "sticky" during subagent work -- `tool_start` events at depth > 0 are always suppressed, even after a permission prompt. Recovery happens naturally when depth reaches 0 and the next `tool_start`, `prompt`, or `subagent_start` fires.
+When idle is caused by a `PermissionRequest` (detail='permission'), a `permissionIdle` flag is set. Guard 1 bypasses suppression when this flag is set, allowing the first tool event after permission approval to transition the card back to thinking -- even at depth > 0. The flag is cleared when the transition to thinking occurs.
 
 **Guard 2: thinking → idle suppression** (prevents main agent Stop from showing idle while subagents work)
 
@@ -126,22 +127,31 @@ Permission idle is "sticky" during subagent work -- `tool_start` events at depth
 - Permission idles (`detail: 'permission'`) also clear the pending flag to prevent stale deferred idles after approval
 
 **Permission idle recovery:**
-- Permission idle is "sticky" -- no special recovery mechanism is needed
-- When subagents finish (depth reaches 0), the card stays idle because the permission prompt may still be blocking
-- Recovery happens naturally: the next `tool_start` at depth 0 (after approval), `prompt`, or `subagent_start` transitions to thinking via Guard 1
-- This ensures the card never shows green while a permission prompt is waiting for user action
+- When idle is caused by `PermissionRequest` (detail='permission'), a `permissionIdle` flag is set on the session
+- Guard 1 bypasses depth-based suppression when this flag is set, allowing the first event after approval to transition to thinking
+- The flag is cleared when the transition to thinking occurs
+- This is safe because during a permission block, the entire CLI process freezes -- no events fire until the user approves
+- The first event after a permission idle IS proof that permission was granted
+
+**Heartbeat recovery (safety net):**
+- Claude Code's `status.json` contains cumulative token counts (`totalInputTokens`, `totalOutputTokens`) that only increase during active model inference
+- The status file is already watched with 100ms debounce via `readAndEmitUsage()`
+- When tokens increase while idle for >1 second, the session transitions to thinking
+- During any true idle, the model is blocked and token counts are frozen -- no false recovery is possible
+- The 1-second grace period prevents race conditions from status updates arriving slightly after an idle event
 
 ### Scenarios
 
-1. **Permission prompt + subagents running:** Permission idle bypasses Guard 2 → card shows idle immediately. Card stays amber while subagents continue (Guard 1 suppresses their tool events). Card stays amber even after subagents finish (permission may still be blocking). Recovery: next depth-0 event after approval (correct)
+1. **Permission prompt + subagents running:** Permission idle bypasses Guard 2 → card shows idle immediately. `permissionIdle` flag is set. First tool event after approval bypasses Guard 1 → card shows thinking immediately (correct)
 2. **Permission approved + no subagents:** Next `tool_start` at depth 0 transitions to thinking via Guard 1 (correct)
-3. **Permission approved + subagents still running:** Card stays amber until subagents finish AND next depth-0 `tool_start` fires. This ensures the card never shows green while a permission prompt is waiting (correct)
-4. **User sends new message:** `prompt` always transitions regardless of depth (correct)
-5. **Main agent spawns subagent then fires Stop:** Idle suppressed, card stays thinking while subagent works (correct)
-6. **Last subagent finishes after deferred idle:** Card transitions to idle when depth reaches 0 (correct)
-7. **User presses Escape while subagents run:** `interrupted` always goes through, card shows idle immediately (correct)
-8. **Prompt fires while idle is deferred:** Pending flag cleared, no stale idle emitted when subagents finish (correct)
-9. **Nested subagents with deferred idle:** Idle only emits when ALL subagents finish (depth 0), not on intermediate stops (correct)
+3. **Permission approved + subagents still running:** First tool event (even at depth > 0) bypasses Guard 1 via `permissionIdle` flag → card shows thinking immediately. Flag is cleared on transition (correct)
+4. **False idle with no event recovery:** Heartbeat detects token increase after 1s idle → card transitions to thinking (correct)
+5. **User sends new message:** `prompt` always transitions regardless of depth (correct)
+6. **Main agent spawns subagent then fires Stop:** Idle suppressed, card stays thinking while subagent works (correct)
+7. **Last subagent finishes after deferred idle:** Card transitions to idle when depth reaches 0 (correct)
+8. **User presses Escape while subagents run:** `interrupted` always goes through, card shows idle immediately (correct)
+9. **Prompt fires while idle is deferred:** Pending flag cleared, no stale idle emitted when subagents finish (correct)
+10. **Nested subagents with deferred idle:** Idle only emits when ALL subagents finish (depth 0), not on intermediate stops (correct)
 
 ## Hook Configuration
 
