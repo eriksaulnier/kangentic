@@ -48,3 +48,15 @@ export function trackEvent(eventName: string, props?: Record<string, string | nu
     // Silently ignore tracking failures -- analytics should never disrupt the app
   });
 }
+
+/**
+ * Track an event and return its delivery promise. Use this when the caller
+ * needs to await delivery (e.g. during shutdown) rather than fire-and-forget.
+ */
+export function trackEventAsync(
+  eventName: string,
+  props?: Record<string, string | number | boolean>
+): Promise<void> {
+  if (!enabled) return Promise.resolve();
+  return aptabaseTrack(eventName, props).catch(() => {});
+}

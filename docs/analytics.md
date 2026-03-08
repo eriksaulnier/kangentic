@@ -4,11 +4,12 @@ Kangentic collects anonymous usage statistics to understand adoption and improve
 
 ## What We Collect
 
-Seven event types are tracked, all on critical-path actions only:
+Eight event types are tracked, all on critical-path actions only:
 
 | Event | When | Properties |
 |-------|------|------------|
 | `app_launch` | App starts (when analytics is enabled) | platform, arch |
+| `app_close` | Graceful quit, Ctrl+C, or SIGTERM | durationSeconds |
 | `project_create` | User creates a project | (none) |
 | `task_create` | User creates a task | (none) |
 | `task_start` | Task moves out of Backlog | (none) |

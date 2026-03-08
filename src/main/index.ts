@@ -11,7 +11,7 @@ import { IPC } from '../shared/ipc-channels';
 import { THEME_BACKGROUNDS } from '../shared/types';
 import type { ThemeMode } from '../shared/types';
 import { PATHS } from './config/paths';
-import { initAnalytics, trackEvent } from './analytics/analytics';
+import { initAnalytics, trackEvent, trackEventAsync } from './analytics/analytics';
 import { initStartupTimer, mark, phase, endPhase, finishStartupTimer } from './startup-timer';
 
 initStartupTimer(PROCESS_START);
@@ -58,6 +58,7 @@ for (const arg of process.argv) {
 // Tell Windows to display "Kangentic" in notification toasts instead of "Electron"
 app.setAppUserModelId('com.squirrel.Kangentic.kangentic');
 
+const appLaunchTime = Date.now();
 const isEphemeral = process.argv.includes('--ephemeral');
 
 let mainWindow: BrowserWindow | null = null;
@@ -388,6 +389,15 @@ async function shutdownEphemeral(): Promise<void> {
   closeAll();
 }
 
+async function trackShutdownAnalytics(): Promise<void> {
+  const durationSeconds = Math.round((Date.now() - appLaunchTime) / 1000);
+  const analyticsTimeout = new Promise<void>((resolve) => setTimeout(resolve, 3000).unref());
+  await Promise.race([
+    trackEventAsync('app_close', { durationSeconds }),
+    analyticsTimeout,
+  ]);
+}
+
 let isShuttingDown = false;
 
 app.on('before-quit', (event) => {
@@ -396,10 +406,11 @@ app.on('before-quit', (event) => {
 
   // Delay quit until async shutdown completes
   event.preventDefault();
-  const shutdown = isEphemeral ? shutdownEphemeral() : shutdownSessions();
-  shutdown.finally(() => {
-    app.exit(0);
-  });
+  trackShutdownAnalytics()
+    .then(() => isEphemeral ? shutdownEphemeral() : shutdownSessions())
+    .finally(() => {
+      app.exit(0);
+    });
 });
 
 // Handle force-close (Ctrl+C / SIGINT / SIGTERM) which may not fire before-quit
@@ -407,9 +418,10 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     if (isShuttingDown) return;
     isShuttingDown = true;
-    const shutdown = isEphemeral ? shutdownEphemeral() : shutdownSessions();
-    shutdown.finally(() => {
-      process.exit(0);
-    });
+    trackShutdownAnalytics()
+      .then(() => isEphemeral ? shutdownEphemeral() : shutdownSessions())
+      .finally(() => {
+        process.exit(0);
+      });
   });
 }
