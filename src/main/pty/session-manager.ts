@@ -568,6 +568,10 @@ export class SessionManager extends EventEmitter {
       label: `Usage:${session.id.slice(0, 8)}`,
       debounceMs: 100,
     });
+
+    // Immediately read any existing status.json (e.g. resumed sessions after restart).
+    // For fresh sessions the file won't exist yet -- readAndEmitUsage handles that gracefully.
+    this.readAndEmitUsage(session);
   }
 
   /**
