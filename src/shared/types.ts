@@ -615,6 +615,9 @@ export interface ElectronAPI {
     close: () => void;
     flashFrame: (flash: boolean) => void;
   };
+
+  // Platform
+  platform: string;
 }
 
 declare global {

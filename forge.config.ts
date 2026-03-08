@@ -63,7 +63,13 @@ const config: ForgeConfig = {
     },
     ...(process.env.AZURE_CODE_SIGNING_DLIB ? { windowsSign } : {}),
     ...(process.env.APPLE_IDENTITY ? {
-      osxSign: {},
+      osxSign: {
+        optionsForFile: () => ({
+          hardenedRuntime: true,
+          entitlements: './entitlements.plist',
+          'entitlements-inherit': './entitlements.plist',
+        }),
+      },
       osxNotarize: {
         tool: 'notarytool',
         appleId: process.env.APPLE_ID!,
@@ -97,6 +103,17 @@ const config: ForgeConfig = {
         name: 'kangentic',
         productName: 'Kangentic',
         icon: './resources/icon.png',
+        section: 'devel',
+        categories: ['Development'],
+        depends: [
+          'libnss3',
+          'libatk-bridge2.0-0',
+          'libgtk-3-0',
+          'libgbm1',
+          'libasound2',
+          'libdrm2',
+          'libxshmfence1',
+        ],
       },
     }),
     new MakerRpm({
@@ -104,6 +121,16 @@ const config: ForgeConfig = {
         name: 'kangentic',
         productName: 'Kangentic',
         icon: './resources/icon.png',
+        categories: ['Development'],
+        requires: [
+          'nss',
+          'atk',
+          'gtk3',
+          'mesa-libgbm',
+          'alsa-lib',
+          'libdrm',
+          'libXShmfence',
+        ],
       },
     }),
   ],

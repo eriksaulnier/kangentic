@@ -636,6 +636,8 @@
       close: noop,
       flashFrame: noop,
     },
+
+    platform: 'win32',
   };
 
   /**

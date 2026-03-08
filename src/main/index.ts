@@ -20,11 +20,12 @@ process.on('unhandledRejection', (reason) => {
 
 // Handle Squirrel.Windows lifecycle events (install/update/uninstall shortcuts)
 import squirrelStartup from 'electron-squirrel-startup';
-if (squirrelStartup) app.quit();
+if (process.platform === 'win32' && squirrelStartup) app.quit();
 
-// Auto-update from GitHub Releases (Squirrel on Windows, autoUpdater on macOS)
+// Auto-update from GitHub Releases (Squirrel on Windows, autoUpdater on macOS).
+// Linux has no Squirrel/autoUpdater backend -- users update via the launcher package.
 import { updateElectronApp } from 'update-electron-app';
-if (app.isPackaged) {
+if (app.isPackaged && process.platform !== 'linux') {
   updateElectronApp({
     repo: 'Kangentic/kangentic',
     updateInterval: '1 hour',
@@ -81,11 +82,19 @@ export function resolveIconPath(): string {
 
 function loadReactDevTools(): void {
   const reactDevToolsId = 'fmkadmapgofadopljbjfkapdkoienihi';
-  const extensionDir = path.join(
-    os.homedir(),
-    'AppData', 'Local', 'Google', 'Chrome', 'User Data', 'Default', 'Extensions',
-    reactDevToolsId,
-  );
+  let chromeExtensionsBase: string;
+  switch (process.platform) {
+    case 'darwin':
+      chromeExtensionsBase = path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome', 'User Data', 'Default', 'Extensions');
+      break;
+    case 'linux':
+      chromeExtensionsBase = path.join(os.homedir(), '.config', 'google-chrome', 'Default', 'Extensions');
+      break;
+    default:
+      chromeExtensionsBase = path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'User Data', 'Default', 'Extensions');
+      break;
+  }
+  const extensionDir = path.join(chromeExtensionsBase, reactDevToolsId);
   if (!fs.existsSync(extensionDir)) return;
 
   const versions = fs.readdirSync(extensionDir).sort();
@@ -112,6 +121,7 @@ const createWindow = () => {
     backgroundColor: resolveBackgroundColor(),
     show: false,
     titleBarStyle: 'hidden',
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 12, y: 12 } } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

@@ -152,6 +152,8 @@ const api: ElectronAPI = {
     close: () => ipcRenderer.send(IPC.WINDOW_CLOSE),
     flashFrame: (flash: boolean) => ipcRenderer.send(IPC.WINDOW_FLASH_FRAME, flash),
   },
+
+  platform: process.platform,
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

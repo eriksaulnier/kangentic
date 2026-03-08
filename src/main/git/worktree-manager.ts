@@ -134,8 +134,13 @@ export class WorktreeManager {
     // This prevents duplicate slash commands and skills while keeping .claude/settings.json
     // (so Claude resolves permissions naturally) and allowing settings.local.json
     // writes to be properly gitignored.
-    await wtGit.raw(['sparse-checkout', 'init', '--no-cone']);
-    await wtGit.raw(['sparse-checkout', 'set', '/*', '!/.claude/commands/', '!/.claude/skills/']);
+    // Requires git 2.25+; older versions (some Linux distros) skip gracefully.
+    try {
+      await wtGit.raw(['sparse-checkout', 'init', '--no-cone']);
+      await wtGit.raw(['sparse-checkout', 'set', '/*', '!/.claude/commands/', '!/.claude/skills/']);
+    } catch (sparseError) {
+      console.warn('git sparse-checkout not available (requires git 2.25+), skipping:', sparseError);
+    }
 
     // Copy specified files into the worktree (skip .claude/ entries --
     // sparse-checkout keeps .claude/ but excludes commands/, and hooks

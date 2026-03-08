@@ -9,7 +9,7 @@ interface TitleBarProps {
   onToggleSidebar: () => void;
 }
 
-const isMac = navigator.platform.toUpperCase().includes('MAC');
+const isMac = window.electronAPI.platform === 'darwin';
 
 export function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps) {
   const currentProject = useProjectStore((s) => s.currentProject);
@@ -21,7 +21,7 @@ export function TitleBar({ sidebarOpen, onToggleSidebar }: TitleBarProps) {
     : false;
 
   return (
-    <div className="h-10 bg-surface border-b border-edge flex items-center px-3 select-none flex-shrink-0"
+    <div className={`h-10 bg-surface border-b border-edge flex items-center select-none flex-shrink-0 ${isMac ? 'pl-20 pr-3' : 'px-3'}`}
          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
       {!sidebarOpen && (
         <div className="flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
