@@ -3,16 +3,29 @@ import { ChevronDown, RotateCcw, X } from 'lucide-react';
 
 type Phase = 'entering' | 'visible' | 'exiting';
 
+/* ── Tab Definition ── */
+
+export interface SettingsTabDefinition {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  /** Render a horizontal divider above this tab in the sidebar. */
+  separator?: boolean;
+}
+
 /* ── Panel Shell ── */
 
 interface SettingsPanelShellProps {
-  title: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   onClose: () => void;
   children: React.ReactNode;
+  tabs?: SettingsTabDefinition[];
+  activeTab?: string;
+  onTabChange?: (tabId: string) => void;
+  footer?: React.ReactNode;
 }
 
-export function SettingsPanelShell({ title, subtitle, onClose, children }: SettingsPanelShellProps) {
+export function SettingsPanelShell({ subtitle, onClose, children, tabs, activeTab, onTabChange, footer }: SettingsPanelShellProps) {
   const [phase, setPhase] = useState<Phase>('entering');
   const backdropMouseDown = useRef(false);
 
@@ -63,14 +76,9 @@ export function SettingsPanelShell({ title, subtitle, onClose, children }: Setti
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-edge flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold text-fg">{title}</h2>
-            {subtitle && (
-              <>
-                <span className="text-fg-faint select-none">--</span>
-                <span className="text-sm text-fg-muted">{subtitle}</span>
-              </>
-            )}
+          <div className="flex items-center gap-3">
+            <h2 className="text-base font-semibold text-fg">Settings</h2>
+            {subtitle && <div>{subtitle}</div>}
           </div>
           <button
             onClick={requestClose}
@@ -81,9 +89,48 @@ export function SettingsPanelShell({ title, subtitle, onClose, children }: Setti
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
-          {children}
-        </div>
+        {tabs && activeTab && onTabChange ? (
+          <div className="flex-1 flex overflow-hidden">
+            {/* Tab sidebar */}
+            <div className="w-44 flex-shrink-0 border-r border-edge py-3 space-y-0.5 overflow-y-auto">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = tab.id === activeTab;
+                return (
+                  <React.Fragment key={tab.id}>
+                    {tab.separator && <div className="my-1.5 mx-4 border-t border-edge" />}
+                    <button
+                      onClick={() => onTabChange(tab.id)}
+                      className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm transition-colors ${
+                        isActive
+                          ? 'text-fg bg-surface-hover font-medium'
+                          : 'text-fg-muted hover:text-fg-secondary hover:bg-surface-hover/50'
+                      }`}
+                    >
+                      <Icon size={16} className={isActive ? 'text-accent' : ''} />
+                      {tab.label}
+                    </button>
+                  </React.Fragment>
+                );
+              })}
+            </div>
+            {/* Tab content */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+                {children}
+              </div>
+              {footer && (
+                <div className="flex-shrink-0 px-6 py-4 border-t border-edge">
+                  {footer}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+            {children}
+          </div>
+        )}
       </div>
     </div>
   );

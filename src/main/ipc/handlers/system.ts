@@ -45,7 +45,7 @@ export function registerSystemHandlers(context: IpcContext): void {
     let updatedCount = 0;
     for (const project of projects) {
       const existing = context.configManager.loadProjectOverrides(project.path) || {};
-      const merged = deepMergeConfig(existing, partial as Record<string, unknown>);
+      const merged = deepMergeConfig(existing, partial);
       context.configManager.saveProjectOverrides(project.path, merged);
       updatedCount++;
     }

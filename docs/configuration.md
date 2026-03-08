@@ -31,7 +31,6 @@ These settings appear only in App Settings and cannot be overridden per-project:
 - `claude.cliPath`, `claude.maxConcurrentSessions`, `claude.queueOverflow`
 - `terminal.panelHeight`, `terminal.showPreview`
 - `skipDeleteConfirm`, `autoFocusIdleSession`, `notifyIdleOnInactiveProject`, `activateAllProjectsOnStartup`
-- `skipDefaultsSyncConfirm`
 
 ### Per-Project Overridable Settings
 
@@ -54,8 +53,6 @@ These settings appear in Project Settings and can be overridden per-project:
 | `autoFocusIdleSession` | boolean | `true` | Auto-switch to session tab when agent goes idle |
 | `notifyIdleOnInactiveProject` | boolean | `true` | Show native OS notification and flash taskbar when an agent goes idle on a non-active project. Clicking the notification switches to the project and opens the task detail dialog. |
 | `activateAllProjectsOnStartup` | boolean | `true` | Open all projects on app launch (not just the last one). Global-only. |
-| `skipDefaultsSyncConfirm` | boolean | `false` | Skip the "Apply to existing projects?" modal when changing project defaults. Global-only. |
-
 ### terminal.*
 
 | Key | Type | Default | Description |

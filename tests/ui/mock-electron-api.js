@@ -47,7 +47,6 @@
     autoFocusIdleSession: true,
     notifyIdleOnInactiveProject: true,
     activateAllProjectsOnStartup: true,
-    skipDefaultsSyncConfirm: false,
   };
 
   function uuid() {

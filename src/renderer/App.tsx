@@ -86,6 +86,7 @@ export function App() {
         dialogSessionId: null,
         openTaskId: null,
       });
+      loadConfig(); // Reset effective config to global defaults (no project overrides)
     }
   }, [currentProject]);
 

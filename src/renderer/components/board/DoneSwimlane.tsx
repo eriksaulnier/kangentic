@@ -21,7 +21,6 @@ export function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
   const [search, setSearch] = useState('');
   const [showEditColumn, setShowEditColumn] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const [dontAskAgain, setDontAskAgain] = useState(false);
 
   const archivedTasks = useBoardStore((s) => s.archivedTasks);
   const deleteArchivedTask = useBoardStore((s) => s.deleteArchivedTask);
@@ -42,17 +41,16 @@ export function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
       deleteArchivedTask(taskId);
     } else {
       setPendingDeleteId(taskId);
-      setDontAskAgain(false);
     }
   }, [skipDeleteConfirm, deleteArchivedTask]);
 
-  const handleConfirmDelete = useCallback(() => {
+  const handleConfirmDelete = useCallback((dontAskAgain: boolean) => {
     if (pendingDeleteId) {
       deleteArchivedTask(pendingDeleteId);
       if (dontAskAgain) updateConfig({ skipDeleteConfirm: true });
     }
     setPendingDeleteId(null);
-  }, [pendingDeleteId, dontAskAgain, deleteArchivedTask, updateConfig]);
+  }, [pendingDeleteId, deleteArchivedTask, updateConfig]);
 
   const taskIds = useMemo(() => tasks.map((t) => t.id), [tasks]);
 
@@ -220,17 +218,7 @@ export function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
           </>}
           confirmLabel="Delete"
           variant="danger"
-          footerLeft={
-            <label className="inline-flex items-center gap-2 cursor-pointer h-full">
-              <input
-                type="checkbox"
-                checked={dontAskAgain}
-                onChange={(e) => setDontAskAgain(e.target.checked)}
-                className="accent-accent rounded border-edge-input bg-surface"
-              />
-              <span className="text-xs text-fg-muted">Don't ask again</span>
-            </label>
-          }
+          showDontAskAgain
           onConfirm={handleConfirmDelete}
           onCancel={() => setPendingDeleteId(null)}
         />

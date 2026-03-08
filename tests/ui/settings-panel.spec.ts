@@ -31,7 +31,8 @@ async function closeSettings() {
 test.describe('App Settings Panel', () => {
   test('titlebar gear opens App Settings panel', async () => {
     await openAppSettings();
-    await expect(page.locator('h2:has-text("App Settings")')).toBeVisible();
+    await expect(page.locator('h2:has-text("Settings")')).toBeVisible();
+    await expect(page.locator('text=Global')).toBeVisible();
     await closeSettings();
   });
 
@@ -44,6 +45,7 @@ test.describe('App Settings Panel', () => {
 
   test('shows Agent section with CLI Path and Max Sessions', async () => {
     await openAppSettings();
+    await page.getByRole('button', { name: 'Agent' }).click();
     await expect(page.locator('text=CLI Path')).toBeVisible();
     await expect(page.locator('text=Max Concurrent Sessions')).toBeVisible();
     await expect(page.locator('text=When Max Sessions Reached')).toBeVisible();
@@ -52,6 +54,7 @@ test.describe('App Settings Panel', () => {
 
   test('shows Behavior section with toggles', async () => {
     await openAppSettings();
+    await page.getByRole('button', { name: 'Behavior' }).click();
     await expect(page.locator('text=Skip Task Delete Confirmation')).toBeVisible();
     await expect(page.locator('text=Auto-Focus Idle Sessions')).toBeVisible();
     await expect(page.locator('text=Desktop Notifications for Idle Agents')).toBeVisible();
@@ -59,22 +62,21 @@ test.describe('App Settings Panel', () => {
     await closeSettings();
   });
 
-  test('shows Project Defaults section with terminal, permissions, and git settings', async () => {
+  test('shows Terminal tab with shell, font size, and font family', async () => {
     await openAppSettings();
-    // Scroll to the Project Defaults section
-    const projectDefaultsHeader = page.locator('text=Project Defaults');
-    await projectDefaultsHeader.scrollIntoViewIfNeeded();
-    await expect(projectDefaultsHeader).toBeVisible();
+    await page.getByRole('button', { name: 'Terminal' }).click();
 
-    // Terminal defaults
     await expect(page.getByText('Shell', { exact: true })).toBeVisible();
     await expect(page.getByText('Font Size', { exact: true })).toBeVisible();
     await expect(page.getByText('Font Family', { exact: true })).toBeVisible();
 
-    // Permission default
-    await expect(page.getByText('Permissions', { exact: true })).toBeVisible();
+    await closeSettings();
+  });
 
-    // Git defaults
+  test('shows Git tab with worktree and branch settings', async () => {
+    await openAppSettings();
+    await page.getByRole('button', { name: 'Git' }).click();
+
     await expect(page.locator('text=Enable Worktrees')).toBeVisible();
     await expect(page.locator('text=Default Base Branch')).toBeVisible();
 
@@ -83,12 +85,11 @@ test.describe('App Settings Panel', () => {
 
   test('Escape key closes panel', async () => {
     await openAppSettings();
-    const header = page.locator('h2:has-text("App Settings")');
-    await expect(header).toBeVisible();
+    await expect(page.locator('text=Global')).toBeVisible();
 
     await page.keyboard.press('Escape');
     await page.waitForTimeout(300);
-    await expect(header).not.toBeVisible({ timeout: 2000 });
+    await expect(page.locator('text=Global')).not.toBeVisible({ timeout: 2000 });
   });
 
   test('settings gear shows active state when panel is open', async () => {
@@ -103,6 +104,7 @@ test.describe('App Settings Panel', () => {
 
   test('CLI path status indicator appears after panel opens', async () => {
     await openAppSettings();
+    await page.getByRole('button', { name: 'Agent' }).click();
     // The mock returns { found: false }, so the indicator div has title="Claude CLI not found"
     await expect(page.locator('[title="Claude CLI not found"]')).toBeVisible();
     await closeSettings();
@@ -110,10 +112,9 @@ test.describe('App Settings Panel', () => {
 
   test('permission strategy dropdown has correct options (no Plan)', async () => {
     await openAppSettings();
+    await page.getByRole('button', { name: 'Agent' }).click();
 
-    // Scroll to the Permissions setting in the Project Defaults section
     const permissionsLabel = page.getByText('Permissions', { exact: true });
-    await permissionsLabel.scrollIntoViewIfNeeded();
 
     // The Permissions select is the one immediately following the "Permissions" label
     // It's inside the same setting row container
@@ -156,20 +157,26 @@ test.describe('Project Settings Panel', () => {
     await closeSettings();
   });
 
-  test('shows Terminal, Agent, and Git sections', async () => {
+  test('shows Appearance, Terminal, Agent, and Git sections', async () => {
     const projectRow = page.locator('[role="button"]').filter({ hasText: 'Settings Test' }).first();
     await projectRow.hover();
     await page.locator('button[title="Project settings"]').first().click();
     await page.waitForTimeout(300);
 
-    // Terminal section
+    // Appearance tab (default)
+    await expect(page.locator('text=Theme')).toBeVisible();
+
+    // Terminal tab
+    await page.getByRole('button', { name: 'Terminal' }).click();
     await expect(page.getByText('Shell', { exact: true })).toBeVisible();
     await expect(page.getByText('Font Size', { exact: true })).toBeVisible();
 
-    // Agent section
+    // Agent tab
+    await page.getByRole('button', { name: 'Agent' }).click();
     await expect(page.getByText('Permissions', { exact: true })).toBeVisible();
 
-    // Git section
+    // Git tab
+    await page.getByRole('button', { name: 'Git' }).click();
     await expect(page.locator('text=Enable Worktrees')).toBeVisible();
     await expect(page.locator('text=Auto-cleanup')).toBeVisible();
 
@@ -182,11 +189,13 @@ test.describe('Project Settings Panel', () => {
     await page.locator('button[title="Project settings"]').first().click();
     await page.waitForTimeout(300);
 
-    // These should NOT appear in project settings
-    await expect(page.locator('text=Theme')).not.toBeVisible();
+    // Agent tab -- should NOT have CLI Path, Max Sessions, etc.
+    await page.getByRole('button', { name: 'Agent' }).click();
     await expect(page.locator('text=CLI Path')).not.toBeVisible();
     await expect(page.locator('text=Max Concurrent Sessions')).not.toBeVisible();
-    await expect(page.locator('text=Skip Task Delete Confirmation')).not.toBeVisible();
+
+    // Behavior tab should not exist
+    await expect(page.getByRole('button', { name: 'Behavior' })).not.toBeVisible();
 
     await closeSettings();
   });

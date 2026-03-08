@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { BaseDialog } from './BaseDialog';
 
@@ -8,8 +8,9 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'danger' | 'warning' | 'default';
-  footerLeft?: React.ReactNode;
-  onConfirm: () => void;
+  showDontAskAgain?: boolean;
+  dontAskAgainLabel?: string;
+  onConfirm: (dontAskAgain: boolean) => void;
   onCancel: () => void;
 }
 
@@ -19,22 +20,25 @@ export function ConfirmDialog({
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   variant = 'default',
-  footerLeft,
+  showDontAskAgain = false,
+  dontAskAgainLabel = "Don't ask again",
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const [dontAskAgainChecked, setDontAskAgainChecked] = useState(false);
+
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        onConfirm();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        onConfirm(dontAskAgainChecked);
       }
     };
     // Capture phase so dnd-kit's bubble-phase KeyboardSensor never sees the event
     document.addEventListener('keydown', handleKeyDown, true);
     return () => document.removeEventListener('keydown', handleKeyDown, true);
-  }, [onConfirm]);
+  }, [onConfirm, dontAskAgainChecked]);
   const confirmStyles = {
     danger: 'bg-red-600 hover:bg-red-500 text-white',
     warning: 'bg-yellow-600 hover:bg-yellow-500 text-white',
@@ -55,7 +59,17 @@ export function ConfirmDialog({
       zIndex="z-[60]"
       footer={
         <div className="flex items-center">
-          {footerLeft && <div className="flex-1 flex items-center">{footerLeft}</div>}
+          {showDontAskAgain && (
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={dontAskAgainChecked}
+                onChange={(event) => setDontAskAgainChecked(event.target.checked)}
+                className="accent-accent rounded border-edge-input bg-surface"
+              />
+              <span className="text-xs text-fg-muted">{dontAskAgainLabel}</span>
+            </label>
+          )}
           <div className="flex justify-end gap-3 ml-auto">
             <button
               onClick={onCancel}
@@ -64,7 +78,7 @@ export function ConfirmDialog({
               {cancelLabel}
             </button>
             <button
-              onClick={onConfirm}
+              onClick={() => onConfirm(dontAskAgainChecked)}
               className={`px-4 py-1.5 text-xs rounded transition-colors ${confirmStyles[variant]}`}
             >
               {confirmLabel}

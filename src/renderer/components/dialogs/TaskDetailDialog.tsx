@@ -107,7 +107,6 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
   const titleInputRef = useRef<HTMLInputElement>(null);
   const [toggling, setToggling] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [dontAskAgain, setDontAskAgain] = useState(false);
   const skipDeleteConfirm = useConfigStore((s) => s.config.skipDeleteConfirm);
   const defaultBaseBranch = useConfigStore((s) => s.config.git.defaultBaseBranch);
   const updateConfig = useConfigStore((s) => s.updateConfig);
@@ -475,7 +474,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
     });
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (dontAskAgain: boolean) => {
     if (dontAskAgain) updateConfig({ skipDeleteConfirm: true });
     const taskTitle = task.title;
     // Close dialog first to unmount the terminal (xterm) cleanly
@@ -719,7 +718,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
 
               {/* Delete -- always available */}
               <button
-                onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); skipDeleteConfirm ? handleDelete() : setConfirmDelete(true); }}
+                onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); skipDeleteConfirm ? handleDelete(false) : setConfirmDelete(true); }}
                 className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-400/10 hover:text-red-300 transition-colors flex items-center gap-2"
               >
                 <Trash2 size={14} />
@@ -751,17 +750,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
         </>}
         confirmLabel="Delete"
         variant="danger"
-        footerLeft={
-          <label className="inline-flex items-center gap-2 cursor-pointer h-full">
-            <input
-              type="checkbox"
-              checked={dontAskAgain}
-              onChange={(e) => setDontAskAgain(e.target.checked)}
-              className="accent-accent rounded border-edge-input bg-surface"
-            />
-            <span className="text-xs text-fg-muted">Don't ask again</span>
-          </label>
-        }
+        showDontAskAgain
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}
       />
@@ -785,7 +774,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
           <div className={`flex ${isInBacklog ? 'justify-between' : 'justify-end'} items-center`}>
             {isInBacklog && (
               <button
-                onClick={() => skipDeleteConfirm ? handleDelete() : setConfirmDelete(true)}
+                onClick={() => skipDeleteConfirm ? handleDelete(false) : setConfirmDelete(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-fg-faint hover:text-red-400 hover:bg-red-400/10 rounded transition-colors"
               >
                 <Trash2 size={14} />

@@ -81,7 +81,7 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
     onClose();
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (_dontAskAgain: boolean) => {
     if (taskCount > 0) {
       setError(`Move or delete all ${taskCount} task${taskCount > 1 ? 's' : ''} first.`);
       setConfirmDelete(false);

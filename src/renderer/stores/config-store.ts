@@ -41,9 +41,6 @@ interface ConfigStore {
   resetAllProjectOverrides: () => Promise<void>;
   isOverridden: (keyPath: string) => boolean;
 
-  // -- Sync defaults --
-  skipDefaultsSyncConfirm: boolean;
-  setSkipDefaultsSyncConfirm: (skip: boolean) => void;
 }
 
 /** Fetch both effective and global configs from main process. */
@@ -67,18 +64,16 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   projectSettingsPath: null,
   projectSettingsProjectName: null,
   projectOverrides: null,
-  skipDefaultsSyncConfirm: DEFAULT_CONFIG.skipDefaultsSyncConfirm,
-
   loadConfig: async () => {
     set({ loading: true });
     const configs = await refreshConfigs();
-    set({ ...configs, loading: false, skipDefaultsSyncConfirm: configs.globalConfig.skipDefaultsSyncConfirm });
+    set({ ...configs, loading: false });
   },
 
   updateConfig: async (partial) => {
     await window.electronAPI.config.set(partial);
     const configs = await refreshConfigs();
-    set({ ...configs, skipDefaultsSyncConfirm: configs.globalConfig.skipDefaultsSyncConfirm });
+    set(configs);
   },
 
   detectClaude: async () => {
@@ -138,9 +133,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     const projectPath = get().projectSettingsPath;
     if (!projectPath) return;
     const current = get().projectOverrides || {};
-    const merged = deepMergeConfig(current, partial as Record<string, unknown>) as DeepPartial<AppConfig>;
+    const merged = deepMergeConfig(current, partial) as DeepPartial<AppConfig>;
     await window.electronAPI.config.setProjectOverridesByPath(projectPath, merged);
-    const effective = deepMergeConfig(get().globalConfig, merged as Record<string, unknown>);
+    const effective = deepMergeConfig(get().globalConfig, merged);
     set({ projectOverrides: merged, config: effective });
   },
 
@@ -173,12 +168,6 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     return !deepEqual(overrideValue, globalValue);
   },
 
-  // -- Sync defaults --
-  setSkipDefaultsSyncConfirm: (skip) => {
-    set({ skipDefaultsSyncConfirm: skip });
-    // Persist to global config
-    window.electronAPI.config.set({ skipDefaultsSyncConfirm: skip });
-  },
 }));
 
 // Sync resolved theme -> localStorage + <html> class whenever it changes.

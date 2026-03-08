@@ -1,9 +1,19 @@
 import React, { useEffect, useState } from 'react';
+import { Bot, FolderOpen, GitBranch, Palette, Terminal } from 'lucide-react';
 import { useConfigStore } from '../../stores/config-store';
 import { BranchPicker } from '../dialogs/BranchPicker';
-import { SettingsPanelShell, SectionHeader, SettingRow, Select, ToggleSwitch, ResetOverridesFooter, INPUT_CLASS } from './shared';
-import type { AppConfig, DeepPartial, PermissionMode } from '../../../shared/types';
+import { SettingsPanelShell, SettingRow, Select, ToggleSwitch, ResetOverridesFooter, INPUT_CLASS } from './shared';
+import type { SettingsTabDefinition } from './shared';
+import type { AppConfig, DeepPartial, PermissionMode, ThemeMode } from '../../../shared/types';
+import { NAMED_THEMES } from '../../../shared/types';
 import { deepMergeConfig } from '../../../shared/object-utils';
+
+const PROJECT_TABS: SettingsTabDefinition[] = [
+  { id: 'appearance', label: 'Appearance', icon: Palette },
+  { id: 'terminal', label: 'Terminal', icon: Terminal },
+  { id: 'agent', label: 'Agent', icon: Bot },
+  { id: 'git', label: 'Git', icon: GitBranch },
+];
 
 export function ProjectSettingsPanel() {
   const globalConfig = useConfigStore((state) => state.globalConfig);
@@ -24,7 +34,7 @@ export function ProjectSettingsPanel() {
   const handleClose = () => setProjectSettingsOpen(false);
 
   const displayConfig = projectOverrides
-    ? deepMergeConfig(globalConfig, projectOverrides as Record<string, unknown>)
+    ? deepMergeConfig(globalConfig, projectOverrides)
     : globalConfig;
 
   const handleUpdate = (partial: DeepPartial<AppConfig>) => {
@@ -41,154 +51,205 @@ export function ProjectSettingsPanel() {
     return String(value);
   };
 
+  const [activeTab, setActiveTab] = useState('appearance');
+
+  const resetFooter = hasAnyOverrides ? (
+    <ResetOverridesFooter onReset={resetAllProjectOverrides} />
+  ) : undefined;
+
   return (
-    <SettingsPanelShell title="Settings" subtitle={projectSettingsProjectName || undefined} onClose={handleClose}>
-      {/* ── Terminal ── */}
-      <SectionHeader label="Terminal" />
-      <SettingRow
-        label="Shell"
-        description="Terminal shell used for agent sessions"
-        isOverridden={isOverridden('terminal.shell')}
-        onReset={() => removeProjectOverride('terminal.shell')}
-        inheritedHint={defaultHint(globalConfig.terminal.shell)}
-      >
-        <Select
-          value={displayConfig.terminal.shell || ''}
-          onChange={(event) => handleUpdate({ terminal: { shell: event.target.value || null } })}
+    <SettingsPanelShell
+      subtitle={projectSettingsProjectName ? (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-accent/10 text-accent text-xs">
+          <FolderOpen size={14} />
+          {projectSettingsProjectName}
+        </span>
+      ) : undefined}
+      onClose={handleClose}
+      tabs={PROJECT_TABS}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      footer={resetFooter}
+    >
+      {/* ── Appearance ── */}
+      {activeTab === 'appearance' && (
+        <SettingRow
+          label="Theme"
+          description="Color scheme for the interface"
+          isOverridden={isOverridden('theme')}
+          onReset={() => removeProjectOverride('theme')}
+          inheritedHint={defaultHint(globalConfig.theme)}
         >
-          <option value="">Auto-detect</option>
-          {shells.map((shell) => (
-            <option key={shell.path} value={shell.path}>{shell.name}</option>
-          ))}
-        </Select>
-      </SettingRow>
-      <SettingRow
-        label="Font Size"
-        description="Terminal text size in pixels"
-        isOverridden={isOverridden('terminal.fontSize')}
-        onReset={() => removeProjectOverride('terminal.fontSize')}
-        inheritedHint={defaultHint(globalConfig.terminal.fontSize)}
-      >
-        <input
-          type="number"
-          value={displayConfig.terminal.fontSize}
-          onChange={(event) => handleUpdate({ terminal: { fontSize: Number(event.target.value) } })}
-          min={8}
-          max={32}
-          className={INPUT_CLASS}
-        />
-      </SettingRow>
-      <SettingRow
-        label="Font Family"
-        description="CSS font-family for the terminal"
-        isOverridden={isOverridden('terminal.fontFamily')}
-        onReset={() => removeProjectOverride('terminal.fontFamily')}
-        inheritedHint={defaultHint(globalConfig.terminal.fontFamily)}
-      >
-        <input
-          type="text"
-          value={displayConfig.terminal.fontFamily}
-          onChange={(event) => handleUpdate({ terminal: { fontFamily: event.target.value } })}
-          className={INPUT_CLASS}
-        />
-      </SettingRow>
+          <Select
+            value={displayConfig.theme}
+            onChange={(event) => handleUpdate({ theme: event.target.value as ThemeMode })}
+          >
+            <optgroup label="Standard">
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </optgroup>
+            <optgroup label="Dark Palette">
+              {NAMED_THEMES.filter(theme => theme.base === 'dark').map(theme => (
+                <option key={theme.id} value={theme.id}>{theme.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Light Palette">
+              {NAMED_THEMES.filter(theme => theme.base === 'light').map(theme => (
+                <option key={theme.id} value={theme.id}>{theme.label}</option>
+              ))}
+            </optgroup>
+          </Select>
+        </SettingRow>
+      )}
+
+      {/* ── Terminal ── */}
+      {activeTab === 'terminal' && (
+        <>
+          <SettingRow
+            label="Shell"
+            description="Terminal shell used for agent sessions"
+            isOverridden={isOverridden('terminal.shell')}
+            onReset={() => removeProjectOverride('terminal.shell')}
+            inheritedHint={defaultHint(globalConfig.terminal.shell)}
+          >
+            <Select
+              value={displayConfig.terminal.shell || ''}
+              onChange={(event) => handleUpdate({ terminal: { shell: event.target.value || null } })}
+            >
+              <option value="">Auto-detect</option>
+              {shells.map((shell) => (
+                <option key={shell.path} value={shell.path}>{shell.name}</option>
+              ))}
+            </Select>
+          </SettingRow>
+          <SettingRow
+            label="Font Size"
+            description="Terminal text size in pixels"
+            isOverridden={isOverridden('terminal.fontSize')}
+            onReset={() => removeProjectOverride('terminal.fontSize')}
+            inheritedHint={defaultHint(globalConfig.terminal.fontSize)}
+          >
+            <input
+              type="number"
+              value={displayConfig.terminal.fontSize}
+              onChange={(event) => handleUpdate({ terminal: { fontSize: Number(event.target.value) } })}
+              min={8}
+              max={32}
+              className={INPUT_CLASS}
+            />
+          </SettingRow>
+          <SettingRow
+            label="Font Family"
+            description="CSS font-family for the terminal"
+            isOverridden={isOverridden('terminal.fontFamily')}
+            onReset={() => removeProjectOverride('terminal.fontFamily')}
+            inheritedHint={defaultHint(globalConfig.terminal.fontFamily)}
+          >
+            <input
+              type="text"
+              value={displayConfig.terminal.fontFamily}
+              onChange={(event) => handleUpdate({ terminal: { fontFamily: event.target.value } })}
+              className={INPUT_CLASS}
+            />
+          </SettingRow>
+        </>
+      )}
 
       {/* ── Agent ── */}
-      <SectionHeader label="Agent" />
-      <SettingRow
-        label="Permissions"
-        description="How Claude handles tool approvals"
-        isOverridden={isOverridden('claude.permissionMode')}
-        onReset={() => removeProjectOverride('claude.permissionMode')}
-        inheritedHint={defaultHint(globalConfig.claude.permissionMode)}
-      >
-        <Select
-          value={displayConfig.claude.permissionMode}
-          onChange={(event) => handleUpdate({ claude: { permissionMode: event.target.value as PermissionMode } })}
+      {activeTab === 'agent' && (
+        <SettingRow
+          label="Permissions"
+          description="How Claude handles tool approvals"
+          isOverridden={isOverridden('claude.permissionMode')}
+          onReset={() => removeProjectOverride('claude.permissionMode')}
+          inheritedHint={defaultHint(globalConfig.claude.permissionMode)}
         >
-          <option value="default">Default (Allowlist)</option>
-          <option value="acceptEdits">Accept Edits</option>
-          <option value="bypass-permissions">Bypass (Unsafe)</option>
-        </Select>
-      </SettingRow>
+          <Select
+            value={displayConfig.claude.permissionMode}
+            onChange={(event) => handleUpdate({ claude: { permissionMode: event.target.value as PermissionMode } })}
+          >
+            <option value="default">Default (Allowlist)</option>
+            <option value="acceptEdits">Accept Edits</option>
+            <option value="bypass-permissions">Bypass (Unsafe)</option>
+          </Select>
+        </SettingRow>
+      )}
 
       {/* ── Git ── */}
-      <SectionHeader label="Git" />
-      <SettingRow
-        label="Enable Worktrees"
-        description="Create git worktrees for agent tasks"
-        isOverridden={isOverridden('git.worktreesEnabled')}
-        onReset={() => removeProjectOverride('git.worktreesEnabled')}
-        inheritedHint={defaultHint(globalConfig.git.worktreesEnabled)}
-      >
-        <ToggleSwitch
-          checked={displayConfig.git.worktreesEnabled}
-          onChange={(value) => handleUpdate({ git: { worktreesEnabled: value } })}
-        />
-      </SettingRow>
-      <SettingRow
-        label="Auto-cleanup"
-        description="Remove worktrees when tasks complete"
-        isOverridden={isOverridden('git.autoCleanup')}
-        onReset={() => removeProjectOverride('git.autoCleanup')}
-        inheritedHint={defaultHint(globalConfig.git.autoCleanup)}
-      >
-        <ToggleSwitch
-          checked={displayConfig.git.autoCleanup}
-          onChange={(value) => handleUpdate({ git: { autoCleanup: value } })}
-        />
-      </SettingRow>
-      <SettingRow
-        label="Default Base Branch"
-        description="Branch to create worktrees from"
-        isOverridden={isOverridden('git.defaultBaseBranch')}
-        onReset={() => removeProjectOverride('git.defaultBaseBranch')}
-        inheritedHint={defaultHint(globalConfig.git.defaultBaseBranch)}
-      >
-        <BranchPicker
-          variant="input"
-          value={displayConfig.git.defaultBaseBranch}
-          defaultBranch="main"
-          onChange={(branch) => handleUpdate({ git: { defaultBaseBranch: branch } })}
-        />
-      </SettingRow>
-      <SettingRow
-        label="Copy Files"
-        description="Additional files copied into each worktree"
-        isOverridden={isOverridden('git.copyFiles')}
-        onReset={() => removeProjectOverride('git.copyFiles')}
-        inheritedHint={defaultHint(globalConfig.git.copyFiles)}
-      >
-        <input
-          type="text"
-          value={displayConfig.git.copyFiles.join(', ')}
-          onChange={(event) => {
-            const files = event.target.value.split(',').map((file) => file.trim()).filter(Boolean);
-            handleUpdate({ git: { copyFiles: files } });
-          }}
-          placeholder=".env, .env.local"
-          className={`${INPUT_CLASS} placeholder-fg-faint`}
-        />
-      </SettingRow>
-      <SettingRow
-        label="Post-Worktree Script"
-        description="Shell script to run after worktree creation"
-        isOverridden={isOverridden('git.initScript')}
-        onReset={() => removeProjectOverride('git.initScript')}
-        inheritedHint={defaultHint(globalConfig.git.initScript)}
-      >
-        <input
-          type="text"
-          value={displayConfig.git.initScript || ''}
-          onChange={(event) => handleUpdate({ git: { initScript: event.target.value || null } })}
-          placeholder="npm install"
-          className={`${INPUT_CLASS} placeholder-fg-faint`}
-        />
-      </SettingRow>
-
-      {/* Reset all */}
-      {hasAnyOverrides && (
-        <ResetOverridesFooter onReset={resetAllProjectOverrides} />
+      {activeTab === 'git' && (
+        <>
+          <SettingRow
+            label="Enable Worktrees"
+            description="Create git worktrees for agent tasks"
+            isOverridden={isOverridden('git.worktreesEnabled')}
+            onReset={() => removeProjectOverride('git.worktreesEnabled')}
+            inheritedHint={defaultHint(globalConfig.git.worktreesEnabled)}
+          >
+            <ToggleSwitch
+              checked={displayConfig.git.worktreesEnabled}
+              onChange={(value) => handleUpdate({ git: { worktreesEnabled: value } })}
+            />
+          </SettingRow>
+          <SettingRow
+            label="Auto-cleanup"
+            description="Remove worktrees when tasks complete"
+            isOverridden={isOverridden('git.autoCleanup')}
+            onReset={() => removeProjectOverride('git.autoCleanup')}
+            inheritedHint={defaultHint(globalConfig.git.autoCleanup)}
+          >
+            <ToggleSwitch
+              checked={displayConfig.git.autoCleanup}
+              onChange={(value) => handleUpdate({ git: { autoCleanup: value } })}
+            />
+          </SettingRow>
+          <SettingRow
+            label="Default Base Branch"
+            description="Branch to create worktrees from"
+            isOverridden={isOverridden('git.defaultBaseBranch')}
+            onReset={() => removeProjectOverride('git.defaultBaseBranch')}
+            inheritedHint={defaultHint(globalConfig.git.defaultBaseBranch)}
+          >
+            <BranchPicker
+              variant="input"
+              value={displayConfig.git.defaultBaseBranch}
+              defaultBranch="main"
+              onChange={(branch) => handleUpdate({ git: { defaultBaseBranch: branch } })}
+            />
+          </SettingRow>
+          <SettingRow
+            label="Copy Files"
+            description="Additional files copied into each worktree"
+            isOverridden={isOverridden('git.copyFiles')}
+            onReset={() => removeProjectOverride('git.copyFiles')}
+            inheritedHint={defaultHint(globalConfig.git.copyFiles)}
+          >
+            <input
+              type="text"
+              value={displayConfig.git.copyFiles.join(', ')}
+              onChange={(event) => {
+                const files = event.target.value.split(',').map((file) => file.trim()).filter(Boolean);
+                handleUpdate({ git: { copyFiles: files } });
+              }}
+              placeholder=".env, .env.local"
+              className={`${INPUT_CLASS} placeholder-fg-faint`}
+            />
+          </SettingRow>
+          <SettingRow
+            label="Post-Worktree Script"
+            description="Shell script to run after worktree creation"
+            isOverridden={isOverridden('git.initScript')}
+            onReset={() => removeProjectOverride('git.initScript')}
+            inheritedHint={defaultHint(globalConfig.git.initScript)}
+          >
+            <input
+              type="text"
+              value={displayConfig.git.initScript || ''}
+              onChange={(event) => handleUpdate({ git: { initScript: event.target.value || null } })}
+              placeholder="npm install"
+              className={`${INPUT_CLASS} placeholder-fg-faint`}
+            />
+          </SettingRow>
+        </>
       )}
     </SettingsPanelShell>
   );

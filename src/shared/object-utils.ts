@@ -61,7 +61,7 @@ export function deepMerge<T extends object>(target: T, source: Partial<T>): T {
 }
 
 /** Typed deep-merge for AppConfig (avoids `as unknown as` chains at call sites). */
-export function deepMergeConfig<T extends object>(base: T, overrides: Record<string, unknown>): T {
+export function deepMergeConfig<T extends object>(base: T, overrides: Partial<T> | Record<string, unknown>): T {
   return deepMerge(base, overrides as Partial<T>);
 }
 

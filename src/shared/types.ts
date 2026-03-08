@@ -349,7 +349,6 @@ export interface AppConfig {
   autoFocusIdleSession: boolean;
   notifyIdleOnInactiveProject: boolean;
   activateAllProjectsOnStartup: boolean;
-  skipDefaultsSyncConfirm: boolean;
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -383,7 +382,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   autoFocusIdleSession: true,
   notifyIdleOnInactiveProject: true,
   activateAllProjectsOnStartup: true,
-  skipDefaultsSyncConfirm: false,
 };
 
 // === IPC API Types ===

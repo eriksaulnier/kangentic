@@ -180,8 +180,9 @@ export function ProjectSidebar({ onToggleSidebar }: ProjectSidebarProps) {
     setProjectToDelete(project);
   };
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = async (_dontAskAgain: boolean) => {
     if (!projectToDelete) return;
+    const wasActive = currentProject?.id === projectToDelete.id;
     const name = projectToDelete.name;
     await deleteProject(projectToDelete.id);
     setProjectToDelete(null);
@@ -189,6 +190,14 @@ export function ProjectSidebar({ onToggleSidebar }: ProjectSidebarProps) {
       message: `Deleted project "${name}"`,
       variant: 'info',
     });
+
+    // Auto-select the first remaining project if the deleted one was active
+    if (wasActive) {
+      const remaining = useProjectStore.getState().projects;
+      if (remaining.length > 0) {
+        openProject(remaining[0].id);
+      }
+    }
   };
 
   const sensors = useSensors(
