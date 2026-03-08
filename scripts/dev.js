@@ -88,16 +88,22 @@ async function start() {
   const electronArgs = [projectDir, `--cwd=${path.resolve(targetDir)}`];
 
   // Preview instances get their own user data directory to avoid disk cache
-  // conflicts with the primary Electron instance.
+  // conflicts with the primary Electron instance, and their own data directory
+  // so preview databases don't pollute the real app. Both live inside
+  // .kangentic/ which is already cleaned up on ephemeral exit.
+  let spawnEnv = process.env;
   if (ephemeral) {
-    const userDataDir = path.join(path.resolve(targetDir), '.kangentic', 'electron-data');
+    const resolvedTarget = path.resolve(targetDir);
+    const userDataDir = path.join(resolvedTarget, '.kangentic', 'electron-data');
     electronArgs.push(`--user-data-dir=${userDataDir}`);
     electronArgs.push('--ephemeral');
+    spawnEnv = { ...process.env, KANGENTIC_DATA_DIR: path.join(resolvedTarget, '.kangentic', 'data') };
   }
 
   electronProc = spawn(electronExe, electronArgs, {
     cwd: projectDir,
     stdio: 'inherit',
+    env: spawnEnv,
   });
 
   electronProc.on('close', (code) => {
