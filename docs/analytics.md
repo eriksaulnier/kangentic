@@ -49,9 +49,7 @@ The `KANGENTIC_TELEMETRY` environment variable controls analytics:
 |-------|----------|
 | `0` or `false` | Analytics disabled (opt-out) |
 | `1` or `true` | Analytics enabled, even in dev builds (for local debugging) |
-| *(unset)* | Analytics enabled in all builds (default) |
-
-Dev-mode events are tagged with `isDebug=true` in Aptabase, so they are filterable and won't pollute production metrics.
+| *(unset)* | Analytics enabled in production only (default) |
 
 ### Opt-out examples
 
