@@ -16,19 +16,30 @@ The config directory (`<configDir>`) is platform-specific:
 - **macOS:** `~/Library/Application Support/kangentic/`
 - **Linux:** `~/.config/kangentic/`
 
-## Global-Only Settings
+## Settings Panels
 
-These settings CANNOT be overridden per-project (defined in `GLOBAL_ONLY_PATHS`):
+Settings are split into two panels with separate entry points:
 
-- `claude.maxConcurrentSessions`
-- `claude.queueOverflow`
-- `claude.cliPath`
-- `sidebarVisible`
-- `boardLayout`
-- `sidebar.width`
-- `terminal.panelHeight`
-- `terminal.showPreview`
-- `activateAllProjectsOnStartup`
+- **App Settings** -- opened via the titlebar gear icon. Contains app-wide settings (theme, CLI path, max sessions, behavior toggles) and a "Project Defaults" section for default values applied to new projects. Changing a project default optionally syncs to all existing projects via a confirmation modal.
+- **Project Settings** -- opened via the gear icon on each project row in the sidebar. Contains per-project overridable settings (shell, font, permissions, git). Inherited defaults are shown as hints; overridden settings get a reset button.
+
+### App-Only Settings
+
+These settings appear only in App Settings and cannot be overridden per-project:
+
+- `theme`, `sidebarVisible`, `boardLayout`, `sidebar.width`
+- `claude.cliPath`, `claude.maxConcurrentSessions`, `claude.queueOverflow`
+- `terminal.panelHeight`, `terminal.showPreview`
+- `skipDeleteConfirm`, `autoFocusIdleSession`, `notifyIdleOnInactiveProject`, `activateAllProjectsOnStartup`
+- `skipDefaultsSyncConfirm`
+
+### Per-Project Overridable Settings
+
+These settings appear in Project Settings and can be overridden per-project:
+
+- `terminal.shell`, `terminal.fontSize`, `terminal.fontFamily`
+- `claude.permissionMode`
+- `git.worktreesEnabled`, `git.autoCleanup`, `git.defaultBaseBranch`, `git.copyFiles`, `git.initScript`
 
 ## Full AppConfig Reference
 
@@ -43,6 +54,7 @@ These settings CANNOT be overridden per-project (defined in `GLOBAL_ONLY_PATHS`)
 | `autoFocusIdleSession` | boolean | `true` | Auto-switch to session tab when agent goes idle |
 | `notifyIdleOnInactiveProject` | boolean | `true` | Show native OS notification and flash taskbar when an agent goes idle on a non-active project. Clicking the notification switches to the project and opens the task detail dialog. |
 | `activateAllProjectsOnStartup` | boolean | `true` | Open all projects on app launch (not just the last one). Global-only. |
+| `skipDefaultsSyncConfirm` | boolean | `false` | Skip the "Apply to existing projects?" modal when changing project defaults. Global-only. |
 
 ### terminal.*
 
@@ -109,9 +121,13 @@ Each swimlane has its own overrides (stored in the per-project DB):
 | Channel | Purpose |
 |---------|---------|
 | `config:get` | Get effective config (global + project merged) |
+| `config:getGlobal` | Get global config only (no project overrides) |
 | `config:set` | Update global config (partial merge) |
-| `config:getProject` | Get project-level overrides only |
-| `config:setProject` | Update project-level overrides |
+| `config:getProject` | Get project-level overrides for current project |
+| `config:setProject` | Update project-level overrides for current project |
+| `config:getProjectByPath` | Get project-level overrides by project path |
+| `config:setProjectByPath` | Update project-level overrides by project path |
+| `config:syncDefaultToProjects` | Sync changed default values to all existing projects (deep merge) |
 
 ## Environment Variables
 
