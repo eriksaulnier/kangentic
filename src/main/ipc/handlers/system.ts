@@ -96,17 +96,43 @@ export function registerSystemHandlers(context: IpcContext): void {
   ipcMain.handle(IPC.WINDOW_IS_FOCUSED, () => context.mainWindow.isFocused());
 
   // === Notifications ===
+  const activeNotifications = new Set<Notification>();
+
   ipcMain.on(IPC.NOTIFICATION_SHOW, (_event, input: NotificationInput) => {
     const notification = new Notification({
       title: input.title,
       body: input.body,
     });
 
+    activeNotifications.add(notification);
+
+    const cleanup = () => {
+      activeNotifications.delete(notification);
+    };
+
     notification.on('click', () => {
-      context.mainWindow.show();
-      context.mainWindow.focus();
-      context.mainWindow.webContents.send(IPC.NOTIFICATION_CLICKED, input.projectId, input.taskId);
+      cleanup();
+
+      const mainWindow = context.mainWindow;
+      if (mainWindow.isDestroyed()) return;
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.show();
+      mainWindow.focus();
+
+      const sendClickEvent = () => {
+        mainWindow.webContents.send(IPC.NOTIFICATION_CLICKED, input.projectId, input.taskId);
+      };
+
+      if (mainWindow.isFocused()) {
+        sendClickEvent();
+      } else {
+        mainWindow.once('focus', sendClickEvent);
+      }
     });
+
+    notification.on('close', cleanup);
 
     notification.show();
   });
