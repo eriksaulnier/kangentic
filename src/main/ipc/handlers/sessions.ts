@@ -135,7 +135,6 @@ export function registerSessionHandlers(context: IpcContext): void {
   context.sessionManager.on('status', (sessionId: string, status: string) => {
     if (status === 'running') {
       sessionStartTimes.set(sessionId, Date.now());
-      trackEvent('session_spawn', { agent: 'claude' });
     }
     if (!context.mainWindow.isDestroyed()) {
       const projectId = context.sessionManager.getSessionProjectId(sessionId);

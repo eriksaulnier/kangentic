@@ -4,17 +4,14 @@ Kangentic collects anonymous usage statistics to understand adoption and improve
 
 ## What We Collect
 
-Eight event types are tracked, all on critical-path actions only:
+Five event types are tracked, all on critical-path actions only:
 
 | Event | When | Properties |
 |-------|------|------------|
 | `app_launch` | App starts (when analytics is enabled) | platform, arch |
 | `app_close` | Graceful quit, Ctrl+C, or SIGTERM | durationSeconds |
 | `project_create` | User creates a project | (none) |
-| `task_create` | User creates a task | (none) |
-| `task_start` | Task moves out of Backlog | (none) |
 | `task_complete` | Task moves to Done | (none) |
-| `session_spawn` | Agent session starts | agent type |
 | `session_exit` | Agent session finishes | exit code, duration (seconds) |
 
 The analytics SDK automatically detects: OS name, OS version, locale, app version, anonymous session ID, and country (derived from IP, then discarded).
@@ -24,7 +21,7 @@ The analytics SDK automatically detects: OS name, OS version, locale, app versio
 - Task titles, descriptions, or any user-generated content
 - File paths, project names, or code
 - Usernames, emails, or any personally identifiable information
-- Mid-board task moves (only backlog-exit and done-entry)
+- Task creation, task start, or mid-board task moves (only done-entry is tracked)
 
 ## Why
 

@@ -45,10 +45,6 @@ export async function handleTaskMove(
   if (fromSwimlaneId === input.targetSwimlaneId) return;
 
   // Analytics: track critical-path transitions only
-  const fromLane = swimlanes.getById(fromSwimlaneId);
-  if (fromLane?.role === 'backlog') {
-    trackEvent('task_start');
-  }
   if (toLane?.role === 'done') {
     trackEvent('task_complete');
   }
@@ -168,7 +164,6 @@ export function registerTaskHandlers(context: IpcContext): void {
     const { tasks, attachments } = getProjectRepos(context);
     const { pendingAttachments, ...taskInput } = input;
     const task = tasks.create(taskInput);
-    trackEvent('task_create');
 
     // Save any pending attachments from the dialog
     if (pendingAttachments?.length && context.currentProjectPath) {
