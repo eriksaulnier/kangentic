@@ -294,7 +294,7 @@ State: `config` (AppConfig), `claudeInfo`, `claudeVersionLabel`, `settingsOpen`
 
 State: `projects`, `currentProject`, `loading`
 
-Standard CRUD. `openProject()` triggers main process initialization (DB, session recovery, worktree reconciliation).
+Standard CRUD. `openProject()` triggers main process initialization (DB open, worktree pruning). Session recovery and reconciliation run in the background (fire-and-forget) so the board renders immediately; sessions appear reactively as PTYs come online via IPC status events.
 
 ### ToastStore (`toast-store.ts`)
 

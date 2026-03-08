@@ -133,7 +133,7 @@ On app close (`SessionManager.suspendAll()`):
 
 1. Send `Ctrl+C` to each running PTY (interrupts in-progress operation)
 2. Send `/exit` to each PTY (triggers Claude Code clean shutdown, flushes JSONL)
-3. Wait up to 2000ms for processes to exit
+3. Wait for processes to exit -- adaptive timeout: 200ms for freshly spawned sessions (<10s old), 2000ms when long-running sessions exist
 4. Force-kill remaining PTYs (null file paths first to preserve files)
 5. Return task IDs for DB status updates
 
