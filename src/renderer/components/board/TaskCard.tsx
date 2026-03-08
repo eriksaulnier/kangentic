@@ -137,7 +137,7 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
           <div className="text-xs text-fg-faint mt-1 line-clamp-3">{task.description}</div>
         )}
 
-        {task.attachment_count > 0 && (
+        {task.attachment_count > 0 && displayState.kind === 'none' && (
           <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-edge">
             {task.attachment_count === 1
               ? <Image size={15} className="text-fg-faint" />
