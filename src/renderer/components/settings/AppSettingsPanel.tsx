@@ -218,6 +218,11 @@ export function AppSettingsPanel() {
               onChange={(value) => handleAppUpdate({ activateAllProjectsOnStartup: value })}
             />
           </SettingRow>
+          <SectionHeader label="Privacy" />
+          <p className="text-fg-muted text-xs leading-relaxed px-1">
+            Kangentic collects anonymous usage statistics to improve the product. No personal data is collected.
+            Set <code className="text-fg-secondary">KANGENTIC_TELEMETRY=0</code> to opt out.
+          </p>
         </>
       )}
 

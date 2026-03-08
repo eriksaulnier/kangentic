@@ -9,6 +9,7 @@ import { IPC } from '../shared/ipc-channels';
 import { THEME_BACKGROUNDS } from '../shared/types';
 import type { ThemeMode } from '../shared/types';
 import { PATHS } from './config/paths';
+import { initAnalytics, trackEvent } from './analytics/analytics';
 
 // Global error handlers -- keep the app running through transient IPC/PTY errors
 process.on('uncaughtException', (err) => {
@@ -31,6 +32,11 @@ if (app.isPackaged && process.platform !== 'linux') {
     updateInterval: '1 hour',
   });
 }
+
+// Initialize anonymous analytics BEFORE app.whenReady() -- the SDK requires this
+// to register protocol schemes. The analytics module decides whether to activate
+// based on app.isPackaged and the KANGENTIC_TELEMETRY env var.
+initAnalytics();
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -282,6 +288,10 @@ Menu.setApplicationMenu(
 
 app.whenReady().then(async () => {
   createWindow();
+
+  // Fire app_launch event (analytics initialized before app.whenReady above).
+  // trackEvent is a no-op if analytics is disabled, so no guard needed here.
+  trackEvent('app_launch', { platform: process.platform, arch: process.arch });
 
   // Load React DevTools extension in development (fire-and-forget, after window is visible)
   if (!app.isPackaged) {

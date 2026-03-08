@@ -31,6 +31,10 @@ vi.mock('../../src/main/git/worktree-manager', () => ({
   isKangenticWorktree: mockIsKangenticWorktree,
 }));
 
+vi.mock('../../src/main/analytics/analytics', () => ({
+  trackEvent: vi.fn(),
+}));
+
 // --- Import the impl directly (bypasses requireContext() guard in register-all.ts) ---
 import { pruneStaleWorktreeProjects } from '../../src/main/ipc/handlers/projects';
 import type { IpcContext } from '../../src/main/ipc/ipc-context';

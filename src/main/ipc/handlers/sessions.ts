@@ -5,7 +5,11 @@ import { TaskRepository } from '../../db/repositories/task-repository';
 import { getProjectDb } from '../../db/database';
 import { getProjectRepos, ensureTaskWorktree, createTransitionEngine } from '../helpers';
 import { handleTaskMove } from './tasks';
+import { trackEvent } from '../../analytics/analytics';
 import type { IpcContext } from '../ipc-context';
+
+// Track session start times for duration calculation on exit
+const sessionStartTimes = new Map<string, number>();
 
 export function registerSessionHandlers(context: IpcContext): void {
   // === Sessions ===
@@ -129,6 +133,10 @@ export function registerSessionHandlers(context: IpcContext): void {
   });
 
   context.sessionManager.on('status', (sessionId: string, status: string) => {
+    if (status === 'running') {
+      sessionStartTimes.set(sessionId, Date.now());
+      trackEvent('session_spawn', { agent: 'claude' });
+    }
     if (!context.mainWindow.isDestroyed()) {
       const projectId = context.sessionManager.getSessionProjectId(sessionId);
       context.mainWindow.webContents.send(IPC.SESSION_STATUS, sessionId, status, projectId);
@@ -137,6 +145,14 @@ export function registerSessionHandlers(context: IpcContext): void {
 
   context.sessionManager.on('exit', (sessionId: string, exitCode: number) => {
     const resolvedProjectId = context.sessionManager.getSessionProjectId(sessionId);
+
+    // Analytics: track session exit with duration (skip recovered sessions with no start time)
+    const startTime = sessionStartTimes.get(sessionId);
+    if (startTime) {
+      const durationSeconds = Math.round((Date.now() - startTime) / 1000);
+      trackEvent('session_exit', { exitCode, durationSeconds });
+      sessionStartTimes.delete(sessionId);
+    }
 
     if (!context.mainWindow.isDestroyed()) {
       context.mainWindow.webContents.send(IPC.SESSION_EXIT, sessionId, exitCode, resolvedProjectId);

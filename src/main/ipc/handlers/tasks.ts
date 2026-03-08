@@ -12,6 +12,7 @@ import {
   cleanupTaskSession,
   cleanupTaskResources,
 } from '../helpers';
+import { trackEvent } from '../../analytics/analytics';
 import type { IpcContext } from '../ipc-context';
 
 /**
@@ -42,6 +43,15 @@ export async function handleTaskMove(
 
   // Within-column reorder -- no side effects needed
   if (fromSwimlaneId === input.targetSwimlaneId) return;
+
+  // Analytics: track critical-path transitions only
+  const fromLane = swimlanes.getById(fromSwimlaneId);
+  if (fromLane?.role === 'backlog') {
+    trackEvent('task_start');
+  }
+  if (toLane?.role === 'done') {
+    trackEvent('task_complete');
+  }
 
   const db = getProjectDb(resolvedProjectId);
   const sessionRepo = new SessionRepository(db);
@@ -158,6 +168,7 @@ export function registerTaskHandlers(context: IpcContext): void {
     const { tasks, attachments } = getProjectRepos(context);
     const { pendingAttachments, ...taskInput } = input;
     const task = tasks.create(taskInput);
+    trackEvent('task_create');
 
     // Save any pending attachments from the dialog
     if (pendingAttachments?.length && context.currentProjectPath) {

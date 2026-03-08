@@ -10,6 +10,7 @@ import { stripKangenticHooks } from '../../agent/hook-manager';
 import { getProjectDb, closeProjectDb } from '../../db/database';
 import { PATHS } from '../../config/paths';
 import { ensureGitignore, getProjectRepos } from '../helpers';
+import { trackEvent } from '../../analytics/analytics';
 import type { Project, Task } from '../../../shared/types';
 import type { IpcContext } from '../ipc-context';
 
@@ -266,6 +267,7 @@ export function registerProjectHandlers(context: IpcContext): void {
     const project = context.projectRepo.create(input);
     // Initialize the project database (creates tables + default swimlanes)
     getProjectDb(project.id);
+    trackEvent('project_create');
     return project;
   });
 
