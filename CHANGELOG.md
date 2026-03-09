@@ -85,3 +85,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - CI workflows for build and release (af82656)
 - Production readiness cleanup (fcff489)
 - Comprehensive test suite: unit, UI, and E2E tiers (436e96e)
+- Auto-populate draft release description from RELEASE_NOTES.md (426a69d)
