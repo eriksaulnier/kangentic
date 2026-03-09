@@ -36,7 +36,7 @@ Attach actions to any column transition: spawn agents, send commands, run shell 
 
 ### Cross-Platform
 
-Native installers for Windows (Squirrel), macOS (DMG), and Linux (deb/rpm). Kangentic adapts to the local shell environment -- PowerShell, bash, zsh, fish, nushell, WSL, and cmd are all supported.
+Native installers for Windows (NSIS), macOS (DMG), and Linux (deb/rpm). Kangentic adapts to the local shell environment -- PowerShell, bash, zsh, fish, nushell, WSL, and cmd are all supported.
 
 ### Real-Time Terminal
 
@@ -74,9 +74,9 @@ Kangentic is an **agent orchestration desktop app** -- a visual control surface 
 | Runtime      | Electron 40, Node 20                            |
 | Frontend     | React 19, Zustand, Tailwind CSS 4, Lucide icons |
 | Backend      | better-sqlite3, node-pty, simple-git             |
-| Build        | Electron Forge + Vite (renderer), esbuild (main) |
-| Testing      | Playwright (E2E + UI), Vitest (unit)             |
-| Distribution | Squirrel (Windows), DMG (macOS), deb/rpm (Linux) |
+| Build        | Vite (renderer), esbuild (main), electron-builder |
+| Testing      | Playwright (E2E + UI), Vitest (unit)              |
+| Distribution | NSIS (Windows), DMG (macOS), deb/rpm (Linux)      |
 
 ## Target Audience
 

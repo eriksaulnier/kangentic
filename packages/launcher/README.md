@@ -23,7 +23,7 @@ npx kangentic /path/to/your/project
 1. Detects your platform (Windows, macOS, Linux) and architecture (x64, arm64)
 2. Downloads the matching installer from [GitHub Releases](https://github.com/Kangentic/kangentic/releases)
 3. Installs per platform:
-   - **Windows:** Runs Squirrel Setup.exe silently to `%LOCALAPPDATA%\Kangentic\`
+   - **Windows:** Runs NSIS installer silently to `%LOCALAPPDATA%\Programs\Kangentic\`
    - **macOS:** Extracts .zip to `~/Applications/Kangentic.app`
    - **Linux:** Installs .deb via `sudo dpkg -i` (prompts for password)
 4. Launches the app
@@ -32,7 +32,7 @@ npx kangentic /path/to/your/project
 
 After the initial install, you generally don't need to run `npx kangentic` again:
 
-- **Windows:** Squirrel auto-updater installs new versions silently on restart.
+- **Windows:** electron-updater installs new versions silently on restart.
 - **macOS:** Built-in auto-updater downloads in the background and prompts to restart. (Requires code signing.)
 - **Linux:** No auto-update. Re-run `npx kangentic` or download from [GitHub Releases](https://github.com/Kangentic/kangentic/releases).
 

@@ -31,7 +31,7 @@ Download the latest release for your platform from [GitHub Releases](https://git
 
 | Platform | File | Notes |
 |----------|------|-------|
-| Windows | `Kangentic-X.Y.Z Setup.exe` | Squirrel installer. Auto-updates. |
+| Windows | `Kangentic Setup X.Y.Z.exe` | NSIS installer. Auto-updates. |
 | macOS | `Kangentic-X.Y.Z.dmg` | Drag to Applications. See [Gatekeeper note](#macos-gatekeeper). |
 | Linux (Debian/Ubuntu) | `kangentic_X.Y.Z_amd64.deb` | `sudo dpkg -i kangentic_*.deb` |
 | Linux (Fedora/RHEL) | `kangentic-X.Y.Z-1.x86_64.rpm` | `sudo rpm -i kangentic-*.rpm` |
@@ -39,7 +39,7 @@ Download the latest release for your platform from [GitHub Releases](https://git
 ### Windows
 
 1. Download the `.exe` installer.
-2. Run it -- Squirrel handles installation and creates a desktop shortcut.
+2. Run it -- the NSIS installer handles installation and creates a Start Menu shortcut.
 3. If Windows SmartScreen warns about an unrecognized app, click **More info** then **Run anyway**. This happens because the app is not yet code-signed.
 4. Auto-updates are built in. New versions install silently on restart.
 

@@ -54,7 +54,7 @@ Apply these rules to every changed file. Collect the **union** of all matched ti
 | `src/renderer/components/terminal/**`, `src/renderer/hooks/useTerminal*.ts`, `src/renderer/stores/session-store.ts` | ui + e2e |
 | `src/renderer/**` (other) | ui |
 | `src/shared/**` | Grep for imports of the changed file in `src/main/` (→ e2e), `src/renderer/` (→ ui), and test dirs (→ matching tier). Include all tiers that import it. |
-| `package.json`, `tsconfig*.json`, `vite.*.ts`, `playwright.config.ts`, `vitest.config.ts`, `forge.config.ts`, `scripts/**` | unit + ui + e2e |
+| `package.json`, `tsconfig*.json`, `vite.*.ts`, `playwright.config.ts`, `vitest.config.ts`, `electron-builder.yml`, `scripts/**` | unit + ui + e2e |
 | `.claude/**`, `*.md`, `.gitignore` | none (docs only — skip testing) |
 
 If **no tiers** are selected (docs-only change), report "No testable changes detected" and stop.

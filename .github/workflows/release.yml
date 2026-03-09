@@ -115,15 +115,15 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
 
-      # macOS code signing and notarization
+      # macOS code signing and notarization (electron-builder auto-detects
+      # signing identity from keychain; notarization uses APPLE_ID + password)
       - name: Set macOS signing env
         if: startsWith(matrix.platform, 'macos')
         shell: bash
         run: |
-          if [ -n "${{ secrets.APPLE_IDENTITY }}" ]; then
-            echo "APPLE_IDENTITY=${{ secrets.APPLE_IDENTITY }}" >> $GITHUB_ENV
+          if [ -n "${{ secrets.APPLE_ID }}" ]; then
             echo "APPLE_ID=${{ secrets.APPLE_ID }}" >> $GITHUB_ENV
-            echo "APPLE_PASSWORD=${{ secrets.APPLE_PASSWORD }}" >> $GITHUB_ENV
+            echo "APPLE_APP_SPECIFIC_PASSWORD=${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" >> $GITHUB_ENV
             echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}" >> $GITHUB_ENV
           fi
 
@@ -151,7 +151,7 @@ jobs:
             $metadataPath = "$env:RUNNER_TEMP\metadata.json"
             $metadata | Out-File -FilePath $metadataPath -Encoding utf8NoBOM
 
-            # Set env vars for forge.config.ts / build/windowsSign.ts
+            # Set env vars for electron-builder custom sign hook
             echo "AZURE_CODE_SIGNING_DLIB=$dlibPath" >> $env:GITHUB_ENV
             echo "AZURE_METADATA_JSON=$metadataPath" >> $env:GITHUB_ENV
             echo "AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> $env:GITHUB_ENV
@@ -159,6 +159,7 @@ jobs:
             echo "AZURE_CLIENT_SECRET=${{ secrets.AZURE_CLIENT_SECRET }}" >> $env:GITHUB_ENV
           }
 
-      - run: npm run publish
+      - name: Build and publish
+        run: npm run publish
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

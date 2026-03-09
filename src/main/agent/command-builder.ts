@@ -70,7 +70,7 @@ function mergePermissions(
 /**
  * Resolve a bridge script path using the standard 3-candidate pattern:
  * 1. Production build (next to main bundle)
- * 2. Forge dev (.vite/build/ → project root)
+ * 2. Dev build (.vite/build/ → project root)
  * 3. Fallback from CWD
  */
 function resolveBridgeScript(name: string): string {
@@ -241,7 +241,7 @@ export class CommandBuilder {
     }
 
     // Resolve bridge scripts. In production, bridge scripts are copied next
-    // to the main bundle by scripts/build.js. In dev (Forge Vite plugin),
+    // to the main bundle by scripts/build.js. In dev (esbuild watch),
     // __dirname is .vite/build/ so we fall back to the source tree.
     const statusBridge = toForwardSlash(resolveBridgeScript('status-bridge'));
     const statusPath = toForwardSlash(options.statusOutputPath!);

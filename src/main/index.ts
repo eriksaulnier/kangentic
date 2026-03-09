@@ -4,58 +4,49 @@ import { app, BrowserWindow, Menu, nativeImage, session } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { registerAllIpc, getSessionManager, getCommandInjector, getCurrentProjectId, openProjectByPath, cleanupProject, deleteProjectFromIndex, pruneStaleWorktreeProjects, activateAllProjects, getLastOpenedProject } from './ipc/register-all';
+import { registerAllIpc, getSessionManager, getCommandInjector, getCurrentProjectId, openProjectByPath, deleteProjectFromIndex, pruneStaleWorktreeProjects, activateAllProjects, getLastOpenedProject } from './ipc/register-all';
 import { closeAll, getProjectDb } from './db/database';
 import { SessionRepository } from './db/repositories/session-repository';
 import { IPC } from '../shared/ipc-channels';
 import { THEME_BACKGROUNDS } from '../shared/types';
 import type { ThemeMode } from '../shared/types';
 import { PATHS } from './config/paths';
-import { initAnalytics, trackEvent, trackEventAsync, sanitizeErrorMessage } from './analytics/analytics';
+import { initAnalytics, trackEvent, sanitizeErrorMessage } from './analytics/analytics';
 import { initStartupTimer, mark, phase, endPhase, finishStartupTimer } from './startup-timer';
 
 initStartupTimer(PROCESS_START);
 mark('process_start');
 
-// Global error handlers -- keep the app running through transient IPC/PTY errors
+// Global error handlers -- keep the app running through transient IPC/PTY errors.
+// During shutdown, skip analytics calls to avoid new network requests that block exit.
 process.on('uncaughtException', (error) => {
   console.error('[APP] Uncaught exception:', error);
-  trackEvent('app_error', {
-    source: 'uncaughtException',
-    message: sanitizeErrorMessage(error.message),
-  });
+  if (!isShuttingDown) {
+    trackEvent('app_error', {
+      source: 'uncaughtException',
+      message: sanitizeErrorMessage(error.message),
+    });
+  }
 });
 process.on('unhandledRejection', (reason) => {
   console.error('[APP] Unhandled rejection:', reason);
-  trackEvent('app_error', {
-    source: 'unhandledRejection',
-    message: sanitizeErrorMessage(reason instanceof Error ? reason.message : String(reason)),
-  });
+  if (!isShuttingDown) {
+    trackEvent('app_error', {
+      source: 'unhandledRejection',
+      message: sanitizeErrorMessage(reason instanceof Error ? reason.message : String(reason)),
+    });
+  }
 });
 
-// Handle Squirrel.Windows lifecycle events (install/update/uninstall shortcuts)
-import squirrelStartup from 'electron-squirrel-startup';
-if (process.platform === 'win32' && squirrelStartup) app.quit();
-
-// Auto-update from GitHub Releases (Squirrel on Windows, autoUpdater on macOS).
-// Linux has no Squirrel/autoUpdater backend -- users update via the launcher package.
+// Auto-update from GitHub Releases via electron-updater.
+// Linux users update via the launcher package (no auto-update backend).
 //
-// DISABLED: No published GitHub releases yet. With zero releases,
-// update.electronjs.org returns errors that cause Squirrel.Windows to
-// phantom-relaunch the app and leave zombie processes. Re-enable once
-// the first GitHub Release is published.
+// DISABLED: No published GitHub releases yet. Re-enable once the first
+// GitHub Release is published.
 //
-// When re-enabling, keep the --squirrel-firstrun guard -- Squirrel holds a
-// file lock after install, and checkForUpdates() during that window causes
-// the same phantom-relaunch behavior.
-//
-// import { updateElectronApp } from 'update-electron-app';
-// const isFirstRun = process.argv.includes('--squirrel-firstrun');
-// if (app.isPackaged && process.platform !== 'linux' && !isFirstRun) {
-//   updateElectronApp({
-//     repo: 'Kangentic/kangentic',
-//     updateInterval: '1 hour',
-//   });
+// import { autoUpdater } from 'electron-updater';
+// if (app.isPackaged && process.platform !== 'linux') {
+//   autoUpdater.checkForUpdatesAndNotify();
 // }
 
 // Initialize anonymous analytics BEFORE app.whenReady() -- the SDK requires this
@@ -75,18 +66,18 @@ for (const arg of process.argv) {
 }
 
 // Set Windows AppUserModelID so the taskbar resolves the correct icon.
-// In packaged builds, this must match Squirrel's setupAppId so Windows links
-// the running process to the .lnk shortcut icon. In dev, use a separate AUMID
-// to avoid poisoning the icon cache with the default Electron exe icon.
+// In packaged builds, this must match the appId in electron-builder.yml so
+// Windows links the running process to the Start Menu shortcut icon. In dev,
+// use a separate AUMID to avoid poisoning the icon cache.
 app.setAppUserModelId(
-  app.isPackaged ? 'com.squirrel.Kangentic.kangentic' : 'com.kangentic.dev'
+  app.isPackaged ? 'com.kangentic.app' : 'com.kangentic.dev'
 );
 
 const appLaunchTime = Date.now();
 const isEphemeral = process.argv.includes('--ephemeral');
 
-// Enforce single instance -- prevents Squirrel update restarts and manual
-// double-launches from spawning duplicate windows. Ephemeral instances
+// Enforce single instance -- prevents manual double-launches from spawning
+// duplicate windows. Ephemeral instances
 // (worktree previews) skip this so they can coexist with the main app.
 if (!isEphemeral) {
   const gotTheLock = app.requestSingleInstanceLock();
@@ -103,6 +94,8 @@ if (!isEphemeral) {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let activateAllProjectsTimer: ReturnType<typeof setTimeout> | null = null;
+let isShuttingDown = false;
 
 // Parse --cwd=<path> from command line args
 function getCwdArg(): string | null {
@@ -271,10 +264,10 @@ const createWindow = () => {
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
-    // Forge puts renderer at ../renderer/, standalone build puts it at ./renderer/
-    const forgePath = path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`);
+    // Check both relative paths: ../renderer/ (legacy Forge layout) and ./renderer/ (esbuild)
+    const legacyPath = path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`);
     const standalonePath = path.join(__dirname, `renderer/${MAIN_WINDOW_VITE_NAME}/index.html`);
-    mainWindow.loadFile(fs.existsSync(forgePath) ? forgePath : standalonePath);
+    mainWindow.loadFile(fs.existsSync(legacyPath) ? legacyPath : standalonePath);
   }
 
   endPhase('createWindow');
@@ -324,7 +317,8 @@ const createWindow = () => {
     // Activate all other projects' sessions in the background.
     // Defer by 5 seconds so the primary project's recovery completes
     // without CPU/IO contention from all other projects.
-    setTimeout(() => {
+    activateAllProjectsTimer = setTimeout(() => {
+      activateAllProjectsTimer = null;
       phase('activateAllProjects');
       activateAllProjects()
         .catch((err) => console.error('[APP] Failed to activate all projects:', err))
@@ -349,7 +343,7 @@ app.whenReady().then(async () => {
   // Redundant AUMID call inside whenReady -- ensures the ID is set even if
   // Electron clears it during app initialization on some Windows versions.
   app.setAppUserModelId(
-    app.isPackaged ? 'com.squirrel.Kangentic.kangentic' : 'com.kangentic.dev'
+    app.isPackaged ? 'com.kangentic.app' : 'com.kangentic.dev'
   );
 
   createWindow();
@@ -387,87 +381,116 @@ app.on('activate', () => {
   }
 });
 
-async function shutdownSessions(): Promise<void> {
-  const sessionManager = getSessionManager();
-  getCommandInjector().cancelAll();
+const HARD_SHUTDOWN_DEADLINE_MS = 6000;
 
-  // Mark running DB records as 'suspended' BEFORE calling suspendAll().
-  // suspendAll() triggers PTY exits whose async onExit handler would
-  // otherwise race and overwrite 'running' → 'exited', preventing resume.
-  // Group sessions by projectId so we suspend across ALL active projects.
-  const allSessions = sessionManager.listSessions();
-  const sessionsByProject = new Map<string, typeof allSessions>();
-  for (const session of allSessions) {
-    if (session.status === 'running' || session.status === 'queued') {
-      const existing = sessionsByProject.get(session.projectId) || [];
-      existing.push(session);
-      sessionsByProject.set(session.projectId, existing);
-    }
+/**
+ * Synchronous shutdown: mark sessions as suspended in DB, kill PTYs, close DBs.
+ *
+ * CRITICAL: This must be fully synchronous. The previous approach used
+ * event.preventDefault() + async shutdown + process.exit(), but that cancelled
+ * Electron's normal quit flow. If the async chain stalled (analytics network
+ * call, PTY wait, uncaught error), the app became a permanent zombie -- all
+ * Chromium child processes (GPU, utility, crashpad) stayed alive because
+ * Electron never reached its own cleanup. By doing only sync work and letting
+ * the quit proceed, Electron's normal shutdown tears down all child processes.
+ */
+function syncShutdownCleanup(): void {
+  // Clear pending timers that could fire during shutdown
+  if (activateAllProjectsTimer) {
+    clearTimeout(activateAllProjectsTimer);
+    activateAllProjectsTimer = null;
   }
 
-  for (const [projectId, sessions] of sessionsByProject) {
-    try {
-      const db = getProjectDb(projectId);
-      const sessionRepo = new SessionRepository(db);
-      const now = new Date().toISOString();
-      for (const session of sessions) {
-        const record = sessionRepo.getLatestForTask(session.taskId);
-        if (record && record.status === 'running') {
-          sessionRepo.updateStatus(record.id, 'suspended', { suspended_at: now });
-        }
+  try {
+    const sessionManager = getSessionManager();
+    getCommandInjector().cancelAll();
+
+    // Mark running DB records as 'suspended' so sessions can resume on next launch.
+    // This must happen BEFORE killAll() because killAll's onExit handlers could
+    // race and overwrite status to 'exited'.
+    const allSessions = sessionManager.listSessions();
+    const sessionsByProject = new Map<string, typeof allSessions>();
+    for (const session of allSessions) {
+      if (session.status === 'running' || session.status === 'queued') {
+        const existing = sessionsByProject.get(session.projectId) || [];
+        existing.push(session);
+        sessionsByProject.set(session.projectId, existing);
       }
-    } catch {
-      // DB may already be closing
     }
+
+    for (const [projectId, sessions] of sessionsByProject) {
+      try {
+        const db = getProjectDb(projectId);
+        const sessionRepo = new SessionRepository(db);
+        const now = new Date().toISOString();
+        for (const session of sessions) {
+          const record = sessionRepo.getLatestForTask(session.taskId);
+          if (record && record.status === 'running') {
+            sessionRepo.updateStatus(record.id, 'suspended', { suspended_at: now });
+          }
+        }
+      } catch {
+        // DB may already be closing
+      }
+    }
+
+    // Kill all PTY sessions immediately. We skip the graceful suspendAll()
+    // (which sends /exit and waits up to 2s) to keep shutdown synchronous.
+    // Sessions are resumable via --resume <claude_session_id> from the DB record.
+    sessionManager.killAll();
+
+    // Ephemeral cleanup: delete project from index so it doesn't show on next launch.
+    // The worktree directory cleanup (async) is skipped here -- pruneStaleWorktreeProjects()
+    // handles it on next launch of the main app.
+    if (isEphemeral) {
+      const projectId = getCurrentProjectId();
+      if (projectId) {
+        deleteProjectFromIndex(projectId);
+      }
+    }
+
+    closeAll();
+  } catch (error) {
+    console.error('[APP] Shutdown error:', error);
   }
-
-  // Gracefully suspend running sessions -- sends /exit then waits for
-  // Claude Code to save its conversation state before force-killing.
-  if (!app.isPackaged) console.time('[shutdown] suspendAll');
-  await sessionManager.suspendAll();
-  if (!app.isPackaged) console.timeEnd('[shutdown] suspendAll');
-
-  sessionManager.killAll();
-  closeAll();
 }
 
-async function shutdownEphemeral(): Promise<void> {
-  const sessionManager = getSessionManager();
-  getCommandInjector().cancelAll();
-  sessionManager.killAll();
-
-  const projectId = getCurrentProjectId();
-  const cwd = getCwdArg();
-  if (projectId && cwd) {
-    await cleanupProject(projectId, cwd);
-    deleteProjectFromIndex(projectId);
-  }
-
-  closeAll();
+/**
+ * Start the hard failsafe timer. If Electron's normal shutdown hangs (e.g.
+ * GPU process won't terminate), this guarantees process termination. On Windows,
+ * uses taskkill /T to kill the entire process tree including Chromium children.
+ */
+function startHardShutdownFailsafe(): void {
+  setTimeout(() => {
+    console.error('[APP] Hard shutdown deadline reached -- forcing exit');
+    if (process.platform === 'win32') {
+      try {
+        require('child_process').execSync(
+          `taskkill /PID ${process.pid} /T /F`,
+          { windowsHide: true, stdio: 'ignore' },
+        );
+      } catch {
+        // taskkill may fail if process is already dying
+      }
+    }
+    process.exit(1);
+  }, HARD_SHUTDOWN_DEADLINE_MS);
 }
 
-async function trackShutdownAnalytics(): Promise<void> {
-  const durationSeconds = Math.round((Date.now() - appLaunchTime) / 1000);
-  const analyticsTimeout = new Promise<void>((resolve) => setTimeout(resolve, 3000).unref());
-  await Promise.race([
-    trackEventAsync('app_close', { durationSeconds }),
-    analyticsTimeout,
-  ]);
-}
-
-let isShuttingDown = false;
-
-app.on('before-quit', (event) => {
+app.on('before-quit', () => {
   if (isShuttingDown) return;
   isShuttingDown = true;
 
-  // Delay quit until async shutdown completes
-  event.preventDefault();
-  trackShutdownAnalytics()
-    .then(() => isEphemeral ? shutdownEphemeral() : shutdownSessions())
-    .finally(() => {
-      app.exit(0);
-    });
+  // Hard failsafe: if Electron's normal shutdown hangs, force-kill everything
+  startHardShutdownFailsafe();
+
+  // Fire-and-forget shutdown analytics (don't await -- must not block quit)
+  const durationSeconds = Math.round((Date.now() - appLaunchTime) / 1000);
+  trackEvent('app_close', { durationSeconds });
+
+  // Synchronous cleanup -- then let the quit proceed normally so Electron
+  // tears down all Chromium child processes (GPU, utility, crashpad, etc.)
+  syncShutdownCleanup();
 });
 
 // Handle force-close (Ctrl+C / SIGINT / SIGTERM) which may not fire before-quit
@@ -475,10 +498,8 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     if (isShuttingDown) return;
     isShuttingDown = true;
-    trackShutdownAnalytics()
-      .then(() => isEphemeral ? shutdownEphemeral() : shutdownSessions())
-      .finally(() => {
-        process.exit(0);
-      });
+    startHardShutdownFailsafe();
+    syncShutdownCleanup();
+    process.exit(0);
   });
 }

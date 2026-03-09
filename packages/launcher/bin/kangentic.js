@@ -42,7 +42,7 @@ function getPlatformInfo() {
 function getInstallPath(platformInfo) {
   if (platformInfo.platform === 'win32') {
     const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
-    return path.join(localAppData, 'Kangentic', 'Kangentic.exe');
+    return path.join(localAppData, 'Programs', 'Kangentic', 'Kangentic.exe');
   }
   if (platformInfo.platform === 'darwin') {
     const userApps = path.join(os.homedir(), 'Applications', 'Kangentic.app');
@@ -61,11 +61,9 @@ function isInstalled(platformInfo) {
   const installPath = getInstallPath(platformInfo);
   if (!fs.existsSync(installPath)) return false;
 
-  // On Windows, check the Squirrel version directory matches
+  // On Windows, the exe existing is sufficient (NSIS install)
   if (platformInfo.platform === 'win32') {
-    const squirrelDir = path.dirname(installPath);
-    const versionDir = path.join(squirrelDir, `app-${VERSION}`);
-    return fs.existsSync(versionDir);
+    return true;
   }
 
   // On macOS, check the app bundle's version in Info.plist
@@ -100,11 +98,11 @@ function getArtifactFilename(platformInfo) {
   const version = VERSION;
 
   if (platformInfo.platform === 'win32') {
-    // Squirrel produces "Kangentic-X.Y.Z Setup.exe"
-    return `Kangentic-${version}%20Setup.exe`;
+    // NSIS produces "Kangentic Setup X.Y.Z.exe"
+    return `Kangentic%20Setup%20${version}.exe`;
   }
   if (platformInfo.platform === 'darwin') {
-    return `Kangentic-darwin-${platformInfo.arch}-${version}.zip`;
+    return `Kangentic-${version}-${platformInfo.arch}-mac.zip`;
   }
   if (platformInfo.platform === 'linux') {
     // Check if rpm-based system
@@ -196,8 +194,8 @@ function download(url, destinationPath, redirectCount) {
 // --- Platform-specific install ---
 
 function installWindows(artifactPath) {
-  console.log('Installing Kangentic (Squirrel installer)...');
-  execFileSync(artifactPath, ['--silent'], { stdio: 'ignore' });
+  console.log('Installing Kangentic (NSIS installer)...');
+  execFileSync(artifactPath, ['/S'], { stdio: 'ignore' });
   console.log('Installation complete.');
 }
 

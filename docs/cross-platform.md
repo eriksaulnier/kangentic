@@ -50,11 +50,11 @@ Adaptations applied in `SessionManager.doSpawn()` and `adaptCommandForShell()`:
 
 | Module | Build Strategy | Packaging |
 |--------|---------------|-----------|
-| better-sqlite3 | Rebuilt per platform during packaging (`rebuildConfig.onlyModules`) | Whitelisted in `packagerConfig.ignore`, C++ source stripped |
-| node-pty | Prebuilt NAPI binaries, no rebuild needed | Whitelisted in `packagerConfig.ignore`, cross-platform prebuilds stripped, `asar.unpack` for current platform |
-| simple-git | Pure JavaScript, bundled by Vite | Not in node_modules (bundled into main process) |
+| better-sqlite3 | Rebuilt against Electron headers via `scripts/rebuild-native.js` | Included via `files` in `electron-builder.yml`, C++ source excluded |
+| node-pty | Prebuilt NAPI binaries, no rebuild needed | Included via `files`, prebuilds unpacked from asar via `asarUnpack` |
+| simple-git | Pure JavaScript, bundled by esbuild | Not in node_modules (bundled into main process) |
 
-The custom `packagerConfig.ignore` in `forge.config.ts` overrides the Forge VitePlugin's default (which only allows `/.vite`). It whitelists `better-sqlite3`, `node-pty`, `bindings`, and `file-uri-to-path` while stripping build artifacts and non-current-platform prebuilds to reduce bundle size.
+The `files` array in `electron-builder.yml` explicitly whitelists `.vite/build/**`, `better-sqlite3`, `node-pty`, `bindings`, and `file-uri-to-path`. Everything else is excluded from the packaged app.
 
 ### Bridge Script Unpacking
 
@@ -72,20 +72,19 @@ Overridable via `KANGENTIC_DATA_DIR` environment variable.
 
 ## Packaging
 
-Electron Forge handles platform-specific packaging via `forge.config.ts`:
+electron-builder handles platform-specific packaging via `electron-builder.yml`:
 
-| Platform | Format | Maker |
-|----------|--------|-------|
-| Windows | Installer | Squirrel |
-| macOS | Disk image | DMG |
+| Platform | Format | Builder |
+|----------|--------|---------|
+| Windows | Installer | NSIS |
+| macOS | Disk image + ZIP | DMG |
 | Linux | Package | deb, rpm |
-| All | Archive | ZIP (fallback) |
 
 ## Windows Taskbar Identity (AUMID)
 
-Windows resolves taskbar icons by matching the running window's AppUserModelID (AUMID) to a `.lnk` shortcut with the same AUMID. Squirrel generates AUMIDs in the format `com.squirrel.<makerName>.<exeName>`.
+Windows resolves taskbar icons by matching the running window's AppUserModelID (AUMID) to a `.lnk` shortcut with the same AUMID. The NSIS installer creates shortcuts with the `appId` from `electron-builder.yml`.
 
-Both `app.setAppUserModelId()` in `src/main/index.ts` and `setupAppId` in `forge.config.ts` must use `com.squirrel.Kangentic.kangentic` in packaged builds. In dev mode, a separate AUMID (`com.kangentic.dev`) prevents the dev exe from poisoning the Windows icon cache with the default Electron icon. Note: `BrowserWindow.setIcon()` does not control the Windows taskbar icon -- only the AUMID match does.
+`app.setAppUserModelId()` in `src/main/index.ts` must use `com.kangentic.app` in packaged builds to match the `appId` in `electron-builder.yml`. In dev mode, a separate AUMID (`com.kangentic.dev`) prevents the dev exe from poisoning the Windows icon cache with the default Electron icon. Note: `BrowserWindow.setIcon()` does not control the Windows taskbar icon -- only the AUMID match does.
 
 ## macOS Title Bar
 
@@ -93,7 +92,7 @@ Both `app.setAppUserModelId()` in `src/main/index.ts` and `setupAppId` in `forge
 
 ## macOS Code Signing
 
-macOS builds use hardened runtime with `build/entitlements.plist` providing JIT, unsigned executable memory, and dyld environment variable entitlements (required by node-pty). Notarization uses `notarytool` via `osxNotarize` in `forge.config.ts`, gated on the `APPLE_IDENTITY` environment variable.
+macOS builds use hardened runtime with `build/entitlements.plist` providing JIT, unsigned executable memory, and dyld environment variable entitlements (required by node-pty). Notarization uses `notarytool` via electron-builder, gated on the `APPLE_ID` and `APPLE_APP_SPECIFIC_PASSWORD` environment variables.
 
 ## Linux System Dependencies
 
@@ -101,7 +100,7 @@ The deb package declares `depends` on Electron's required system libraries (`lib
 
 ## Auto-Update Platform Guard
 
-Auto-update via `update-electron-app` is currently disabled on all platforms -- no published GitHub releases exist yet, and `update.electronjs.org` returns errors that cause Squirrel.Windows to phantom-relaunch the app and leave zombie processes. Once the first release is published, re-enable auto-update for Windows and macOS in `src/main/index.ts`. Linux will never use auto-update -- users update via the launcher package (`npx kangentic`). Similarly, `electron-squirrel-startup` only calls `app.quit()` on Windows.
+Auto-update via `electron-updater` is currently disabled on all platforms -- no published GitHub releases exist yet. Once the first release is published, re-enable auto-update for Windows and macOS in `src/main/index.ts`. Linux will never use auto-update -- users update via the launcher package (`npx kangentic`).
 
 ## Security Fuses
 

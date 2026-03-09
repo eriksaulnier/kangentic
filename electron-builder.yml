@@ -1,0 +1,91 @@
+appId: com.kangentic.app
+productName: Kangentic
+extraMetadata:
+  description: Kangentic
+
+directories:
+  output: out
+  buildResources: resources
+
+# Only include build output + native modules (matches old forge.config.ts ignore function)
+files:
+  - ".vite/build/**"
+  - "package.json"
+  - "node_modules/better-sqlite3/**"
+  - "node_modules/node-pty/**"
+  - "node_modules/bindings/**"
+  - "node_modules/file-uri-to-path/**"
+  - "!node_modules/better-sqlite3/{src,deps}/**"
+  - "!node_modules/better-sqlite3/binding.gyp"
+  - "!node_modules/node-pty/{src,scripts,deps,third_party}/**"
+
+asar: true
+asarUnpack:
+  - "node_modules/node-pty/prebuilds/**"
+
+extraResources:
+  - from: resources/icon.png
+    to: icon.png
+  - from: resources/icon.ico
+    to: icon.ico
+
+# We rebuild better-sqlite3 manually; node-pty uses NAPI prebuilts
+npmRebuild: false
+afterPack: build/afterPack.js
+
+win:
+  target: nsis
+  icon: resources/icon.ico
+  signtoolOptions:
+    sign: build/windowsSign.js
+
+nsis:
+  oneClick: true
+  perMachine: false
+
+
+mac:
+  target:
+    - dmg
+    - zip
+  icon: resources/icon.icns
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  entitlements: build/entitlements.plist
+  entitlementsInherit: build/entitlements.plist
+
+linux:
+  target:
+    - deb
+    - rpm
+  icon: resources/icon.png
+  category: Development
+
+deb:
+  depends:
+    - libnss3
+    - libatk-bridge2.0-0
+    - libgtk-3-0
+    - libgbm1
+    - libasound2
+    - libdrm2
+    - libxshmfence1
+
+rpm:
+  # Pin filename to match what the launcher (packages/launcher/bin/kangentic.js) expects.
+  # electron-builder's default may or may not include the -1 release number.
+  artifactName: "${name}-${version}-1.${arch}.rpm"
+  depends:
+    - nss
+    - atk
+    - gtk3
+    - mesa-libgbm
+    - alsa-lib
+    - libdrm
+    - libXShmfence
+
+publish:
+  provider: github
+  owner: Kangentic
+  repo: kangentic
+  releaseType: draft

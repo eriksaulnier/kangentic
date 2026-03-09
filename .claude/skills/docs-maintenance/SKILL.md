@@ -14,12 +14,12 @@ Each doc file and the source files that are its authority:
 | `claude-integration.md` | `src/main/agent/command-builder.ts`, `src/main/agent/hook-manager.ts`, `src/main/agent/trust-manager.ts`, `src/main/agent/claude-detector.ts` |
 | `transition-engine.md` | `src/main/engine/transition-engine.ts`, `src/shared/types.ts` (ActionType, ActionConfig) |
 | `database.md` | `src/main/db/migrations.ts`, `src/main/db/database.ts`, `src/main/db/repositories/*.ts` |
-| `cross-platform.md` | `src/main/pty/shell-resolver.ts`, `forge.config.ts`, `scripts/build.js` |
+| `cross-platform.md` | `src/main/pty/shell-resolver.ts`, `electron-builder.yml`, `scripts/build.js` |
 | `worktree-strategy.md` | `src/main/git/worktree-manager.ts`, `src/main/agent/hook-manager.ts`, `src/main/agent/trust-manager.ts` |
 | `activity-detection.md` | `src/main/agent/event-bridge.js`, `src/shared/types.ts` (EventType, EventTypeActivity, HookEvent) |
 | `overview.md` | `README.md`, high-level features |
 | `user-guide.md` | `src/renderer/components/`, `src/renderer/stores/`, `src/shared/types.ts` |
-| `developer-guide.md` | `scripts/`, `tests/`, `forge.config.ts`, `package.json` |
+| `developer-guide.md` | `scripts/`, `tests/`, `electron-builder.yml`, `package.json` |
 | `docs/README.md` | All other docs (index) |
 
 ## Doc Conventions

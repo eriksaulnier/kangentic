@@ -16,11 +16,11 @@ This downloads the pre-built binary for your platform, installs it, and launches
 
 | Platform | Update mechanism | User action |
 |----------|-----------------|-------------|
-| Windows | Squirrel auto-updater | None. Downloads in background, installs on next restart. |
-| macOS | `autoUpdater` via `update-electron-app` | Click "Restart to update" when prompted. Requires code signing -- see [macOS signing note](#macos-auto-update-requires-signing). |
+| Windows | `electron-updater` (NSIS) | None. Downloads in background, installs on next restart. |
+| macOS | `electron-updater` | Click "Restart to update" when prompted. Requires code signing -- see [macOS signing note](#macos-auto-update-requires-signing). |
 | Linux | None | Re-run `npx kangentic` or download from [GitHub Releases](https://github.com/Kangentic/kangentic/releases). |
 
-**Auto-update is currently disabled** -- no published GitHub releases exist yet. With zero releases, `update.electronjs.org` returns errors that cause Squirrel.Windows to phantom-relaunch the app and leave zombie processes. Re-enable in `src/main/index.ts` once the first GitHub Release is published. When enabled, the app will check for updates hourly.
+**Auto-update is currently disabled** -- no published GitHub releases exist yet. Re-enable in `src/main/index.ts` once the first GitHub Release is published.
 
 ### Install a Specific Version
 
@@ -32,7 +32,7 @@ The launcher version matches the app version. This downloads the exact matching 
 
 ### Rollback
 
-To roll back to a previous version, run `npx kangentic@X.Y.Z` with the desired version. On Windows, the Squirrel installer will replace the current version. On macOS, the .app is replaced in `~/Applications/`.
+To roll back to a previous version, run `npx kangentic@X.Y.Z` with the desired version. On Windows, the NSIS installer will replace the current version. On macOS, the .app is replaced in `~/Applications/`.
 
 ## For Maintainers
 

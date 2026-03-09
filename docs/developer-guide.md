@@ -224,7 +224,7 @@ npm run test:unit                 # Unit (separate runner)
 | `HEADED` | Test | Set to `1` for visible Electron windows in E2E |
 | `NODE_ENV` | Build | `development` or `production` |
 | `MAIN_WINDOW_VITE_DEV_SERVER_URL` | Dev | Injected by esbuild, points Electron to Vite |
-| `MAIN_WINDOW_VITE_NAME` | Build | Forge renderer name (`main_window`) |
+| `MAIN_WINDOW_VITE_NAME` | Build | Renderer output directory name (`main_window`) |
 
 ## Further Reading
 
@@ -250,17 +250,16 @@ This runs automatically as part of `/merge-back` (Step 4.5). To run manually: `/
 
 ## Packaging
 
-Electron Forge handles platform-specific packaging via `forge.config.ts`:
+electron-builder handles platform-specific packaging via `electron-builder.yml`:
 
-| Platform | Format | Maker |
-|----------|--------|-------|
-| Windows | Installer | Squirrel |
-| macOS | Disk image | DMG |
+| Platform | Format | Builder |
+|----------|--------|---------|
+| Windows | Installer | NSIS |
+| macOS | Disk image + ZIP | DMG |
 | Linux | Package | deb, rpm |
-| All | Archive | ZIP (fallback) |
 
 Native modules:
-- `better-sqlite3` -- rebuilt per platform during packaging
+- `better-sqlite3` -- rebuilt against Electron headers via `scripts/rebuild-native.js`
 - `node-pty` -- uses prebuilt NAPI binaries, no rebuild needed
 
 Security fuses enabled: no RunAsNode, no NodeOptions, no inspection, cookie encryption, ASAR integrity validation.

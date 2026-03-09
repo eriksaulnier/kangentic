@@ -46,15 +46,15 @@ npm run typecheck                    # CORRECT — run from cwd, or use --prefix
 - **Runtime:** Electron 40 + Node 20
 - **Frontend:** React 19, Zustand, Tailwind CSS 4, Lucide React icons
 - **Backend:** better-sqlite3, node-pty, simple-git
-- **Build:** Electron Forge + Vite (renderer), esbuild (main/preload)
+- **Build:** Vite (renderer), esbuild (main/preload), electron-builder (packaging)
 - **Testing:** Playwright with Electron support
-- **Package:** Squirrel (Windows), DMG (macOS), deb/rpm (Linux)
+- **Package:** NSIS (Windows), DMG (macOS), deb/rpm (Linux)
 
 ## Project Structure
 
 ```
 build/            # Platform-specific signing & entitlement files
-config/           # Forge-specific Vite configs (referenced from forge.config.ts)
+config/           # Vite configs (renderer, used by scripts/dev.js)
 packages/
   launcher/       # Public npm package ("kangentic") -- thin npx installer
     bin/          # kangentic.js launcher script
@@ -79,12 +79,12 @@ scripts/          # Build and dev scripts
 
 ## Commands
 
-- `npm run dev` — Start in development mode (Forge + Vite HMR)
+- `npm start` — Start in development mode (Vite HMR + esbuild watch)
 - `npm run build` — Production build to `.vite/build/`
 - `npm test` — Run all Playwright E2E tests
 - `npm run test:screenshots` — Run screenshot capture tests only
-- `npm start` — Start via Electron Forge
-- `npm run package` — Package for distribution
+- `npm run package` — Package for distribution (unpacked directory)
+- `npm run make` — Build installer (NSIS on Windows, DMG on macOS, deb/rpm on Linux)
 
 ## Architecture
 
@@ -101,6 +101,18 @@ scripts/          # Build and dev scripts
 - **Icons** use Lucide React — no inline SVGs
 - **PTY sessions** handle cross-platform shells (PowerShell needs `& ` prefix, WSL splits into exe + args, fish/nushell skip `--login`)
 - **Claude CLI** is invoked with `cwd` set to the project directory (or worktree path) so that `.claude/`, `CLAUDE.md`, and commands are loaded into context
+
+### Shutdown (CRITICAL)
+
+The `before-quit` handler in `src/main/index.ts` **must be fully synchronous**. Never use `event.preventDefault()` + async shutdown + `process.exit()`. That pattern cancels Electron's normal quit flow, which means Electron never reaches its own cleanup -- all Chromium child processes (GPU, utility, crashpad) survive as zombies. If the async chain stalls for any reason (network call, PTY wait, uncaught error), the main process also survives, and on Windows installed builds the app can auto-reopen.
+
+The correct pattern:
+1. Do all cleanup synchronously in `before-quit` (mark DB records, kill PTYs, close DBs)
+2. **Do not** call `event.preventDefault()` -- let Electron's normal quit proceed
+3. Fire-and-forget analytics (never await network calls during shutdown)
+4. Set a hard failsafe timer (`taskkill /T /F` on Windows) as a backstop
+
+This means we lose the 2-second graceful Claude CLI exit window (`suspendAll`). Sessions are still resumable because the DB records are marked `suspended` before PTYs are killed, and `--resume <id>` works from the saved session ID.
 
 ### Per-Project Directory
 All runtime data lives under `<project>/.kangentic/` (auto-added to `.gitignore` on project open):
