@@ -3,23 +3,25 @@ const fs = require('fs');
 const path = require('path');
 
 module.exports = async function afterPack(context) {
-  const exeName = context.packager.appInfo.productFilename;
+  const productFilename = context.packager.appInfo.productFilename;
   const platform = context.electronPlatformName;
   let electronBinaryPath;
   if (platform === 'darwin') {
-    electronBinaryPath = path.join(context.appOutDir, `${exeName}.app`, 'Contents', 'MacOS', exeName);
+    electronBinaryPath = path.join(context.appOutDir, `${productFilename}.app`, 'Contents', 'MacOS', productFilename);
   } else if (platform === 'win32') {
-    electronBinaryPath = path.join(context.appOutDir, `${exeName}.exe`);
+    electronBinaryPath = path.join(context.appOutDir, `${productFilename}.exe`);
   } else {
-    // Linux: binary has no extension
-    electronBinaryPath = path.join(context.appOutDir, exeName);
+    // Linux: executable name comes from package.json "name" (lowercase),
+    // not productName. electron-builder exposes it as executableName.
+    const linuxExeName = context.packager.executableName;
+    electronBinaryPath = path.join(context.appOutDir, linuxExeName);
   }
 
   // Resolve the framework directory (contains resources/, LICENSES.chromium.html, etc.)
   // macOS: <name>.app/Contents/  (resources dir is capitalized "Resources")
   // Windows/Linux: appOutDir directly (resources dir is lowercase "resources")
   const frameworkDir = platform === 'darwin'
-    ? path.join(context.appOutDir, `${exeName}.app`, 'Contents')
+    ? path.join(context.appOutDir, `${productFilename}.app`, 'Contents')
     : context.appOutDir;
   const resourcesDirName = platform === 'darwin' ? 'Resources' : 'resources';
 

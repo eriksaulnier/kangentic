@@ -98,8 +98,8 @@ function getArtifactFilename(platformInfo) {
   const version = VERSION;
 
   if (platformInfo.platform === 'win32') {
-    // NSIS produces "Kangentic Setup X.Y.Z.exe"
-    return `Kangentic%20Setup%20${version}.exe`;
+    // NSIS produces "Kangentic-Setup-X.Y.Z.exe"
+    return `Kangentic-Setup-${version}.exe`;
   }
   if (platformInfo.platform === 'darwin') {
     return `Kangentic-${version}-${platformInfo.arch}-mac.zip`;

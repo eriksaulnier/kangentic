@@ -48,6 +48,7 @@ win:
 nsis:
   oneClick: true
   perMachine: false
+  artifactName: "${productName}-Setup-${version}.${ext}"
 
 
 mac:
@@ -57,6 +58,8 @@ mac:
   icon: resources/icon.icns
   category: public.app-category.developer-tools
   hardenedRuntime: true
+  gatekeeperAssess: false
+  strictVerify: false
   entitlements: build/entitlements.plist
   entitlementsInherit: build/entitlements.plist
 

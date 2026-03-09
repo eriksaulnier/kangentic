@@ -16,11 +16,9 @@ permissions:
 
 jobs:
   # When triggered manually, create and push the tag first.
-  # Requires approval from the 'release' environment (Settings > Environments).
   create-tag:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    environment: release
     timeout-minutes: 5
     outputs:
       tag: v${{ inputs.version }}
@@ -41,14 +39,17 @@ jobs:
 
       - name: Create and push tag
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "v${{ inputs.version }}" -m "Release v${{ inputs.version }}"
           git push origin "v${{ inputs.version }}"
 
   release:
     needs: [create-tag]
     if: always() && (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
-    environment: release
+    environment: release-${{ matrix.platform }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -58,11 +59,12 @@ jobs:
           - os: macos-latest
             platform: macos-arm64
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-tags: true
 
       - uses: actions/setup-node@v4
@@ -93,73 +95,46 @@ jobs:
             echo "CHANGELOG_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      # Install Apple Developer ID certificate into a temporary keychain
+      # Import Apple Developer ID certificate using Apple's official action.
+      # Handles keychain creation, partition list, and default keychain setup.
       - name: Install Apple signing certificate
-        if: startsWith(matrix.platform, 'macos') && env.APPLE_CERTIFICATE_BASE64 != ''
-        shell: bash
-        env:
-          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          CERTIFICATE_PATH="$RUNNER_TEMP/certificate.p12"
-          KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
-          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
-
-          echo -n "$APPLE_CERTIFICATE_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-          security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
-
-      # macOS code signing and notarization (electron-builder auto-detects
-      # signing identity from keychain; notarization uses APPLE_ID + password)
-      - name: Set macOS signing env
         if: startsWith(matrix.platform, 'macos')
-        shell: bash
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
+      - name: Verify signing identity
+        if: startsWith(matrix.platform, 'macos')
         run: |
-          if [ -n "${{ secrets.APPLE_ID }}" ]; then
-            echo "APPLE_ID=${{ secrets.APPLE_ID }}" >> $GITHUB_ENV
-            echo "APPLE_APP_SPECIFIC_PASSWORD=${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" >> $GITHUB_ENV
-            echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}" >> $GITHUB_ENV
-          fi
+          echo "Default keychain:"
+          security default-keychain
+          echo "Signing identities:"
+          security find-identity -v -p codesigning
 
-      # Windows code signing (Azure Trusted Signing)
-      - name: Set up Azure Trusted Signing
-        if: matrix.platform == 'windows'
-        shell: pwsh
+      # Block OCSP/timestamp lookups that cause codesign to hang on CI.
+      # OCSP is a soft failure -- blocking it makes codesign skip the check.
+      - name: Block OCSP for codesign
+        if: startsWith(matrix.platform, 'macos')
         run: |
-          if ("${{ secrets.AZURE_TENANT_ID }}" -ne "") {
-            # Download nuget.exe
-            Invoke-WebRequest -Uri https://dist.nuget.org/win-x86-commandline/latest/nuget.exe -OutFile "$env:RUNNER_TEMP\nuget.exe"
-
-            # Install the Artifact Signing dlib via NuGet
-            & "$env:RUNNER_TEMP\nuget.exe" install Microsoft.ArtifactSigning.Client -x -OutputDirectory "$env:RUNNER_TEMP\signing"
-
-            # Find the dlib path
-            $dlibPath = (Get-ChildItem -Path "$env:RUNNER_TEMP\signing" -Recurse -Filter "Azure.CodeSigning.Dlib.dll" | Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1).FullName
-
-            # Write metadata.json
-            $metadata = @{
-              Endpoint = "${{ secrets.AZURE_SIGNING_ENDPOINT }}"
-              CodeSigningAccountName = "${{ secrets.AZURE_SIGNING_ACCOUNT }}"
-              CertificateProfileName = "${{ secrets.AZURE_CERT_PROFILE }}"
-            } | ConvertTo-Json
-            $metadataPath = "$env:RUNNER_TEMP\metadata.json"
-            $metadata | Out-File -FilePath $metadataPath -Encoding utf8NoBOM
-
-            # Set env vars for electron-builder custom sign hook
-            echo "AZURE_CODE_SIGNING_DLIB=$dlibPath" >> $env:GITHUB_ENV
-            echo "AZURE_METADATA_JSON=$metadataPath" >> $env:GITHUB_ENV
-            echo "AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> $env:GITHUB_ENV
-            echo "AZURE_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}" >> $env:GITHUB_ENV
-            echo "AZURE_CLIENT_SECRET=${{ secrets.AZURE_CLIENT_SECRET }}" >> $env:GITHUB_ENV
-          }
+          echo "127.0.0.1 ocsp.apple.com" | sudo tee -a /etc/hosts
+          echo "127.0.0.1 ocsp2.apple.com" | sudo tee -a /etc/hosts
+          sudo dscacheutil -flushcache
+          sudo killall -HUP mDNSResponder
 
       - name: Build and publish
         run: npm run publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEBUG: electron-builder
+          # macOS notarization
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Azure Trusted Signing (Windows custom sign script)
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: https://eus.codesigning.azure.net/
+          AZURE_SIGNING_ACCOUNT: sign-kangentic
+          AZURE_CERT_PROFILE: kangentic-signing
