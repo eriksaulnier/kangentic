@@ -29,7 +29,7 @@ export class ClaudeStatusParser {
    *
    * Two tiers:
    * 1. **Primary** (has `current_usage` + `context_window_size`): compute
-   *    input-only percentage via Math.round -- matches Claude Code's JSON.
+   *    total token percentage via Math.round -- matches Claude Code's JSON.
    * 2. **Fallback** (`used_percentage` only, no tokens): return it directly.
    */
   static computeContextPercentage(contextWindow: StatusContextWindow | null | undefined): number {
@@ -42,10 +42,11 @@ export class ClaudeStatusParser {
     // Code's used_percentage field.
     if (usage && windowSize > 0) {
       const input = usage.input_tokens ?? 0;
+      const output = usage.output_tokens ?? 0;
       const cacheCreation = usage.cache_creation_input_tokens ?? 0;
       const cacheRead = usage.cache_read_input_tokens ?? 0;
-      const totalInput = input + cacheCreation + cacheRead;
-      return Math.min(100, Math.round((totalInput / windowSize) * 100));
+      const totalUsed = input + output + cacheCreation + cacheRead;
+      return Math.min(100, Math.round((totalUsed / windowSize) * 100));
     }
 
     // Fallback: use pre-rounded used_percentage when tokens aren't available
@@ -85,15 +86,16 @@ export class ClaudeStatusParser {
       const inputTokens = (cu?.input_tokens as number) ?? 0;
       const windowSize = (cw?.context_window_size as number) ?? 0;
 
-      // Input-only token computation -- always use raw token sums when
+      // Total token computation -- always use raw token sums when
       // available for exact counts. Only estimate from used_percentage
       // when current_usage is missing (e.g. very early status updates).
       const rawUsedPercentage = (cw?.used_percentage as number) ?? 0;
       let usedTokens: number;
       let cacheTokens: number;
+      const outputTokens = (cu?.output_tokens as number) ?? 0;
       if (cu) {
-        // Primary: sum input token buckets directly (no output tokens)
-        usedTokens = inputTokens + cacheCreation + cacheRead;
+        // Primary: sum all token buckets including output tokens
+        usedTokens = inputTokens + outputTokens + cacheCreation + cacheRead;
         cacheTokens = cacheCreation + cacheRead;
       } else if (rawUsedPercentage > 0 && windowSize > 0) {
         // Fallback: estimate from used_percentage when no current_usage
