@@ -16,6 +16,7 @@ describe('resolveAutoFocusTarget', () => {
         sessionId: 'A',
         newState: 'idle',
         currentActiveSessionId: ACTIVITY_TAB,
+        dialogSessionId: null,
         sessionActivity: { A: 'idle' },
         sessions: [makeSession('A')],
       })).toBeNull();
@@ -26,8 +27,34 @@ describe('resolveAutoFocusTarget', () => {
         sessionId: 'A',
         newState: 'thinking',
         currentActiveSessionId: ACTIVITY_TAB,
+        dialogSessionId: null,
         sessionActivity: { A: 'thinking' },
         sessions: [makeSession('A')],
+      })).toBeNull();
+    });
+  });
+
+  // ── Task Detail dialog is open ──
+  describe('when Task Detail dialog is open', () => {
+    it('returns null when a session goes idle and dialogSessionId is set', () => {
+      expect(resolveAutoFocusTarget({
+        sessionId: 'B',
+        newState: 'idle',
+        currentActiveSessionId: 'A',
+        dialogSessionId: 'C',
+        sessionActivity: { A: 'thinking', B: 'idle' },
+        sessions: [makeSession('A'), makeSession('B'), makeSession('C')],
+      })).toBeNull();
+    });
+
+    it('returns null when the viewed session goes thinking and dialogSessionId is set', () => {
+      expect(resolveAutoFocusTarget({
+        sessionId: 'A',
+        newState: 'thinking',
+        currentActiveSessionId: 'A',
+        dialogSessionId: 'A',
+        sessionActivity: { A: 'thinking', B: 'idle' },
+        sessions: [makeSession('A'), makeSession('B')],
       })).toBeNull();
     });
   });
@@ -39,6 +66,7 @@ describe('resolveAutoFocusTarget', () => {
         sessionId: 'B',
         newState: 'idle',
         currentActiveSessionId: 'A',
+        dialogSessionId: null,
         sessionActivity: { A: 'thinking', B: 'idle' },
         sessions: [makeSession('A'), makeSession('B')],
       })).toBe('B');
@@ -49,6 +77,7 @@ describe('resolveAutoFocusTarget', () => {
         sessionId: 'A',
         newState: 'idle',
         currentActiveSessionId: null,
+        dialogSessionId: null,
         sessionActivity: { A: 'idle' },
         sessions: [makeSession('A')],
       })).toBe('A');
@@ -59,6 +88,7 @@ describe('resolveAutoFocusTarget', () => {
         sessionId: 'B',
         newState: 'idle',
         currentActiveSessionId: 'A',
+        dialogSessionId: null,
         sessionActivity: { A: 'idle', B: 'idle' },
         sessions: [makeSession('A'), makeSession('B')],
       })).toBeNull();
@@ -69,6 +99,7 @@ describe('resolveAutoFocusTarget', () => {
         sessionId: 'A',
         newState: 'idle',
         currentActiveSessionId: 'A',
+        dialogSessionId: null,
         sessionActivity: { A: 'idle' },
         sessions: [makeSession('A')],
       })).toBeNull();
@@ -79,6 +110,7 @@ describe('resolveAutoFocusTarget', () => {
         sessionId: 'B',
         newState: 'idle',
         currentActiveSessionId: 'A',
+        dialogSessionId: null,
         sessionActivity: { A: 'idle', B: 'idle' },
         sessions: [makeSession('A', 'exited'), makeSession('B')],
       })).toBe('B');
@@ -89,6 +121,7 @@ describe('resolveAutoFocusTarget', () => {
         sessionId: 'B',
         newState: 'idle',
         currentActiveSessionId: 'A',
+        dialogSessionId: null,
         sessionActivity: { A: 'idle', B: 'idle' },
         sessions: [makeSession('A', 'suspended'), makeSession('B')],
       })).toBe('B');
@@ -102,6 +135,7 @@ describe('resolveAutoFocusTarget', () => {
         sessionId: 'A',
         newState: 'thinking',
         currentActiveSessionId: 'A',
+        dialogSessionId: null,
         sessionActivity: { A: 'thinking', B: 'idle' },
         sessions: [makeSession('A'), makeSession('B')],
       })).toBe('B');
@@ -112,6 +146,7 @@ describe('resolveAutoFocusTarget', () => {
         sessionId: 'A',
         newState: 'thinking',
         currentActiveSessionId: 'A',
+        dialogSessionId: null,
         sessionActivity: { A: 'thinking', B: 'thinking' },
         sessions: [makeSession('A'), makeSession('B')],
       })).toBeNull();
@@ -122,6 +157,7 @@ describe('resolveAutoFocusTarget', () => {
         sessionId: 'A',
         newState: 'thinking',
         currentActiveSessionId: 'A',
+        dialogSessionId: null,
         sessionActivity: { A: 'thinking' },
         sessions: [makeSession('A')],
       })).toBeNull();
@@ -132,6 +168,7 @@ describe('resolveAutoFocusTarget', () => {
         sessionId: 'B',
         newState: 'thinking',
         currentActiveSessionId: 'A',
+        dialogSessionId: null,
         sessionActivity: { A: 'idle', B: 'thinking' },
         sessions: [makeSession('A'), makeSession('B')],
       })).toBeNull();
@@ -142,6 +179,7 @@ describe('resolveAutoFocusTarget', () => {
         sessionId: 'A',
         newState: 'thinking',
         currentActiveSessionId: 'A',
+        dialogSessionId: null,
         sessionActivity: { A: 'thinking', B: 'idle', C: 'idle' },
         sessions: [makeSession('A'), makeSession('B', 'exited'), makeSession('C')],
       })).toBe('C');
@@ -152,6 +190,7 @@ describe('resolveAutoFocusTarget', () => {
         sessionId: 'A',
         newState: 'thinking',
         currentActiveSessionId: 'A',
+        dialogSessionId: null,
         sessionActivity: { A: 'thinking', B: 'idle', C: 'idle' },
         sessions: [makeSession('A'), makeSession('B', 'queued'), makeSession('C')],
       })).toBe('C');

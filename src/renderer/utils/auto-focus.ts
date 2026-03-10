@@ -5,6 +5,7 @@ interface AutoFocusInput {
   sessionId: string;
   newState: ActivityState;
   currentActiveSessionId: string | null;
+  dialogSessionId: string | null;
   sessionActivity: Record<string, ActivityState>;
   // projectId is not used by auto-focus; optional so Session[] is assignable
   sessions: Array<{ id: string; status: SessionStatus; projectId?: string }>;
@@ -16,10 +17,15 @@ interface AutoFocusInput {
  * or null if no switch is needed.
  */
 export function resolveAutoFocusTarget(input: AutoFocusInput): string | null {
-  const { sessionId, newState, currentActiveSessionId, sessionActivity, sessions } = input;
+  const { sessionId, newState, currentActiveSessionId, dialogSessionId, sessionActivity, sessions } = input;
 
   // Activity tab is sacred -- never switch away from it
   if (currentActiveSessionId === ACTIVITY_TAB) {
+    return null;
+  }
+
+  // Task Detail dialog is open -- user is in a focused view, don't interrupt
+  if (dialogSessionId !== null) {
     return null;
   }
 

@@ -256,6 +256,7 @@ export function App() {
             sessionId,
             newState: state,
             currentActiveSessionId: sessionStore.activeSessionId,
+            dialogSessionId: sessionStore.dialogSessionId,
             sessionActivity: sessionStore.sessionActivity,
             sessions: projectSessions,
           });
