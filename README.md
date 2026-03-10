@@ -17,7 +17,9 @@
   <a href="https://github.com/Kangentic/kangentic/stargazers"><img src="https://img.shields.io/github/stars/Kangentic/kangentic?style=social" alt="GitHub Stars" /></a>
 </p>
 
-One board to manage all your Claude Code agents.
+---
+
+<p align="center">One board to manage all your Claude Code agents.</p>
 
 <p align="center">
   <img src="resources/kanban-demo.png" alt="Kangentic Kanban Board" width="800" />
@@ -25,21 +27,21 @@ One board to manage all your Claude Code agents.
 
 ## How It Works
 
-1. **Add tasks** to your board -- describe the work in plain text
-2. **Drag a task** into an active column -- Kangentic spawns a Claude Code agent in an isolated git worktree
+1. **Add tasks** to your board, describing the work in plain text
+2. **Drag a task** into an active column. Kangentic spawns a Claude Code agent in an isolated git worktree.
 3. **Watch progress** in the built-in terminal, or let it run and check back later
 4. **Review and merge** when the agent finishes
 
 ## Features
 
-- **Agent orchestration** -- drag tasks between columns to spawn, suspend, and resume Claude Code sessions
-- **Git worktrees** -- each agent works on its own branch in an isolated checkout, no conflicts
-- **Built-in terminals** -- full xterm.js terminals with WebGL rendering, right in the app
-- **Session persistence** -- close the app, reopen it, pick up where you left off
-- **Real-time status** -- see what each agent is doing (tool calls, idle detection, token usage)
-- **Customizable columns** -- configure swimlanes with transition actions that trigger automatically
-- **Themes** -- light, dark, and system-matched
-- **Cross-platform** -- Windows, macOS, and Linux
+- **Agent orchestration:** drag tasks between columns to spawn, suspend, and resume Claude Code sessions
+- **Git worktrees:** each agent works on its own branch in an isolated checkout, no conflicts
+- **Built-in terminals:** full xterm.js terminals with WebGL rendering, right in the app
+- **Session persistence:** close the app, reopen it, pick up where you left off
+- **Real-time status:** see what each agent is doing (tool calls, idle detection, token usage)
+- **Customizable columns:** configure swimlanes with transition actions that trigger automatically
+- **Themes:** light, dark, and system-matched
+- **Cross-platform:** Windows, macOS, and Linux
 
 ## Prerequisites
 
@@ -78,12 +80,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. All contributors must sig
 
 ## Support
 
-- [GitHub Discussions](https://github.com/Kangentic/kangentic/discussions) -- questions and feature requests
-- [GitHub Issues](https://github.com/Kangentic/kangentic/issues) -- bug reports
+- [GitHub Discussions](https://github.com/Kangentic/kangentic/discussions) for questions and feature requests
+- [GitHub Issues](https://github.com/Kangentic/kangentic/issues) for bug reports
 
 ## License
 
-[AGPL-3.0](LICENSE) -- if AGPL doesn't work for you, drop us a line at licensing@kangentic.com.
+[AGPL-3.0](LICENSE). If AGPL doesn't work for you, drop us a line at licensing@kangentic.com.
 
 ---
 
