@@ -1,5 +1,5 @@
 import React, { useState, useLayoutEffect, useRef, useEffect, useCallback, useMemo } from 'react';
-import { X, Trash2, Pencil, Loader2, FolderGit2, GitPullRequest, ArrowRightLeft, ChevronRight, MoreHorizontal, Archive, CirclePause, CirclePlay, Play, Image, Clock } from 'lucide-react';
+import { X, Trash2, Pencil, Loader2, FolderGit2, FolderOpen, GitPullRequest, ArrowRightLeft, ChevronRight, MoreHorizontal, Archive, CirclePause, CirclePlay, Play, Image, Clock } from 'lucide-react';
 import { useBoardStore } from '../../stores/board-store';
 import { useSessionStore } from '../../stores/session-store';
 import { getSwimlaneIcon } from '../../utils/swimlane-icons';
@@ -572,8 +572,17 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
           title={[task.branch_name, task.worktree_path ?? projectPath].filter(Boolean).join('\n') || 'Open working directory'}
           data-testid="branch-pill"
         >
-          <FolderGit2 size={16} />
-          Open
+          {task.worktree_path ? (
+            <>
+              <FolderGit2 size={14} />
+              Worktree
+            </>
+          ) : (
+            <>
+              <FolderOpen size={14} />
+              Project
+            </>
+          )}
         </button>
       )}
 
