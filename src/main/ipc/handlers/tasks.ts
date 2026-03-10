@@ -160,8 +160,8 @@ export function registerTaskHandlers(context: IpcContext): void {
     return tasks.list(swimlaneId);
   });
 
-  ipcMain.handle(IPC.TASK_CREATE, (_, input) => {
-    const { tasks, attachments } = getProjectRepos(context);
+  ipcMain.handle(IPC.TASK_CREATE, async (_, input) => {
+    const { tasks, swimlanes, actions, attachments } = getProjectRepos(context);
     const { pendingAttachments, ...taskInput } = input;
     const task = tasks.create(taskInput);
 
@@ -170,11 +170,45 @@ export function registerTaskHandlers(context: IpcContext): void {
       for (const att of pendingAttachments) {
         attachments.add(context.currentProjectPath, task.id, att.filename, att.data, att.media_type);
       }
-      // Re-fetch to get correct attachment_count from the JOIN
-      return tasks.getById(task.id) ?? task;
     }
 
-    return task;
+    // Auto-spawn: if target column has auto_spawn, start the agent
+    const toLane = swimlanes.getById(task.swimlane_id);
+    if (toLane?.auto_spawn && context.currentProjectPath && context.currentProjectId) {
+      await ensureTaskWorktree(context, task, tasks, context.currentProjectPath);
+
+      const db = getProjectDb(context.currentProjectId);
+      const sessionRepo = new SessionRepository(db);
+      const engine = createTransitionEngine(context, actions, tasks, sessionRepo, attachments, context.currentProjectId, context.currentProjectPath);
+
+      try {
+        // Use '*' as fromSwimlaneId -- no source column on creation, matches wildcard transitions
+        await engine.executeTransition(task, '*', toLane.id, toLane.permission_strategy);
+      } catch (err) {
+        console.error('[TASK_CREATE] Transition engine error:', err);
+      }
+
+      // Re-read task; if still no session, resume suspended or spawn fresh
+      let finalTask = tasks.getById(task.id);
+      if (finalTask && !finalTask.session_id && toLane.auto_spawn) {
+        console.log(`[TASK_CREATE] Ensuring agent for task ${task.id.slice(0, 8)}`);
+        try {
+          await engine.resumeSuspendedSession(finalTask, toLane.permission_strategy);
+          finalTask = tasks.getById(task.id);
+        } catch (err) {
+          console.error('[TASK_CREATE] Failed to start session:', err);
+        }
+      }
+
+      // Schedule auto-command for freshly spawned session
+      if (finalTask?.session_id && toLane.auto_command) {
+        const vars = buildAutoCommandVars(finalTask);
+        const interpolated = context.commandBuilder.interpolateTemplate(toLane.auto_command, vars);
+        context.commandInjector.schedule(finalTask.id, finalTask.session_id, interpolated, { freshlySpawned: true });
+      }
+    }
+
+    return tasks.getById(task.id) ?? task;
   });
 
   ipcMain.handle(IPC.TASK_UPDATE, async (_, input) => {
