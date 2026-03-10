@@ -79,26 +79,28 @@ async function start() {
   //    optimizer to complete before Electron loads the page, preventing
   //    the renderer from blocking on mid-load re-optimization.
   console.time('[dev] esbuild');
-  console.time('[dev] warmup');
+  const viteCacheDir = path.join(projectDir, 'node_modules', '.vite');
+  const coldCache = !fs.existsSync(viteCacheDir);
   await Promise.all([
-    Promise.all([
-      esbuild.build({
-        ...esbuildCommon,
-        entryPoints: [path.join(projectDir, 'src/main/index.ts')],
-        outfile: path.join(projectDir, '.vite/build/index.js'),
-      }),
-      esbuild.build({
-        ...esbuildCommon,
-        entryPoints: [path.join(projectDir, 'src/preload/preload.ts')],
-        outfile: path.join(projectDir, '.vite/build/preload.js'),
-      }),
-    ]).then(() => {
-      console.timeEnd('[dev] esbuild');
-      console.log('[dev] Main + preload built');
+    esbuild.build({
+      ...esbuildCommon,
+      entryPoints: [path.join(projectDir, 'src/main/index.ts')],
+      outfile: path.join(projectDir, '.vite/build/index.js'),
     }),
-    viteServer.transformRequest('/src/renderer/index.tsx')
-      .finally(() => console.timeEnd('[dev] warmup')),
+    esbuild.build({
+      ...esbuildCommon,
+      entryPoints: [path.join(projectDir, 'src/preload/preload.ts')],
+      outfile: path.join(projectDir, '.vite/build/preload.js'),
+    }),
   ]);
+  console.timeEnd('[dev] esbuild');
+  console.log('[dev] Main + preload built');
+  if (coldCache) {
+    console.log('[dev] Vite cache is cold -- warming up will take longer while Vite optimizes dependencies...');
+  }
+  console.time('[dev] warmup');
+  await viteServer.transformRequest('/src/renderer/index.tsx');
+  console.timeEnd('[dev] warmup');
 
   // 3. Launch Electron
   const positionalArgs = process.argv.slice(2).filter(a => !a.startsWith('--'));
