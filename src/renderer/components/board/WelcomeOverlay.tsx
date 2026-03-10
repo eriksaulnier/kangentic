@@ -9,6 +9,7 @@ const FADE_DURATION_MS = 500;
 
 export function WelcomeOverlay() {
   const hasCompletedFirstRun = useConfigStore((state) => state.config.hasCompletedFirstRun);
+  const loading = useConfigStore((state) => state.loading);
   const projectName = useProjectStore((state) => state.currentProject?.name);
   const [visible, setVisible] = useState(true);
   const [fading, setFading] = useState(false);
@@ -71,7 +72,7 @@ export function WelcomeOverlay() {
     hideTimerRef.current = setTimeout(() => setVisible(false), remainingTime + FADE_DURATION_MS);
   }, [startCountdown]);
 
-  if (hasCompletedFirstRun || !visible) return null;
+  if (loading || hasCompletedFirstRun || !visible) return null;
 
   const dismiss = () => {
     if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);

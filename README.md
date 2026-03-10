@@ -43,7 +43,15 @@ See the full feature list at [kangentic.com](https://www.kangentic.com/).
 
 Get started at [kangentic.com/getting-started](https://www.kangentic.com/getting-started/).
 
-## Tech Stack
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. All contributors must sign a [CLA](CLA.md) before their first PR can be merged.
+
+## License
+
+[AGPL-3.0](LICENSE) -- if AGPL doesn't work for you, drop us a line at licensing@kangentic.com.
+
+---
 
 <p align="center">
   <img src="https://img.shields.io/badge/Electron-47848F?style=for-the-badge&logo=electron&logoColor=white" alt="Electron" />
@@ -55,12 +63,4 @@ Get started at [kangentic.com/getting-started](https://www.kangentic.com/getting
   <img src="https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" />
   <img src="https://img.shields.io/badge/Playwright-2EAD33?style=for-the-badge&logo=playwright&logoColor=white" alt="Playwright" />
 </p>
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. All contributors must sign a [CLA](CLA.md) before their first PR can be merged.
-
-## License
-
-[AGPL-3.0](LICENSE) -- if AGPL doesn't work for you, drop us a line at licensing@kangentic.com.
 

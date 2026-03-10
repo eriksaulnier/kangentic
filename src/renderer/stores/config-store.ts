@@ -66,7 +66,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   claudeInfo: null,
   claudeVersionNumber: null,
   gitInfo: null,
-  loading: false,
+  loading: true,
   settingsOpen: false,
   projectSettingsOpen: false,
   projectSettingsPath: null,

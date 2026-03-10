@@ -9,7 +9,7 @@ Open a new terminal window running a Kangentic dev server for previewing live co
 
 ## Instructions
 
-1. Run `node scripts/worktree-preview.js` from the current working directory.
+1. If the user passed `--fresh` (e.g. `/preview --fresh`), run `node scripts/worktree-preview.js --fresh`. Otherwise run `node scripts/worktree-preview.js`.
 2. Report the output — it will show the assigned port and directory.
 3. If the command fails, report the error message.
 
@@ -21,6 +21,7 @@ Open a new terminal window running a Kangentic dev server for previewing live co
 - Each preview instance has its own empty board — board state does NOT sync between instances. Use the root instance for task management.
 - When the preview terminal is closed, the worktree's `.kangentic/` and `.vite/` directories are automatically cleaned up (ephemeral mode). The node_modules junction is left in place for instant restarts.
 - Multiple `/preview` invocations can run simultaneously — each gets its own port.
+- Pass `--fresh` to launch without auto-opening a project (shows the Welcome Screen). Useful for testing the first-launch experience. Example: `/preview --fresh`
 
 ## Allowed Tools
 
