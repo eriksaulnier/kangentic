@@ -16,7 +16,7 @@ export function TitleBar() {
     : false;
 
   return (
-    <div className={`h-10 bg-surface border-b border-edge flex items-center select-none flex-shrink-0 ${isMac ? 'pl-20 pr-3' : 'px-3'}`}
+    <div className={`relative h-10 bg-surface border-b border-edge flex items-center select-none flex-shrink-0 ${isMac ? 'pl-20 pr-3' : 'px-3'}`}
          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
       {/* Branding -- logo + app name */}
       <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -24,16 +24,17 @@ export function TitleBar() {
         <span className="text-sm font-semibold text-fg-secondary">Kangentic</span>
       </div>
 
-      {/* Divider + project name */}
+      {/* Centered project name */}
       {currentProject && (
-        <div className="flex items-center gap-2 ml-2 min-w-0">
-          <div className="w-px h-4 bg-edge flex-shrink-0" />
-          <span className="text-sm font-medium text-fg truncate">
-            {currentProject.name}
-          </span>
-          {isWorktree && (
-            <span className="text-xs text-amber-500/70 flex-shrink-0">(worktree)</span>
-          )}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="max-w-[50%] flex items-center gap-2">
+            <span className="text-base font-semibold text-fg truncate">
+              {currentProject.name}
+            </span>
+            {isWorktree && (
+              <span className="text-xs text-amber-500/70 flex-shrink-0">(worktree)</span>
+            )}
+          </div>
         </div>
       )}
 
