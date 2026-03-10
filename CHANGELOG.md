@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 <!-- releases -->
 
+## [v0.2.0] - 2026-03-09
+
+### Features
+- Auto-update via electron-updater (813cf91)
+
+### Other
+- Tolerate already-published versions and update CLI docs to npx (942a2fd)
+
 ## [v0.1.0] - 2026-03-09
 
 ### Features
