@@ -363,13 +363,24 @@ export function App() {
   return <AppLayout />;
 }
 
-// Dev-only: re-sync session caches after Vite HMR updates.
-// When HMR replaces renderer modules, IPC listeners may briefly disconnect.
-// The main process still caches all events -- this re-fetches them.
+// Dev-only: re-sync all IPC-backed Zustand stores after Vite HMR updates.
+// When HMR replaces a module, its Zustand store reverts to defaults (e.g.
+// config resets to DEFAULT_CONFIG, projects list empties). Re-fetching from the
+// main process restores the correct state.
+//
+// IMPORTANT: If you add a new IPC-backed store, add its load/sync call here.
+// The unit test "hmr-resync.test.ts" will fail if you forget.
+//
+// Order matters: projects first (restores currentProject), then config/board
+// (which depend on having a current project), then sessions last.
 // @ts-expect-error -- Vite handles import.meta.hot; tsc's "module": "commonjs" doesn't support it
 if (import.meta.hot) {
   // @ts-expect-error
   import.meta.hot.on('vite:afterUpdate', () => {
+    useProjectStore.getState().loadProjects();
+    useProjectStore.getState().loadCurrent();
+    useConfigStore.getState().loadConfig();
+    useBoardStore.getState().loadBoard();
     useSessionStore.getState().syncSessions();
   });
 }
