@@ -48,6 +48,9 @@ export function useTerminal(options: UseTerminalOptions) {
   const fitAddonRef = useRef<FitAddon | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
   const scrollbackPendingRef = useRef(false);
+  /** When true, onData writes are suppressed. Controlled by the caller
+   *  (e.g. TerminalTab) to gate PTY output while a loading overlay is shown. */
+  const suppressDataRef = useRef(false);
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const initTerminal = useCallback(() => {
@@ -106,8 +109,9 @@ export function useTerminal(options: UseTerminalOptions) {
       // The scrollback was generated at the PTY's initial 120x30 which
       // likely differs from the dialog's actual dimensions.
       scrollbackPendingRef.current = true;
+      const suppressScrollback = suppressDataRef.current;
       window.electronAPI.sessions.getScrollback(options.sessionId).then((scrollback) => {
-        if (scrollback && xtermRef.current) {
+        if (scrollback && xtermRef.current && !suppressScrollback) {
           xtermRef.current.write(scrollback);
         }
         // Now fit -- xterm reflows all content to the actual container size,
@@ -144,6 +148,7 @@ export function useTerminal(options: UseTerminalOptions) {
       // a brief duplicate write, but xterm handles this gracefully for
       // TUI apps (absolute cursor positioning rewrites the same cells).
       if (scrollbackPendingRef.current) return;
+      if (suppressDataRef.current) return;
 
       xtermRef.current.write(data);
     });
@@ -209,16 +214,12 @@ export function useTerminal(options: UseTerminalOptions) {
     xtermRef.current?.focus();
   }, []);
 
-  const clear = useCallback(() => {
-    xtermRef.current?.clear();
-  }, []);
-
   return {
     terminalRef,
     initTerminal,
     fit,
     focus,
-    clear,
     scrollbackPending: scrollbackPendingRef,
+    suppressDataRef,
   };
 }

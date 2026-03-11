@@ -105,18 +105,49 @@ export async function handleTaskMove(
     return;
   }
 
-  // --- Priority 3: TASK HAS ACTIVE SESSION → keep alive, skip transitions ---
-  // If the agent is already running, moving between non-terminal columns
-  // (e.g. Review → Running) should NOT kill and respawn -- just let it continue.
+  // --- Priority 3: TASK HAS ACTIVE SESSION ---
+  // Permission mode is set at launch and cannot change at runtime. If the
+  // target column requires a different mode or has an auto_command, we must
+  // suspend and resume with the correct flags. Otherwise keep alive.
   if (task.session_id) {
     context.commandInjector.cancel(task.id);
-    if (toLane?.auto_command) {
-      const vars = buildAutoCommandVars(task);
-      const interpolated = context.commandBuilder.interpolateTemplate(toLane.auto_command, vars);
-      context.commandInjector.schedule(task.id, task.session_id, interpolated, { freshlySpawned: false });
+
+    // Resolve effective permission modes to detect mismatches
+    const sessionRecord = sessionRepo.getLatestForTask(task.id);
+    const effectiveConfig = context.configManager.getEffectiveConfig(
+      resolvedProjectPath || undefined,
+    );
+    const currentPermissionMode =
+      sessionRecord?.permission_mode ?? effectiveConfig.claude.permissionMode;
+    const targetPermissionMode =
+      toLane?.permission_strategy ?? effectiveConfig.claude.permissionMode;
+    const permissionModeChanged = currentPermissionMode !== targetPermissionMode;
+
+    if (permissionModeChanged || toLane?.auto_command?.trim()) {
+      // Suspend session. Will resume with correct mode + preloaded command.
+      if (sessionRecord && sessionRecord.claude_session_id
+          && (sessionRecord.status === 'running' || sessionRecord.status === 'exited')) {
+        sessionRepo.updateStatus(sessionRecord.id, 'suspended', {
+          suspended_at: new Date().toISOString(),
+        });
+      }
+      context.sessionManager.suspend(task.session_id);
+      tasks.update({ id: task.id, session_id: null });
+      console.log(
+        `[TASK_MOVE] Suspending session for task ${task.id.slice(0, 8)}`
+        + ` (permission: ${currentPermissionMode} -> ${targetPermissionMode},`
+        + ` auto_command: ${toLane?.auto_command ? 'yes' : 'no'}).`
+        + ` Will resume with correct mode.`,
+      );
+      // Fall through to Priority 4 (resume with new permissions + preloaded command)
+    } else {
+      // Same permission mode, no auto_command. Keep session alive.
+      console.log(
+        `[TASK_MOVE] Task ${task.id.slice(0, 8)} already has active session`
+        + ` (same permission mode, no auto_command). Skipping transitions.`,
+      );
+      return;
     }
-    console.log(`[TASK_MOVE] Task ${task.id.slice(0, 8)} already has active session -- skipping transitions`);
-    return;
   }
 
   // --- Priority 4: TASK HAS NO ACTIVE SESSION ---
@@ -138,19 +169,33 @@ export async function handleTaskMove(
   // If task STILL has no session, resume a suspended session or spawn fresh.
   if (finalTask && !finalTask.session_id && toLane?.auto_spawn) {
     console.log(`[TASK_MOVE] Ensuring agent for task ${task.id.slice(0, 8)}`);
+
+    // Check if a suspended session exists so we can preload auto_command into the resume prompt
+    const suspendedRecord = sessionRepo.getLatestForTask(task.id);
+    const wasSuspended = !!suspendedRecord?.claude_session_id
+      && suspendedRecord.status === 'suspended';
+
+    const resumePrompt = (toLane?.auto_command && wasSuspended)
+      ? context.commandBuilder.interpolateTemplate(
+          toLane.auto_command,
+          buildAutoCommandVars(finalTask),
+        )
+      : undefined;
+
     try {
-      await engine.resumeSuspendedSession(finalTask, toLane.permission_strategy);
+      await engine.resumeSuspendedSession(finalTask, toLane.permission_strategy, resumePrompt);
       finalTask = tasks.getById(task.id);
     } catch (err) {
       console.error('[TASK_MOVE] Failed to start session:', err);
     }
-  }
 
-  // Schedule auto-command for freshly spawned session
-  if (finalTask?.session_id && toLane?.auto_command) {
-    const vars = buildAutoCommandVars(finalTask);
-    const interpolated = context.commandBuilder.interpolateTemplate(toLane.auto_command, vars);
-    context.commandInjector.schedule(finalTask.id, finalTask.session_id, interpolated, { freshlySpawned: true });
+    // Schedule auto-command via deferred injection only for fresh spawns
+    // (resumes preload the command as the initial prompt instead)
+    if (finalTask?.session_id && toLane?.auto_command && !resumePrompt) {
+      const vars = buildAutoCommandVars(finalTask);
+      const interpolated = context.commandBuilder.interpolateTemplate(toLane.auto_command, vars);
+      context.commandInjector.schedule(finalTask.id, finalTask.session_id, interpolated, { freshlySpawned: true });
+    }
   }
 }
 

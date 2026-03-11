@@ -30,7 +30,7 @@ export class TransitionEngine {
    * Resume a suspended session for a task. Used when moving out of
    * Backlog/Done into a non-agent column (no spawn_agent transition fires).
    */
-  async resumeSuspendedSession(task: Task, permissionOverride?: PermissionMode | null): Promise<void> {
+  async resumeSuspendedSession(task: Task, permissionOverride?: PermissionMode | null, resumePrompt?: string): Promise<void> {
     const attachmentPaths = this.attachmentRepo?.getPathsForTask(task.id) ?? [];
     const cleanTitle = sanitizeForPty(task.title);
     const cleanDesc = sanitizeForPty(task.description);
@@ -47,7 +47,7 @@ export class TransitionEngine {
       attachments: attachmentPaths.length > 0
         ? ` [Review images: ${attachmentPaths.join(', ')}]`
         : '',
-    }, permissionOverride);
+    }, permissionOverride, resumePrompt);
   }
 
   async executeTransition(task: Task, fromSwimlaneId: string, toSwimlaneId: string, permissionOverride?: PermissionMode | null): Promise<void> {
@@ -115,7 +115,7 @@ export class TransitionEngine {
     }
   }
 
-  private async executeSpawnAgent(config: ActionConfig, task: Task, vars: Record<string, string>, permissionOverride?: PermissionMode | null): Promise<void> {
+  private async executeSpawnAgent(config: ActionConfig, task: Task, vars: Record<string, string>, permissionOverride?: PermissionMode | null, resumePrompt?: string): Promise<void> {
     const appConfig = this.getConfig();
     const claude = await this.claudeDetector.detect(appConfig.claudePath);
     if (!claude.found || !claude.path) {
@@ -146,9 +146,10 @@ export class TransitionEngine {
     let claudeSessionId: string;
 
     if (canResume) {
-      // Resume the previous Claude conversation -- no extra prompt
+      // Resume the previous Claude conversation, optionally with a preloaded command
       claudeSessionId = previousSession.claude_session_id!;
-      console.log(`[spawn_agent] RESUMING with claude_session_id=${claudeSessionId.slice(0, 8)}`);
+      prompt = resumePrompt;
+      console.log(`[spawn_agent] RESUMING with claude_session_id=${claudeSessionId.slice(0, 8)}${resumePrompt ? ` prompt="${resumePrompt.slice(0, 40)}"` : ''}`);
     } else {
       // Fresh session: generate a Claude session ID upfront so we can
       // resume with --session-id on recovery. Claude CLI accepts
@@ -193,6 +194,7 @@ export class TransitionEngine {
       cwd,
       statusOutputPath,
       eventsOutputPath,
+      resuming: !!canResume,
     });
 
     this.taskRepo.update({

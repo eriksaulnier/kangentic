@@ -123,6 +123,8 @@ export interface Session {
   cwd: string;
   startedAt: string;
   exitCode: number | null;
+  /** True when this session was spawned as a resume of a previous session. */
+  resuming: boolean;
 }
 
 // === Session Persistence (DB) ===
@@ -548,6 +550,8 @@ export interface SpawnSessionInput {
   env?: Record<string, string>;
   statusOutputPath?: string; // path for the status bridge JSON file
   eventsOutputPath?: string; // path for the event bridge JSONL file (activity log)
+  /** True when this session is resuming a previous Claude conversation. */
+  resuming?: boolean;
 }
 
 export interface NotificationInput {

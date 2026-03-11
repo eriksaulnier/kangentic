@@ -1,6 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTerminal } from '../../hooks/useTerminal';
 import { useConfigStore } from '../../stores/config-store';
+import { useSessionStore } from '../../stores/session-store';
+import { useBoardStore } from '../../stores/board-store';
+import { ShimmerOverlay } from '../ShimmerOverlay';
 
 const FIT_DELAY_MS = 100;
 
@@ -11,13 +14,47 @@ interface TerminalTabProps {
 
 export function TerminalTab({ sessionId, active }: TerminalTabProps) {
   const config = useConfigStore((s) => s.config);
-  const { terminalRef, initTerminal, fit, focus, scrollbackPending } = useTerminal({
+  const hasUsage = useSessionStore((s) => !!s.sessionUsage[sessionId]);
+
+  const resumingSelector = useCallback(
+    (s: ReturnType<typeof useSessionStore.getState>) => {
+      const session = s.sessions.find((sess) => sess.id === sessionId);
+      return session?.resuming ?? false;
+    },
+    [sessionId],
+  );
+  const isResuming = useSessionStore(resumingSelector);
+
+  // Derive overlay label from task's swimlane auto_command (e.g. "/code-review")
+  const autoCommandSelector = useCallback(
+    (s: ReturnType<typeof useBoardStore.getState>) => {
+      const task = s.tasks.find((t) => t.session_id === sessionId);
+      if (!task) return null;
+      const swimlane = s.swimlanes.find((l) => l.id === task.swimlane_id);
+      return swimlane?.auto_command ?? null;
+    },
+    [sessionId],
+  );
+  const autoCommand = useBoardStore(autoCommandSelector);
+  const overlayLabel = autoCommand
+    ?? (isResuming ? 'Resuming agent...' : 'Starting agent...');
+
+  // Terminal is "ready" once startup noise has been cleared. Until then,
+  // an overlay hides the raw command line and suppressDataRef prevents
+  // PTY output from accumulating in xterm behind the overlay.
+  const [terminalReady, setTerminalReady] = useState(() => hasUsage);
+
+  const { terminalRef, initTerminal, fit, focus, scrollbackPending, suppressDataRef } = useTerminal({
     sessionId,
     fontFamily: config.terminal.fontFamily,
     fontSize: config.terminal.fontSize,
     scrollbackLines: config.terminal.scrollbackLines,
     cursorStyle: config.terminal.cursorStyle,
   });
+
+  // Sync suppressDataRef with overlay state: suppress all PTY data while overlay is showing.
+  suppressDataRef.current = !terminalReady;
+
   const initialized = useRef(false);
   const draggingRef = useRef(false);
 
@@ -54,8 +91,18 @@ export function TerminalTab({ sessionId, active }: TerminalTabProps) {
     return () => {
       observer?.disconnect();
       initialized.current = false;
+      setTerminalReady(false);
     };
   }, [initTerminal]);
+
+  // When usage arrives, lift the overlay and stop suppressing PTY data.
+  // No clear() needed: the fresh xterm (from remount) has no stale content,
+  // and suppressDataRef blocked all noise while the overlay was showing.
+  useEffect(() => {
+    if (hasUsage && !terminalReady) {
+      setTerminalReady(true);
+    }
+  }, [hasUsage, terminalReady]);
 
   // Re-fit and focus when tab becomes active or container resizes.
   // Always set up the ResizeObserver when active -- even if the terminal
@@ -144,6 +191,12 @@ export function TerminalTab({ sessionId, active }: TerminalTabProps) {
   }, [active, fit, focus]);
 
   return (
-    <div ref={terminalRef} className="h-full w-full bg-surface" />
+    <div className="h-full w-full bg-surface relative">
+      <div ref={terminalRef} className="h-full w-full" />
+      {/* Placeholder overlay while Claude CLI is loading (before first usage report).
+          Stays visible until scrollback replay + clear are both done.
+          z-10 ensures it paints above xterm's WebGL canvas layers. */}
+      {!terminalReady && <ShimmerOverlay label={overlayLabel} />}
+    </div>
   );
 }

@@ -13,10 +13,10 @@ When a task moves from one column to another, the IPC handler (`task:move`) chec
 | 1 | Target is **Backlog** (role=`backlog`) | Kill session, preserve worktree |
 | 2 | Target is **Done** (role=`done`) | Suspend session (resumable), archive task |
 | 2.5 | Target has `auto_spawn=false` (non-backlog, non-done) | Suspend session |
-| 3 | Task has **active session** | Keep session alive. If target has `auto_command`, inject it via CommandInjector |
-| 4 | Task has **no session** | Resume suspended session OR create worktree (if enabled) + execute transition action chain |
+| 3 | Task has **active session** | If target requires a different permission mode or has `auto_command`, suspend and respawn with correct flags. Otherwise keep alive. |
+| 4 | Task has **no session** | Resume suspended session (with `auto_command` preloaded as resume prompt) OR create worktree (if enabled) + execute transition action chain |
 
-Transition action chains (priority 4) only fire when a task has no active session. This means moving between active columns with a running agent simply keeps the agent running -- no restart, no context loss.
+Transition action chains (priority 4) only fire when a task has no active session. Moving between active columns with the same permission mode and no `auto_command` keeps the agent running with no restart. When the permission mode differs or an `auto_command` is set, the session is suspended and resumed with the correct configuration.
 
 ## Transition Lookup
 
@@ -135,12 +135,16 @@ All action types that accept templates can use these placeholders:
 
 ## Command Injection
 
-When a task with a running session moves to a column that has `auto_command` set (priority 4), the command is injected into the running PTY:
+When a task moves to a column with `auto_command` set, the command delivery depends on how the session was started:
 
-1. `CommandInjector` retrieves the session for the task
-2. Interpolates the `auto_command` template with task variables
-3. Sanitizes for PTY safety
-4. Writes to PTY stdin with `\r` terminator
+**Resumed sessions** (priority 3 suspend-and-resume, or priority 4 resume from suspended):
+- The `auto_command` is interpolated and passed as the resume prompt to `claude --resume <id>`
+- This is deterministic: the command is the first thing the agent sees on resume
+
+**Fresh spawns** (priority 4, no suspended session to resume):
+- `CommandInjector` schedules the command for deferred PTY injection
+- Interpolates the `auto_command` template with task variables
+- Writes to PTY stdin with `\r` terminator after the session is ready
 
 This enables workflows like moving a task from "Running" to "Code Review" to automatically send a review prompt to the agent.
 

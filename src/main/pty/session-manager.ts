@@ -32,6 +32,7 @@ interface ManagedSession {
   mergedSettingsPath: string | null;
   statusFileWatcher: FileWatcher | null;
   eventsFileWatcher: FileWatcher | null;
+  resuming: boolean;
 }
 
 export class SessionManager extends EventEmitter {
@@ -151,6 +152,7 @@ export class SessionManager extends EventEmitter {
         mergedSettingsPath: null,
         statusFileWatcher: null,
         eventsFileWatcher: null,
+        resuming: false,
       };
       this.sessions.set(id, session);
       this.sessionQueue.enqueue(input, id);
@@ -164,7 +166,11 @@ export class SessionManager extends EventEmitter {
   private async doSpawn(input: SpawnSessionInput): Promise<Session> {
     const shell = await this.getShell();
     const existing = input.taskId ? this.findByTaskId(input.taskId) : null;
-    const id = existing?.id || uuidv4();
+
+    // Always use a fresh UUID so the renderer treats respawns as new
+    // sessions (TerminalTab is keyed by session ID -- a new ID forces a
+    // clean remount with the loading overlay and data suppression).
+    const id = uuidv4();
 
     // Kill any existing PTY for this task to prevent orphaned processes
     // that would emit data with the same session ID (double output).
@@ -192,6 +198,18 @@ export class SessionManager extends EventEmitter {
       existing.mergedSettingsPath = null;
       existing.statusOutputPath = null;
       existing.eventsOutputPath = null;
+    }
+
+    // Remove old session from map and caches so findByTaskId returns
+    // the new session, and stale usage/activity data doesn't persist.
+    if (existing) {
+      this.sessions.delete(existing.id);
+      this.usageCache.delete(existing.id);
+      this.activityCache.delete(existing.id);
+      this.subagentDepth.delete(existing.id);
+      this.pendingIdleWhileSubagent.delete(existing.id);
+      this.permissionIdle.delete(existing.id);
+      this.idleTimestamp.delete(existing.id);
     }
 
     // Carry over scrollback from the previous session so the terminal
@@ -253,6 +271,7 @@ export class SessionManager extends EventEmitter {
         mergedSettingsPath: null,
         statusFileWatcher: null,
         eventsFileWatcher: null,
+        resuming: input.resuming ?? false,
       };
       this.sessions.set(id, failedSession);
       this.emit('exit', id, -1);
@@ -287,9 +306,17 @@ export class SessionManager extends EventEmitter {
       mergedSettingsPath,
       statusFileWatcher: null,
       eventsFileWatcher: null,
+      resuming: input.resuming ?? false,
     };
 
     this.sessions.set(id, session);
+
+    // Delete stale status.json so the usage watcher doesn't emit
+    // cached data from the previous session run. Claude CLI will
+    // write fresh usage data when it's ready.
+    if (input.statusOutputPath) {
+      try { fs.unlinkSync(input.statusOutputPath); } catch { /* may not exist yet */ }
+    }
 
     // Start watching the status output file for usage data
     if (input.statusOutputPath) {
@@ -602,6 +629,7 @@ export class SessionManager extends EventEmitter {
       cwd: s.cwd,
       startedAt: s.startedAt,
       exitCode: s.exitCode,
+      resuming: s.resuming,
     };
   }
 

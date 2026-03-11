@@ -540,6 +540,7 @@
           cwd: '/mock/path',
           startedAt: now(),
           exitCode: null,
+          resuming: true,
         };
         sessions.push(newSession);
         // Default activity to 'idle' on spawn (matches real backend behavior)

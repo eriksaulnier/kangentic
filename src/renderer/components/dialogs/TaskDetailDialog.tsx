@@ -873,11 +873,11 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
               className="flex items-center gap-2.5 px-6 py-3 rounded-lg bg-accent/20 border border-accent/40 text-base text-accent-fg hover:bg-accent/30 transition-colors disabled:opacity-50"
             >
               {toggling ? (
-                <Loader2 size={14} className="animate-spin" />
+                <Loader2 size={16} className="animate-spin" />
               ) : (
                 <Play size={16} />
               )}
-              Resume session
+              {toggling ? 'Resuming agent...' : 'Resume session'}
             </button>
           </div>
         ) : (

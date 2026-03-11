@@ -121,8 +121,9 @@ Task moved to active column (e.g., Planning)
   → File watchers emit usage/activity/events to UI
 
 Task moved between active columns (e.g., Planning → Code Review)
-  → Session stays alive (not killed/respawned)
-  → If target has auto_command, inject it into running session
+  → If same permission mode and no auto_command: session stays alive
+  → If different permission mode or auto_command: suspend and resume with correct flags
+  → auto_command delivered as resume prompt (not PTY injection)
 
 Task moved to Done
   → Session suspended (PTY killed, DB record preserved)
