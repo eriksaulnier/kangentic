@@ -48,7 +48,6 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
   const [autoCommand, setAutoCommand] = useState(swimlane.auto_command || '');
   const [planExitTargetId, setPlanExitTargetId] = useState<string | null>(swimlane.plan_exit_target_id);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const taskCount = tasks.filter((t) => t.swimlane_id === swimlane.id).length;
@@ -83,8 +82,11 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
 
   const handleDelete = async (_dontAskAgain: boolean) => {
     if (taskCount > 0) {
-      setError(`Move or delete all ${taskCount} task${taskCount > 1 ? 's' : ''} first.`);
-      setConfirmDelete(false);
+      useToastStore.getState().addToast({
+        message: `Cannot delete "${swimlane.name}". Move or delete all ${taskCount} task${taskCount > 1 ? 's' : ''} first.`,
+        variant: 'error',
+      });
+      onClose();
       return;
     }
     try {
@@ -96,8 +98,11 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
       });
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to delete column.');
-      setConfirmDelete(false);
+      useToastStore.getState().addToast({
+        message: err instanceof Error ? err.message : 'Failed to delete column.',
+        variant: 'error',
+      });
+      onClose();
     }
   };
 
@@ -389,9 +394,6 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
             </div>
           )}
 
-          {error && (
-            <p className="text-xs text-red-400">{error}</p>
-          )}
         </div>
       </BaseDialog>
   );
