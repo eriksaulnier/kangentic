@@ -3,7 +3,7 @@
  *
  * Covers scenarios introduced by the priority-ordered TASK_MOVE handler:
  *  1. Backlog → non-agent column (Code Review) spawns a fresh session
- *  2. Active session survives moves between non-kill columns (Code Review → Tests)
+ *  2. Active session survives moves between same-permission columns (Executing → Code Review → Tests)
  *  3. Done → unarchive to non-agent column (Code Review) resumes suspended session
  *
  * Uses the mock Claude CLI (tests/fixtures/mock-claude) which outputs
@@ -198,14 +198,14 @@ test.describe('Claude Agent -- Session Move Lifecycle', () => {
     expect(taskSession).toBeTruthy();
   });
 
-  test('active session survives move between non-kill columns (Planning → Code Review → Tests)', async () => {
+  test('active session survives move between same-permission columns (Executing → Code Review → Tests)', async () => {
     const title = `Survive Move ${runId}`;
-    await createTask(page, title, 'Test session survives non-kill move');
+    await createTask(page, title, 'Test session survives same-permission move');
 
     const taskId = await getTaskId(page, title);
 
-    // Move to Planning → spawns session
-    await moveTask(page, taskId, lanes['Planning']);
+    // Move to Executing → spawns session (default permission mode)
+    await moveTask(page, taskId, lanes['Executing']);
     await waitForRunningSession(page);
     await waitForTaskScrollback(page, taskId, 'MOCK_CLAUDE_SESSION:');
 
@@ -217,7 +217,7 @@ test.describe('Claude Agent -- Session Move Lifecycle', () => {
     expect(sessionBefore).toBeTruthy();
     const sessionIdBefore = sessionBefore.id;
 
-    // Move to Code Review → session should stay alive (Priority 3: keep alive)
+    // Move to Code Review → session should stay alive (same permission mode, no auto_command)
     await moveTask(page, taskId, lanes['Code Review']);
     await page.waitForTimeout(1000);
 
