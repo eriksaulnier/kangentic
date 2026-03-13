@@ -381,15 +381,15 @@
 
 /* ── Terminal loading overlay animations ── */
 
-/* Option 1: Pulsing glow on the pill */
+/* Pulsing glow on the pill */
 @keyframes pill-glow {
   0%, 100% {
-    box-shadow: 0 0 8px 0px var(--kng-accent);
-    border-color: color-mix(in srgb, var(--kng-accent) 40%, transparent);
+    box-shadow: 0 0 4px 0px color-mix(in srgb, var(--kng-accent) 40%, transparent);
+    border-color: color-mix(in srgb, var(--kng-accent) 20%, transparent);
   }
   50% {
-    box-shadow: 0 0 24px 4px var(--kng-accent);
-    border-color: color-mix(in srgb, var(--kng-accent) 70%, transparent);
+    box-shadow: 0 0 10px 1px color-mix(in srgb, var(--kng-accent) 50%, transparent);
+    border-color: color-mix(in srgb, var(--kng-accent) 35%, transparent);
   }
 }
 
@@ -397,7 +397,7 @@
   animation: pill-glow 2s ease-in-out infinite;
 }
 
-/* Option 2: Shimmer skeleton lines behind the pill */
+/* Shimmer skeleton lines behind the pill */
 @keyframes shimmer-slide {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
@@ -417,9 +417,9 @@
   background: linear-gradient(
     90deg,
     transparent 0%,
-    color-mix(in srgb, var(--kng-accent) 15%, transparent) 50%,
+    color-mix(in srgb, var(--kng-accent) 10%, transparent) 50%,
     transparent 100%
   );
-  animation: shimmer-slide 2s ease-in-out infinite;
+  animation: shimmer-slide 3s ease-in-out infinite;
 }
 

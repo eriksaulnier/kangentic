@@ -1,5 +1,3 @@
-import { Loader2 } from 'lucide-react';
-
 /** Knuth multiplicative hash for deterministic pseudo-random values per line. */
 function hash(seed: number): number {
   let value = seed * 2654435761;
@@ -19,8 +17,8 @@ const shimmerLines = Array.from({ length: 80 }, (_, index) => {
   return {
     key: index,
     width: isBlank ? 0 : 6 + (hashValue % 34),                 // 6-40%
-    delay: ((hashValue >>> 12) % 24) * 0.08,                    // 0-1.84s stagger
-    opacity: isBlank ? 0 : 0.18 + ((hashValue >>> 16) % 15) * 0.012, // 0.18-0.35
+    delay: ((hashValue >>> 12) % 30) * 0.1,                    // 0-2.9s stagger
+    opacity: isBlank ? 0 : 0.25 + ((hashValue >>> 16) % 15) * 0.01, // 0.25-0.39
   };
 });
 
@@ -55,8 +53,7 @@ export function ShimmerOverlay({ label }: ShimmerOverlayProps) {
       </div>
 
       {/* Glowing pill centered above shimmer lines */}
-      <div className="relative z-20 flex items-center gap-2.5 px-6 py-3 rounded-lg bg-accent/20 border border-accent/40 terminal-overlay-glow">
-        <Loader2 size={16} className="animate-spin text-accent-fg" />
+      <div className="relative z-20 px-6 py-3 rounded-lg bg-accent/20 border border-accent/40 terminal-overlay-glow">
         <span className="text-base text-accent-fg">{label}</span>
       </div>
     </div>
