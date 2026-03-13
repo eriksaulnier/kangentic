@@ -9,34 +9,45 @@ const FIT_DELAY_MS = 100;
 
 interface TerminalTabProps {
   sessionId: string;
+  taskId: string;
   active: boolean;
 }
 
-export function TerminalTab({ sessionId, active }: TerminalTabProps) {
+export function TerminalTab({ sessionId, taskId, active }: TerminalTabProps) {
   const config = useConfigStore((s) => s.config);
   const hasUsage = useSessionStore((s) => !!s.sessionUsage[sessionId]);
 
-  const resumingSelector = useCallback(
-    (s: ReturnType<typeof useSessionStore.getState>) => {
-      const session = s.sessions.find((sess) => sess.id === sessionId);
-      return session?.resuming ?? false;
-    },
-    [sessionId],
+  const isResuming = useSessionStore(
+    useCallback(
+      (s: ReturnType<typeof useSessionStore.getState>) =>
+        s.sessions.find((session) => session.id === sessionId)?.resuming ?? false,
+      [sessionId],
+    ),
   );
-  const isResuming = useSessionStore(resumingSelector);
+  const sessionStatus = useSessionStore(
+    useCallback(
+      (s: ReturnType<typeof useSessionStore.getState>) =>
+        s.sessions.find((session) => session.id === sessionId)?.status ?? null,
+      [sessionId],
+    ),
+  );
 
-  // Derive overlay label from task's swimlane auto_command (e.g. "/code-review")
-  const autoCommandSelector = useCallback(
-    (s: ReturnType<typeof useBoardStore.getState>) => {
-      const task = s.tasks.find((t) => t.session_id === sessionId);
-      if (!task) return null;
-      const swimlane = s.swimlanes.find((l) => l.id === task.swimlane_id);
-      return swimlane?.auto_command ?? null;
-    },
-    [sessionId],
+  // Derive overlay label: pending command (manual invoke) > swimlane auto_command > generic fallback.
+  // pendingCommandLabel is keyed by taskId (a prop), so it resolves on the very first render
+  // without waiting for syncSessions IPC. This prevents flicker during command invocations.
+  const pendingCommandLabel = useSessionStore((s) => s.pendingCommandLabel[taskId] ?? null);
+  const autoCommand = useBoardStore(
+    useCallback(
+      (s: ReturnType<typeof useBoardStore.getState>) => {
+        const task = s.tasks.find((t) => t.session_id === sessionId);
+        if (!task) return null;
+        const swimlane = s.swimlanes.find((l) => l.id === task.swimlane_id);
+        return swimlane?.auto_command ?? null;
+      },
+      [sessionId],
+    ),
   );
-  const autoCommand = useBoardStore(autoCommandSelector);
-  const overlayLabel = autoCommand
+  const overlayLabel = pendingCommandLabel ?? autoCommand
     ?? (isResuming ? 'Resuming agent...' : 'Starting agent...');
 
   // Terminal is "ready" once startup noise has been cleared. Until then,
@@ -101,8 +112,22 @@ export function TerminalTab({ sessionId, active }: TerminalTabProps) {
   useEffect(() => {
     if (hasUsage && !terminalReady) {
       setTerminalReady(true);
+      if (taskId && pendingCommandLabel) {
+        useSessionStore.getState().clearPendingCommandLabel(taskId);
+      }
     }
-  }, [hasUsage, terminalReady]);
+  }, [hasUsage, terminalReady, taskId, pendingCommandLabel]);
+
+  // If session exits (Ctrl+C, crash, etc.) before usage arrives, clear the overlay
+  // so the terminal isn't stuck behind the shimmer indefinitely.
+  useEffect(() => {
+    if (!terminalReady && sessionStatus === 'exited') {
+      setTerminalReady(true);
+      if (taskId && pendingCommandLabel) {
+        useSessionStore.getState().clearPendingCommandLabel(taskId);
+      }
+    }
+  }, [sessionStatus, terminalReady, taskId, pendingCommandLabel]);
 
   // Re-fit and focus when tab becomes active or container resizes.
   // Always set up the ResizeObserver when active -- even if the terminal

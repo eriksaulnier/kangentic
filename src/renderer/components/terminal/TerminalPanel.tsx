@@ -177,6 +177,7 @@ export function TerminalPanel({ collapsed = false, showContent = true, onToggleC
                   {!ownedByDialog && (
                     <TerminalTab
                       sessionId={session.id}
+                      taskId={session.taskId}
                       active={isActive}
                     />
                   )}

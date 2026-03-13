@@ -79,6 +79,7 @@ export const IPC = {
 
   // Claude
   CLAUDE_DETECT: 'claude:detect',
+  CLAUDE_LIST_COMMANDS: 'claude:listCommands',
 
   // Shell
   SHELL_GET_AVAILABLE: 'shell:getAvailable',

@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { GitBranch, Search, Loader2, ChevronDown } from 'lucide-react';
+import { usePopoverPosition } from '../../hooks/usePopoverPosition';
 
 interface BranchPickerProps {
   value: string;
@@ -16,7 +17,16 @@ export function BranchPicker({ value, defaultBranch, onChange, variant = 'chip',
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const { style: dropdownStyle } = usePopoverPosition(containerRef, dropdownRef, open, { mode: 'dropdown', preferRight: false });
+
+  // Input variant: override horizontal positioning to stretch full width
+  useLayoutEffect(() => {
+    if (!open || variant !== 'input' || !dropdownRef.current) return;
+    dropdownRef.current.style.left = '0';
+    dropdownRef.current.style.right = '0';
+  }, [open, variant]);
 
   const displayBranch = value || defaultBranch || 'main';
 
@@ -117,8 +127,8 @@ export function BranchPicker({ value, defaultBranch, onChange, variant = 'chip',
   );
 
   const dropdown = (
-    <div className={`absolute top-full mt-1 bg-surface-raised border border-edge-input rounded-md shadow-xl z-50 overflow-hidden ${
-      variant === 'input' ? 'left-0 right-0' : 'left-0 w-64'
+    <div ref={dropdownRef} style={dropdownStyle} className={`absolute bg-surface-raised border border-edge-input rounded-md shadow-xl z-50 overflow-hidden ${
+      variant === 'input' ? 'left-0 right-0' : 'w-64'
     }`}>
       {/* Search input */}
       <div className="p-2 border-b border-edge">

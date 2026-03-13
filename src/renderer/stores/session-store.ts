@@ -14,6 +14,8 @@ interface SessionStore {
   sessionActivity: Record<string, ActivityState>;
   sessionEvents: Record<string, SessionEvent[]>;
   seenIdleSessions: Record<string, boolean>;
+  /** Command label to show in the terminal overlay (e.g. "/code-review") keyed by task ID */
+  pendingCommandLabel: Record<string, string>;
   _pendingOpenTaskId: string | null;
   _syncGeneration: number;
 
@@ -23,7 +25,7 @@ interface SessionStore {
   spawnSession: (input: SpawnSessionInput) => Promise<Session>;
   killSession: (id: string) => Promise<void>;
   suspendSession: (taskId: string) => Promise<void>;
-  resumeSession: (taskId: string) => Promise<Session>;
+  resumeSession: (taskId: string, resumePrompt?: string) => Promise<Session>;
   setActiveSession: (id: string | null) => void;
   setOpenTaskId: (id: string | null) => void;
   setDialogSessionId: (id: string | null) => void;
@@ -32,6 +34,8 @@ interface SessionStore {
   updateActivity: (sessionId: string, state: ActivityState) => void;
   addEvent: (sessionId: string, event: SessionEvent) => void;
   clearEvents: (sessionId: string) => void;
+  setPendingCommandLabel: (taskId: string, label: string) => void;
+  clearPendingCommandLabel: (taskId: string) => void;
   markIdleSessionsSeen: (projectId: string) => void;
 
   getRunningCount: () => number;
@@ -48,6 +52,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   sessionActivity: {},
   sessionEvents: {},
   seenIdleSessions: {},
+  pendingCommandLabel: {},
   _pendingOpenTaskId: null,
   _syncGeneration: 0,
 
@@ -137,8 +142,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     await window.electronAPI.sessions.suspend(taskId);
   },
 
-  resumeSession: async (taskId) => {
-    const newSession = await window.electronAPI.sessions.resume(taskId);
+  resumeSession: async (taskId, resumePrompt?) => {
+    const newSession = await window.electronAPI.sessions.resume(taskId, resumePrompt);
     set((s) => ({
       sessions: [
         ...s.sessions.filter((sess) => sess.taskId !== taskId),
@@ -197,6 +202,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const { [sessionId]: _, ...rest } = s.sessionEvents;
       return { sessionEvents: rest };
+    });
+  },
+
+  setPendingCommandLabel: (taskId, label) => {
+    set((s) => ({ pendingCommandLabel: { ...s.pendingCommandLabel, [taskId]: label } }));
+  },
+  clearPendingCommandLabel: (taskId) => {
+    set((s) => {
+      const { [taskId]: _, ...rest } = s.pendingCommandLabel;
+      return { pendingCommandLabel: rest };
     });
   },
 

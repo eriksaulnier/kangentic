@@ -480,6 +480,15 @@ export const DEFAULT_CONFIG: AppConfig = {
   windowBounds: null,
 };
 
+// === Claude Commands ===
+
+export interface ClaudeCommand {
+  name: string;         // "code-review"
+  displayName: string;  // "/code-review"
+  description: string;  // from frontmatter, or empty
+  argumentHint: string; // from frontmatter, or empty (e.g. "[all|audit|write]")
+}
+
 // === Updater ===
 
 export interface UpdateDownloadedInfo {
@@ -690,7 +699,7 @@ export interface ElectronAPI {
     spawn: (input: SpawnSessionInput) => Promise<Session>;
     kill: (sessionId: string) => Promise<void>;
     suspend: (taskId: string) => Promise<void>;
-    resume: (taskId: string) => Promise<Session>;
+    resume: (taskId: string, resumePrompt?: string) => Promise<Session>;
     write: (sessionId: string, data: string) => Promise<void>;
     resize: (sessionId: string, cols: number, rows: number) => Promise<void>;
     list: () => Promise<Session[]>;
@@ -722,9 +731,10 @@ export interface ElectronAPI {
     syncDefaultToProjects: (partial: DeepPartial<AppConfig>) => Promise<number>;
   };
 
-  // Claude detection
+  // Claude detection & commands
   claude: {
     detect: () => Promise<{ found: boolean; path: string | null; version: string | null }>;
+    listCommands: (cwd?: string) => Promise<ClaudeCommand[]>;
   };
 
   // Shell

@@ -1,11 +1,13 @@
-import React, { useState, useLayoutEffect, useRef, useEffect, useCallback, useMemo } from 'react';
-import { X, Trash2, Pencil, Loader2, FolderGit2, FolderOpen, GitPullRequest, ArrowRightLeft, ChevronRight, MoreHorizontal, Archive, CirclePause, CirclePlay, Play, Image, Clock } from 'lucide-react';
+import React, { useState, useLayoutEffect, useRef, useEffect, useCallback, useMemo, type RefObject } from 'react';
+import { X, Trash2, Pencil, Loader2, FolderGit2, FolderOpen, GitPullRequest, ArrowRightLeft, ChevronRight, ChevronLeft, MoreHorizontal, Archive, CirclePause, CirclePlay, Play, Image, Clock, SquareChevronRight, Search } from 'lucide-react';
+import { usePopoverPosition } from '../../hooks/usePopoverPosition';
 import { SessionSummaryPanel } from './SessionSummaryPanel';
 import { useBoardStore } from '../../stores/board-store';
 import { useSessionStore } from '../../stores/session-store';
 import { getSwimlaneIcon } from '../../utils/swimlane-icons';
 import { TerminalTab } from '../terminal/TerminalTab';
 import { ContextBar } from '../terminal/ContextBar';
+import { ShimmerOverlay } from '../ShimmerOverlay';
 import { BaseDialog } from './BaseDialog';
 import { ConfirmDialog } from './ConfirmDialog';
 import { useToastStore } from '../../stores/toast-store';
@@ -14,7 +16,7 @@ import { useProjectStore } from '../../stores/project-store';
 import { useSessionDisplayState } from '../../utils/session-display-state';
 import { BranchPicker } from './BranchPicker';
 import { WorktreeChip } from './WorktreeChip';
-import type { Task, TaskAttachment } from '../../../shared/types';
+import type { Task, TaskAttachment, ClaudeCommand } from '../../../shared/types';
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10MB
 
@@ -81,6 +83,156 @@ function QueuedPlaceholder({ sessionId }: { sessionId: string | null }) {
   );
 }
 
+interface CommandPalettePopoverProps {
+  triggerRef: RefObject<HTMLElement | null>;
+  cwd?: string;
+  onSelect: (command: ClaudeCommand) => void;
+  onClose: () => void;
+}
+
+function CommandPalettePopover({ triggerRef, cwd, onSelect, onClose }: CommandPalettePopoverProps) {
+  const [commands, setCommands] = useState<ClaudeCommand[]>([]);
+  const [searchFilter, setSearchFilter] = useState('');
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const { style: popoverStyle } = usePopoverPosition(triggerRef, popoverRef, true, { mode: 'dropdown' });
+
+  // Fetch commands on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await window.electronAPI.claude.listCommands(cwd);
+        if (!cancelled) {
+          setCommands(result);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [cwd]);
+
+  // Auto-focus search input
+  useEffect(() => {
+    searchInputRef.current?.focus();
+  }, []);
+
+  // Click-outside closes
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener('mousedown', handleClick, true);
+    return () => document.removeEventListener('mousedown', handleClick, true);
+  }, [onClose]);
+
+  const filteredCommands = useMemo(() => {
+    if (!searchFilter) return commands;
+    const lower = searchFilter.toLowerCase();
+    return commands.filter((command) =>
+      command.name.toLowerCase().includes(lower)
+      || command.description.toLowerCase().includes(lower)
+    );
+  }, [commands, searchFilter]);
+
+  // Reset selection when filter changes
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [searchFilter]);
+
+  // Scroll selected item into view
+  useEffect(() => {
+    if (!listRef.current) return;
+    const items = listRef.current.querySelectorAll('[data-command-item]');
+    const selectedItem = items[selectedIndex];
+    if (selectedItem) {
+      selectedItem.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedIndex]);
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setSelectedIndex((previous) => Math.min(previous + 1, filteredCommands.length - 1));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setSelectedIndex((previous) => Math.max(previous - 1, 0));
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (filteredCommands[selectedIndex]) {
+        onSelect(filteredCommands[selectedIndex]);
+      }
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    }
+  };
+
+  return (
+    <div
+      ref={popoverRef}
+      style={popoverStyle}
+      className="absolute w-[280px] max-h-[300px] bg-surface-raised border border-edge-input rounded-md shadow-xl z-50 flex flex-col overflow-hidden"
+      data-testid="command-palette-popover"
+      onKeyDown={handleKeyDown}
+    >
+      <div className="flex items-center gap-2 px-2.5 py-2 border-b border-edge">
+        <Search size={14} className="text-fg-faint flex-shrink-0" />
+        <input
+          ref={searchInputRef}
+          type="text"
+          placeholder="Search commands..."
+          value={searchFilter}
+          onChange={(event) => setSearchFilter(event.target.value)}
+          className="flex-1 bg-transparent text-sm text-fg placeholder-fg-faint outline-none"
+          data-testid="command-search-input"
+        />
+      </div>
+      <div ref={listRef} className="overflow-y-auto flex-1">
+        {loading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 size={16} className="text-fg-faint animate-spin" />
+          </div>
+        ) : filteredCommands.length === 0 ? (
+          <div className="px-3 py-6 text-center text-xs text-fg-faint">
+            No commands found
+          </div>
+        ) : (
+          filteredCommands.map((command, index) => (
+            <button
+              key={command.name}
+              data-command-item
+              onClick={() => onSelect(command)}
+              onMouseEnter={() => setSelectedIndex(index)}
+              className={`w-full text-left px-3 py-2 transition-colors ${
+                index === selectedIndex ? 'bg-surface-hover' : ''
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-fg truncate">{command.displayName}</span>
+                {command.argumentHint && (
+                  <span className="text-[10px] font-mono text-fg-disabled truncate">{command.argumentHint}</span>
+                )}
+              </div>
+              {command.description && (
+                <p className="text-[11px] text-fg-faint truncate mt-0.5">{command.description}</p>
+              )}
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialogProps) {
   const updateTask = useBoardStore((s) => s.updateTask);
   const deleteTask = useBoardStore((s) => s.deleteTask);
@@ -97,6 +249,8 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
   const [isEditing, setIsEditing] = useState(!!initialEdit);
   const [showKebabMenu, setShowKebabMenu] = useState(false);
   const [showMoveSubmenu, setShowMoveSubmenu] = useState(false);
+  const [showCommandsSubmenu, setShowCommandsSubmenu] = useState(false);
+  const [kebabCommands, setKebabCommands] = useState<ClaudeCommand[]>([]);
   const [baseBranch, setBaseBranch] = useState(task.base_branch || '');
   const worktreesEnabled = useConfigStore((s) => s.config.git.worktreesEnabled);
   const [useWorktree, setUseWorktree] = useState<boolean | null>(
@@ -107,11 +261,18 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const [toggling, setToggling] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const commandButtonRef = useRef<HTMLDivElement>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const skipDeleteConfirm = useConfigStore((s) => s.config.skipDeleteConfirm);
   const defaultBaseBranch = useConfigStore((s) => s.config.git.defaultBaseBranch);
   const updateConfig = useConfigStore((s) => s.updateConfig);
   const kebabMenuRef = useRef<HTMLDivElement>(null);
+  const kebabPopoverRef = useRef<HTMLDivElement>(null);
+  const commandsFlyoutTriggerRef = useRef<HTMLDivElement>(null);
+  const commandsFlyoutRef = useRef<HTMLDivElement>(null);
+  const moveFlyoutTriggerRef = useRef<HTMLDivElement>(null);
+  const moveFlyoutRef = useRef<HTMLDivElement>(null);
 
   // Attachment state
   const [savedAttachments, setSavedAttachments] = useState<AttachmentWithPreview[]>([]);
@@ -122,6 +283,11 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
   const isArchived = task.archived_at !== null;
   const currentSwimlane = swimlanes.find((s) => s.id === task.swimlane_id);
   const isInBacklog = currentSwimlane?.role === 'backlog';
+
+  // Smart popover positioning
+  const { style: kebabStyle } = usePopoverPosition(kebabMenuRef, kebabPopoverRef, showKebabMenu, { mode: 'dropdown' });
+  const { placement: commandsFlyoutPlacement } = usePopoverPosition(commandsFlyoutTriggerRef, commandsFlyoutRef, showCommandsSubmenu, { mode: 'flyout' });
+  const { placement: moveFlyoutPlacement } = usePopoverPosition(moveFlyoutTriggerRef, moveFlyoutRef, showMoveSubmenu, { mode: 'flyout' });
 
   // Load attachments on mount
   useEffect(() => {
@@ -264,6 +430,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
       if (kebabMenuRef.current && !kebabMenuRef.current.contains(e.target as Node)) {
         setShowKebabMenu(false);
         setShowMoveSubmenu(false);
+        setShowCommandsSubmenu(false);
       }
     };
     document.addEventListener('mousedown', handleClick, true);
@@ -298,6 +465,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
   };
 
   const setDialogSessionId = useSessionStore((s) => s.setDialogSessionId);
+  const pendingCommandLabel = useSessionStore((s) => s.pendingCommandLabel[task.id] ?? null);
   const loadBoard = useBoardStore((s) => s.loadBoard);
   // Targeted selector -- find by taskId (consistent with useSessionDisplayState).
   // task.session_id can be stale after HMR or optimistic moves; taskId is always reliable.
@@ -314,6 +482,16 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
     || displayState.kind === 'initializing';
   const isQueued = displayState.kind === 'queued';
   const isSuspended = displayState.kind === 'suspended';
+
+  // Fetch commands when kebab menu opens (for the Commands flyout)
+  useEffect(() => {
+    if (!showKebabMenu || !isSessionActive) return;
+    let cancelled = false;
+    window.electronAPI.claude.listCommands(task.worktree_path ?? projectPath ?? undefined)
+      .then((result) => { if (!cancelled) setKebabCommands(result); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [showKebabMenu, isSessionActive, task.worktree_path, projectPath]);
 
   // Track whether mouse is inside the dialog content (for Escape key behavior)
   const mouseInsideDialog = useRef(false);
@@ -372,6 +550,29 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
         message: `Failed to ${isSessionActive ? 'suspend' : 'resume'} session`,
         variant: 'warning',
       });
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  const handleCommandSelect = async (command: ClaudeCommand) => {
+    setShowCommandPalette(false);
+    if (!task.id || toggling) return;
+    setToggling(true);
+    try {
+      useSessionStore.getState().setPendingCommandLabel(task.id, command.displayName);
+      await suspendSession(task.id);
+      await resumeSession(task.id, command.displayName);
+      await loadBoard();
+    } catch (error) {
+      console.error('Command invocation failed:', error);
+      useSessionStore.getState().clearPendingCommandLabel(task.id);
+      useToastStore.getState().addToast({
+        message: `Failed to invoke ${command.displayName}`,
+        variant: 'warning',
+      });
+      // Refresh board to reflect actual DB state (suspend may have cleared session_id)
+      await loadBoard().catch(() => {});
     } finally {
       setToggling(false);
     }
@@ -581,23 +782,46 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
         </button>
       )}
 
+      {/* Commands button */}
+      {isSessionActive && !isEditing && (
+        <div className="relative flex-shrink-0" ref={commandButtonRef}>
+          <button
+            onClick={() => setShowCommandPalette(!showCommandPalette)}
+            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-hover/50 text-xs text-fg-muted hover:text-fg-secondary hover:bg-surface-hover transition-colors"
+            title="Run a command"
+            data-testid="commands-button"
+          >
+            <SquareChevronRight size={14} />
+            Commands
+          </button>
+          {showCommandPalette && (
+            <CommandPalettePopover
+              triggerRef={commandButtonRef}
+              cwd={task.worktree_path ?? projectPath ?? undefined}
+              onSelect={handleCommandSelect}
+              onClose={() => setShowCommandPalette(false)}
+            />
+          )}
+        </div>
+      )}
+
       {/* Spacer */}
       <div className="flex-1" />
 
       {/* Actions */}
       <div className="relative flex-shrink-0" ref={kebabMenuRef}>
         <button
-          onClick={() => { setShowKebabMenu(!showKebabMenu); setShowMoveSubmenu(false); }}
+          onClick={() => { setShowKebabMenu(!showKebabMenu); setShowMoveSubmenu(false); setShowCommandsSubmenu(false); }}
           className="p-1.5 text-fg-faint hover:text-fg-tertiary hover:bg-surface-hover rounded transition-colors"
           title="Actions"
         >
           <MoreHorizontal size={16} />
         </button>
         {showKebabMenu && (
-          <div className="absolute top-full right-0 mt-1 min-w-[170px] bg-surface-raised border border-edge-input rounded-md shadow-xl z-50 py-1">
+          <div ref={kebabPopoverRef} style={kebabStyle} className="absolute min-w-[170px] bg-surface-raised border border-edge-input rounded-md shadow-xl z-50 py-1">
             {/* Edit */}
             <button
-              onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); setIsEditing(true); }}
+              onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); setShowCommandsSubmenu(false); setIsEditing(true); }}
               className="w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 text-fg-tertiary hover:bg-surface-hover hover:text-fg"
             >
               <Pencil size={14} />
@@ -607,7 +831,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
             {/* Open folder */}
             {(task.worktree_path || projectPath) && (
               <button
-                onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); window.electronAPI.shell.openPath(task.worktree_path ?? projectPath!); }}
+                onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); setShowCommandsSubmenu(false); window.electronAPI.shell.openPath(task.worktree_path ?? projectPath!); }}
                 className="w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 text-fg-tertiary hover:bg-surface-hover hover:text-fg"
               >
                 <FolderGit2 size={14} />
@@ -618,7 +842,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
             {/* View PR */}
             {task.pr_url && (
               <button
-                onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); window.electronAPI.shell.openExternal(task.pr_url!); }}
+                onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); setShowCommandsSubmenu(false); window.electronAPI.shell.openExternal(task.pr_url!); }}
                 className="w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 text-fg-tertiary hover:bg-surface-hover hover:text-fg"
               >
                 <GitPullRequest size={14} />
@@ -629,7 +853,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
             {/* Pause / Resume */}
             {canToggle && (
               <button
-                onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); handleToggle(); }}
+                onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); setShowCommandsSubmenu(false); handleToggle(); }}
                 disabled={toggling}
                 className="w-full text-left px-3 py-1.5 text-xs text-fg-tertiary hover:bg-surface-hover hover:text-fg transition-colors flex items-center gap-2 disabled:opacity-50"
               >
@@ -647,9 +871,51 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
               </button>
             )}
 
-            {/* Move to -- flyout submenu to the right */}
+            {/* Commands -- flyout submenu */}
+            {isSessionActive && kebabCommands.length > 0 && (
+              <div
+                ref={commandsFlyoutTriggerRef}
+                className="relative"
+                onMouseEnter={() => setShowCommandsSubmenu(true)}
+                onMouseLeave={() => setShowCommandsSubmenu(false)}
+              >
+                <button
+                  onClick={() => setShowCommandsSubmenu(!showCommandsSubmenu)}
+                  className={`w-full text-left px-3 py-1.5 text-xs text-fg-tertiary hover:bg-surface-hover hover:text-fg transition-colors flex items-center gap-2 ${showCommandsSubmenu ? 'bg-surface-hover text-fg' : ''}`}
+                  data-testid="kebab-commands-button"
+                >
+                  <SquareChevronRight size={14} />
+                  <span className="flex-1">Commands</span>
+                  {commandsFlyoutPlacement.horizontal === 'left' ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+                </button>
+                {showCommandsSubmenu && (
+                  <div ref={commandsFlyoutRef} className="absolute min-w-[220px] max-h-[300px] overflow-y-auto bg-surface-raised border border-edge-input rounded-md shadow-xl z-50 py-1">
+                    {kebabCommands.map((command) => (
+                      <button
+                        key={command.name}
+                        onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); setShowCommandsSubmenu(false); handleCommandSelect(command); }}
+                        className="w-full text-left px-3 py-1.5 text-xs text-fg-tertiary hover:bg-surface-hover hover:text-fg transition-colors"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate">{command.displayName}</span>
+                          {command.argumentHint && (
+                            <span className="text-[11px] font-mono text-fg-disabled truncate">{command.argumentHint}</span>
+                          )}
+                        </div>
+                        {command.description && (
+                          <span className="block text-[11px] text-fg-faint truncate">{command.description}</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Move to -- flyout submenu */}
             {moveTargets.length > 0 && (
               <div
+                ref={moveFlyoutTriggerRef}
                 className="relative"
                 onMouseEnter={() => setShowMoveSubmenu(true)}
                 onMouseLeave={() => setShowMoveSubmenu(false)}
@@ -660,10 +926,10 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
                 >
                   <ArrowRightLeft size={14} />
                   <span className="flex-1">Move to</span>
-                  <ChevronRight size={14} />
+                  {moveFlyoutPlacement.horizontal === 'left' ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
                 </button>
                 {showMoveSubmenu && (
-                  <div className="absolute left-full top-0 -ml-px min-w-[150px] bg-surface-raised border border-edge-input rounded-md shadow-xl z-50 py-1">
+                  <div ref={moveFlyoutRef} className="absolute min-w-[150px] bg-surface-raised border border-edge-input rounded-md shadow-xl z-50 py-1">
                     {moveTargets.map((s) => (
                       <button
                         key={s.id}
@@ -693,7 +959,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
 
             {!isArchived && (
               <button
-                onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); handleArchive(); }}
+                onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); setShowCommandsSubmenu(false); handleArchive(); }}
                 className="w-full text-left px-3 py-2 text-xs text-fg-tertiary hover:bg-surface-hover hover:text-fg transition-colors flex items-center gap-2"
               >
                 <Archive size={14} />
@@ -706,7 +972,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
 
             {/* Delete -- always available */}
             <button
-              onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); skipDeleteConfirm ? handleDelete(false) : setConfirmDelete(true); }}
+              onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); setShowCommandsSubmenu(false); skipDeleteConfirm ? handleDelete(false) : setConfirmDelete(true); }}
               className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-400/10 hover:text-red-300 transition-colors flex items-center gap-2"
             >
               <Trash2 size={14} />
@@ -876,6 +1142,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
                 <TerminalTab
                   key={session.id}
                   sessionId={session.id}
+                  taskId={task.id}
                   active={true}
                 />
               </div>
@@ -885,20 +1152,28 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
         ) : !isEditing && displayState.kind === 'queued' ? (
           <QueuedPlaceholder sessionId={session?.id ?? null} />
         ) : !isEditing && (isSuspended || toggling) && !isArchived ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-surface/50">
-            <button
-              onClick={handleToggle}
-              disabled={toggling}
-              className="flex items-center gap-2.5 px-6 py-3 rounded-lg bg-accent/20 border border-accent/40 text-base text-accent-fg hover:bg-accent/30 transition-colors disabled:opacity-50"
-            >
-              {toggling ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <Play size={16} />
-              )}
-              {toggling ? 'Resuming agent...' : 'Resume session'}
-            </button>
-          </div>
+          pendingCommandLabel ? (
+            <div className="flex-1 min-h-0 relative">
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface">
+                <ShimmerOverlay label={pendingCommandLabel} />
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-surface/50">
+              <button
+                onClick={handleToggle}
+                disabled={toggling}
+                className="flex items-center gap-2.5 px-6 py-3 rounded-lg bg-accent/20 border border-accent/40 text-base text-accent-fg hover:bg-accent/30 transition-colors disabled:opacity-50"
+              >
+                {toggling ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Play size={16} />
+                )}
+                {toggling ? 'Resuming agent...' : 'Resume session'}
+              </button>
+            </div>
+          )
         ) : (
           !isEditing && !task.description && savedAttachments.length === 0 && (
             <div className="flex-1 flex items-center justify-center text-fg-disabled text-sm p-8">

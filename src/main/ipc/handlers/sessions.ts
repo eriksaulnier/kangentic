@@ -61,7 +61,7 @@ export function registerSessionHandlers(context: IpcContext): void {
     tasks.update({ id: task.id, session_id: null });
   });
 
-  ipcMain.handle(IPC.SESSION_RESUME, async (_, taskId: string) => {
+  ipcMain.handle(IPC.SESSION_RESUME, async (_, taskId: string, resumePrompt?: string) => {
     const resolvedProjectId = context.currentProjectId;
     const resolvedProjectPath = context.currentProjectPath;
     if (!resolvedProjectId) throw new Error('No project is currently open');
@@ -82,7 +82,7 @@ export function registerSessionHandlers(context: IpcContext): void {
     const sessionRepo = new SessionRepository(db);
     const engine = createTransitionEngine(context, actions, tasks, sessionRepo, attachmentRepo, resolvedProjectId, resolvedProjectPath);
 
-    await engine.resumeSuspendedSession(task, lane?.permission_strategy);
+    await engine.resumeSuspendedSession(task, lane?.permission_strategy, resumePrompt);
 
     // Re-read task to get the new session_id
     const updated = tasks.getById(taskId);

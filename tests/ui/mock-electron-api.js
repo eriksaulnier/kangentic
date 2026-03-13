@@ -566,7 +566,7 @@
           task.updated_at = now();
         }
       },
-      resume: async function (taskId) {
+      resume: async function (taskId, resumePrompt) {
         var newSession = {
           id: uuid(),
           taskId: taskId,
@@ -680,6 +680,13 @@
     claude: {
       detect: async function () {
         return { found: true, path: '/usr/bin/claude', version: '2.1.72 (Claude Code)' };
+      },
+      listCommands: async function (/* cwd */) {
+        return [
+          { name: 'code-review', displayName: '/code-review', description: 'Review code for quality and conventions', argumentHint: '' },
+          { name: 'test', displayName: '/test', description: 'Run tests and audit coverage', argumentHint: '' },
+          { name: 'ci:build', displayName: '/ci:build', description: 'Run CI build pipeline', argumentHint: '[fast|full]' },
+        ];
       },
     },
 

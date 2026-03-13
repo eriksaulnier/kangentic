@@ -1,8 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { app, ipcMain, Notification, dialog, shell } from 'electron';
 import { IPC } from '../../../shared/ipc-channels';
 import { WorktreeManager, isGitRepo } from '../../git/worktree-manager';
 import { deepMergeConfig } from '../../../shared/object-utils';
-import type { NotificationInput } from '../../../shared/types';
+import type { NotificationInput, ClaudeCommand } from '../../../shared/types';
 import type { IpcContext } from '../ipc-context';
 
 export function registerSystemHandlers(context: IpcContext): void {
@@ -60,6 +62,84 @@ export function registerSystemHandlers(context: IpcContext): void {
   ipcMain.handle(IPC.CLAUDE_DETECT, () => {
     const config = context.configManager.load();
     return context.claudeDetector.detect(config.claude.cliPath);
+  });
+
+  ipcMain.handle(IPC.CLAUDE_LIST_COMMANDS, (_, cwd?: string): ClaudeCommand[] => {
+    const projectPath = context.currentProjectPath;
+    if (!projectPath) return [];
+
+    // Collect candidate .claude/commands/ directories from cwd upward,
+    // similar to how Claude Code discovers commands. Closest dirs first
+    // so nearer commands win on dedup.
+    const searchRoots: string[] = [];
+    const startDir = cwd || projectPath;
+    let current = path.resolve(startDir);
+    const root = path.parse(current).root;
+    while (current !== root) {
+      searchRoots.push(path.join(current, '.claude', 'commands'));
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+    // Also include ~/.claude/commands/ (user-level commands)
+    const homeDir = app.getPath('home');
+    searchRoots.push(path.join(homeDir, '.claude', 'commands'));
+
+    const seen = new Set<string>(); // command names already collected (closest wins)
+    const commands: ClaudeCommand[] = [];
+
+    function walkDirectory(directory: string, prefix: string): void {
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(directory, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const fullPath = path.join(directory, entry.name);
+        if (entry.isDirectory()) {
+          walkDirectory(fullPath, prefix ? `${prefix}${entry.name}:` : `${entry.name}:`);
+        } else if (entry.isFile() && entry.name.endsWith('.md')) {
+          const baseName = entry.name.slice(0, -3);
+          const commandName = prefix + baseName;
+          if (seen.has(commandName)) continue; // closer directory already provided this command
+          seen.add(commandName);
+
+          const displayName = `/${commandName}`;
+          let description = '';
+          let argumentHint = '';
+
+          try {
+            const content = fs.readFileSync(fullPath, 'utf-8');
+            if (content.startsWith('---')) {
+              const endIndex = content.indexOf('---', 3);
+              if (endIndex !== -1) {
+                const frontmatter = content.slice(3, endIndex);
+                for (const line of frontmatter.split('\n')) {
+                  const trimmed = line.trim();
+                  if (trimmed.startsWith('description:')) {
+                    description = trimmed.slice('description:'.length).trim().replace(/^['"]|['"]$/g, '');
+                  } else if (trimmed.startsWith('argument-hint:')) {
+                    argumentHint = trimmed.slice('argument-hint:'.length).trim().replace(/^['"]|['"]$/g, '');
+                  }
+                }
+              }
+            }
+          } catch {
+            // Skip files that can't be read
+          }
+
+          commands.push({ name: commandName, displayName, description, argumentHint });
+        }
+      }
+    }
+
+    for (const commandsDir of searchRoots) {
+      walkDirectory(commandsDir, '');
+    }
+
+    commands.sort((a, b) => a.name.localeCompare(b.name));
+    return commands;
   });
 
   // === Shell ===
