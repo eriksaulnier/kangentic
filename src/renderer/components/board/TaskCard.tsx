@@ -112,26 +112,26 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
             isDragOverlay ? 'shadow-xl' : ''
           }`}
         >
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             <span className="text-sm text-fg-tertiary truncate flex-1" data-testid="compact-title">{task.title}</span>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <span className="text-xs text-fg-disabled">
-                {task.archived_at ? formatDistanceToNow(new Date(task.archived_at), { addSuffix: true }) : ''}
-              </span>
-              {onDelete && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
-                  className="ml-1.5 p-2 rounded-full text-fg-disabled hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover/card:opacity-100 transition-all"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
+            {onDelete && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
+                className="p-2 rounded-full text-fg-disabled hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover/card:opacity-100 transition-all flex-shrink-0"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
           </div>
-          {task.description && (
-            <p className="text-xs text-fg-disabled truncate mt-0.5">{task.description}</p>
-          )}
+          <div className="flex items-center gap-1.5 mt-0.5">
+            {task.description && (
+              <span className="text-xs text-fg-disabled truncate flex-1">{task.description}</span>
+            )}
+            <span className="text-xs text-fg-disabled flex-shrink-0 ml-auto">
+              {task.archived_at ? formatDistanceToNow(new Date(task.archived_at), { addSuffix: true }) : ''}
+            </span>
+          </div>
         </div>
 
         {showDetail && (
