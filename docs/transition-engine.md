@@ -137,7 +137,7 @@ All action types that accept templates can use these placeholders:
 | `{{taskId}}` | Task UUID |
 | `{{worktreePath}}` | Worktree directory path (empty if none) |
 | `{{branchName}}` | Git branch name (empty if none) |
-| `{{attachments}}` | ` [Review images: path1, path2]` when present |
+| `{{attachments}}` | Bare file paths (one per line) when present |
 
 ## Command Injection
 

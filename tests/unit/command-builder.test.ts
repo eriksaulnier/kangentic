@@ -437,11 +437,11 @@ describe('Prompt Delivery (Claude Agent)', () => {
     expect(cmd).not.toContain(' -- ');
   });
 
-  it('prompt with [Review images: ...] attachment paths is handled', () => {
+  it('prompt with bare attachment paths is handled', () => {
     const cmd = buildClaudeCommand({
       claudePath: '/usr/bin/claude',
       sessionId: 'sess-123',
-      prompt: 'Fix bug [Review images: C:\\Users\\dev\\image-1.png, C:\\Users\\dev\\image-2.png]',
+      prompt: 'Fix bug\nC:\\Users\\dev\\image-1.png\nC:\\Users\\dev\\image-2.png',
     });
     expect(cmd).toContain(' -- ');
     expect(cmd).toContain('image-1.png');

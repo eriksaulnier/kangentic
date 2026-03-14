@@ -45,7 +45,7 @@ export class TransitionEngine {
       worktreePath: task.worktree_path || '',
       branchName: task.branch_name || '',
       attachments: attachmentPaths.length > 0
-        ? ` [Review images: ${attachmentPaths.join(', ')}]`
+        ? `\n${attachmentPaths.join('\n')}`
         : '',
     }, permissionOverride, resumePrompt);
   }
@@ -80,7 +80,7 @@ export class TransitionEngine {
       worktreePath: task.worktree_path || '',
       branchName: task.branch_name || '',
       attachments: attachmentPaths.length > 0
-        ? ` [Review images: ${attachmentPaths.join(', ')}]`
+        ? `\n${attachmentPaths.join('\n')}`
         : '',
     };
 

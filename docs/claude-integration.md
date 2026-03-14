@@ -69,12 +69,12 @@ Actions of type `spawn_agent` can define a `promptTemplate` with placeholders:
 | `{{taskId}}` | Task UUID |
 | `{{worktreePath}}` | Worktree directory path (empty if no worktree) |
 | `{{branchName}}` | Git branch name (empty if no worktree) |
-| `{{attachments}}` | ` [Review images: path1, path2]` when attachments exist, empty otherwise |
+| `{{attachments}}` | Bare file paths (one per line) when attachments exist, empty otherwise |
 
 Default template: `{{title}}{{description}}{{attachments}}`
 
 This produces prompts like:
-- `Fix auth bug: Users can't login after password reset [Review images: /path/to/screenshot.png]`
+- `Fix auth bug: Users can't login after password reset` followed by `/path/to/screenshot.png` on the next line
 - `Add dark mode` (no description, no attachments)
 
 ## Settings Merge
