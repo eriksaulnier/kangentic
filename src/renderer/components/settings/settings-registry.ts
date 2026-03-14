@@ -85,8 +85,8 @@ export const TAB_LABELS: Record<string, string> = {
 };
 
 /** Helper to get props for a SettingRow from the registry. */
-export function settingProps(id: string): { searchId: string; label: string; description: string; scope: SettingScope } {
+export function settingProps(id: string): { searchId: string; label: string; description: string } {
   const entry = SETTINGS_BY_ID[id];
   if (!entry) throw new Error(`Unknown setting ID: ${id}`);
-  return { searchId: entry.id, label: entry.label, description: entry.description, scope: entry.scope };
+  return { searchId: entry.id, label: entry.label, description: entry.description };
 }

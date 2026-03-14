@@ -14,7 +14,7 @@ import { useSidebarResize, COLLAPSED_STRIP_WIDTH } from '../../hooks/useSidebarR
 import { useTerminalResize, COLLAPSED_HEIGHT } from '../../hooks/useTerminalResize';
 
 export function AppLayout() {
-  const settingsScope = useConfigStore((s) => s.settingsScope);
+  const settingsOpen = useConfigStore((s) => s.settingsOpen);
   const config = useConfigStore((s) => s.config);
   const currentProject = useProjectStore((s) => s.currentProject);
   const projects = useProjectStore((s) => s.projects);
@@ -113,7 +113,7 @@ export function AppLayout() {
       </div>
 
       <StatusBar />
-      {settingsScope && <SettingsPanel />}
+      {settingsOpen && <SettingsPanel />}
       <ToastContainer />
     </div>
   );

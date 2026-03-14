@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Bell, Bot, Check, CircleAlert, GitBranch, Palette, ShieldAlert, ShieldCheck, SlidersHorizontal, Terminal } from 'lucide-react';
 import { useConfigStore } from '../../stores/config-store';
 import { BranchPicker } from '../dialogs/BranchPicker';
@@ -6,35 +6,36 @@ import { SettingsPanelProvider, SectionHeader, SettingRow, Select, ToggleSwitch,
 import type { SettingsTabDefinition, SettingScope, SettingsContentProps } from './shared';
 import type { AppConfig, DeepPartial, NotificationConfig, PermissionMode, ThemeMode } from '../../../shared/types';
 import { NAMED_THEMES } from '../../../shared/types';
+import { deepMergeConfig } from '../../../shared/object-utils';
 import { settingProps } from './settings-registry';
 
 /**
- * App Settings tab layout:
+ * Settings tab layout:
  *
- * Tabs ABOVE the separator are project-overridable settings (also shown in
- * ProjectSettingsPanel). Changes here set the global default. Projects without
- * explicit overrides inherit the new value automatically.
+ * Tabs ABOVE the separator are per-project settings. When a project is open,
+ * changes save to the project's override file. These tabs are hidden when
+ * no project is selected.
  *
- * Tabs BELOW the separator (after `separator: true`) are global-only settings
- * that apply to the entire app, not per-project. These tabs do NOT appear in
- * the ProjectSettingsPanel.
+ * Tabs BELOW the separator (after `separator: true`) are shared settings
+ * that apply across all projects. They save to the global config.
  */
 export const APP_TABS: SettingsTabDefinition[] = [
-  // -- Project-overridable defaults --
+  // -- Per-project settings --
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'terminal', label: 'Terminal', icon: Terminal },
   { id: 'agent', label: 'Agent', icon: Bot },
   { id: 'git', label: 'Git', icon: GitBranch },
-  // -- Global-only (separator marks the boundary) --
-  { id: 'behavior', label: 'Behavior', icon: SlidersHorizontal, separator: true },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'privacy', label: 'Privacy', icon: ShieldCheck },
+  // -- Shared settings (separator marks the boundary) --
+  { id: 'behavior', label: 'Behavior', icon: SlidersHorizontal, separator: true, tooltip: 'Applies to all projects' },
+  { id: 'notifications', label: 'Notifications', icon: Bell, tooltip: 'Applies to all projects' },
+  { id: 'privacy', label: 'Privacy', icon: ShieldCheck, tooltip: 'Applies to all projects' },
 ];
 
-/** Tab IDs that are project-overridable (above the separator). */
-export const PROJECT_OVERRIDABLE_TAB_IDS = new Set(
-  APP_TABS.slice(0, APP_TABS.findIndex((tab) => tab.separator)).map((tab) => tab.id),
-);
+/** Separator index: tabs before this are per-project, tabs at/after are shared. */
+const SEPARATOR_INDEX = APP_TABS.findIndex((tab) => tab.separator);
+
+/** Shared-only tabs (below separator). Shown even when no project is open. */
+export const GLOBAL_ONLY_TABS = APP_TABS.slice(SEPARATOR_INDEX);
 
 type NotifyEventKey = 'onAgentIdle' | 'onPlanComplete';
 
@@ -81,22 +82,38 @@ function NotifyChannelRow({ eventKey, config, searchId }: {
 }
 
 /**
- * Global settings content. Rendered inside the unified SettingsPanel shell.
- * All changes save immediately to the global config. Projects without explicit
- * overrides inherit the new default automatically (VS Code-style).
+ * Unified settings content. Rendered inside the SettingsPanel shell.
+ *
+ * For per-project tabs (above separator): reads from effectiveConfig
+ * (global merged with project overrides), writes to project overrides.
+ *
+ * For shared tabs (below separator): reads from globalConfig, writes
+ * to global config. These settings apply across all projects.
  */
-export function AppSettingsContent({ activeTab, isSearching, searchQuery, matchingTabs, navigateToTab, shells }: SettingsContentProps) {
+export function SettingsContent({ activeTab, isSearching, searchQuery, matchingTabs, navigateToTab, shells }: SettingsContentProps) {
   const globalConfig = useConfigStore((state) => state.globalConfig);
+  const projectOverrides = useConfigStore((state) => state.projectOverrides);
   const updateConfig = useConfigStore((state) => state.updateConfig);
+  const updateProjectOverride = useConfigStore((state) => state.updateProjectOverride);
   const claudeInfo = useConfigStore((state) => state.claudeInfo);
 
-  /** Save directly to global config regardless of scope. */
-  const updateSetting = useCallback((partial: DeepPartial<AppConfig>, _scope: SettingScope) => {
-    updateConfig(partial);
-  }, [updateConfig]);
+  // Effective config for per-project tabs: global merged with project overrides
+  const effectiveConfig = useMemo(
+    () => projectOverrides ? deepMergeConfig(globalConfig, projectOverrides) as AppConfig : globalConfig,
+    [globalConfig, projectOverrides],
+  );
+
+  /** Route updates to the correct target based on scope. */
+  const updateSetting = useCallback((partial: DeepPartial<AppConfig>, scope: SettingScope) => {
+    if (scope === 'project') {
+      updateProjectOverride(partial);
+    } else {
+      updateConfig(partial);
+    }
+  }, [updateProjectOverride, updateConfig]);
 
   return (
-    <SettingsPanelProvider value={{ panelType: 'app', updateSetting }}>
+    <SettingsPanelProvider value={{ updateSetting }}>
       {isSearching ? (
         // Search mode: render all matching tabs stacked
         matchingTabs.length > 0 ? (
@@ -104,10 +121,10 @@ export function AppSettingsContent({ activeTab, isSearching, searchQuery, matchi
             <div key={tab.id}>
               <SearchTabGroupHeader tab={tab} first={index === 0} onNavigate={navigateToTab} />
               <div className="space-y-4">
-                {tab.id === 'appearance' && <AppearanceTab globalConfig={globalConfig} />}
-                {tab.id === 'terminal' && <TerminalTab globalConfig={globalConfig} shells={shells} />}
-                {tab.id === 'agent' && <AgentTab globalConfig={globalConfig} claudeInfo={claudeInfo} />}
-                {tab.id === 'git' && <GitTab globalConfig={globalConfig} />}
+                {tab.id === 'appearance' && <AppearanceTab config={effectiveConfig} />}
+                {tab.id === 'terminal' && <TerminalTab config={effectiveConfig} globalConfig={globalConfig} shells={shells} />}
+                {tab.id === 'agent' && <AgentTab config={effectiveConfig} globalConfig={globalConfig} claudeInfo={claudeInfo} />}
+                {tab.id === 'git' && <GitTab config={effectiveConfig} />}
                 {tab.id === 'behavior' && <BehaviorTab globalConfig={globalConfig} />}
                 {tab.id === 'notifications' && <NotificationsTab globalConfig={globalConfig} />}
                 {tab.id === 'privacy' && <PrivacyTab />}
@@ -120,13 +137,13 @@ export function AppSettingsContent({ activeTab, isSearching, searchQuery, matchi
       ) : (
         // Normal mode: single active tab
         <>
-          {activeTab === 'appearance' && <AppearanceTab globalConfig={globalConfig} />}
-          {activeTab === 'terminal' && <TerminalTab globalConfig={globalConfig} shells={shells} />}
-          {activeTab === 'agent' && <AgentTab globalConfig={globalConfig} claudeInfo={claudeInfo} />}
+          {activeTab === 'appearance' && <AppearanceTab config={effectiveConfig} />}
+          {activeTab === 'terminal' && <TerminalTab config={effectiveConfig} globalConfig={globalConfig} shells={shells} />}
+          {activeTab === 'agent' && <AgentTab config={effectiveConfig} globalConfig={globalConfig} claudeInfo={claudeInfo} />}
           {activeTab === 'behavior' && <BehaviorTab globalConfig={globalConfig} />}
           {activeTab === 'notifications' && <NotificationsTab globalConfig={globalConfig} />}
           {activeTab === 'privacy' && <PrivacyTab />}
-          {activeTab === 'git' && <GitTab globalConfig={globalConfig} />}
+          {activeTab === 'git' && <GitTab config={effectiveConfig} />}
         </>
       )}
     </SettingsPanelProvider>
@@ -135,12 +152,12 @@ export function AppSettingsContent({ activeTab, isSearching, searchQuery, matchi
 
 /* ── Tab Components ── */
 
-function AppearanceTab({ globalConfig }: { globalConfig: AppConfig }) {
+function AppearanceTab({ config }: { config: AppConfig }) {
   const updateProject = useScopedUpdate('project');
   return (
     <SettingRow {...settingProps('theme')}>
       <Select
-        value={globalConfig.theme}
+        value={config.theme}
         onChange={(event) => updateProject({ theme: event.target.value as ThemeMode })}
       >
         <optgroup label="Standard">
@@ -162,14 +179,14 @@ function AppearanceTab({ globalConfig }: { globalConfig: AppConfig }) {
   );
 }
 
-function TerminalTab({ globalConfig, shells }: { globalConfig: AppConfig; shells: Array<{ name: string; path: string }> }) {
+function TerminalTab({ config, globalConfig, shells }: { config: AppConfig; globalConfig: AppConfig; shells: Array<{ name: string; path: string }> }) {
   const updateProject = useScopedUpdate('project');
   const updateGlobal = useScopedUpdate('global');
   return (
     <>
       <SettingRow {...settingProps('terminal.shell')}>
         <Select
-          value={globalConfig.terminal.shell || ''}
+          value={config.terminal.shell || ''}
           onChange={(event) => updateProject({ terminal: { shell: event.target.value || null } })}
         >
           <option value="">Auto-detect</option>
@@ -181,7 +198,7 @@ function TerminalTab({ globalConfig, shells }: { globalConfig: AppConfig; shells
       <SettingRow {...settingProps('terminal.fontSize')}>
         <input
           type="number"
-          value={globalConfig.terminal.fontSize}
+          value={config.terminal.fontSize}
           onChange={(event) => updateProject({ terminal: { fontSize: Number(event.target.value) } })}
           min={8}
           max={32}
@@ -191,7 +208,7 @@ function TerminalTab({ globalConfig, shells }: { globalConfig: AppConfig; shells
       <SettingRow {...settingProps('terminal.fontFamily')}>
         <input
           type="text"
-          value={globalConfig.terminal.fontFamily}
+          value={config.terminal.fontFamily}
           onChange={(event) => updateProject({ terminal: { fontFamily: event.target.value } })}
           className={INPUT_CLASS}
         />
@@ -199,7 +216,7 @@ function TerminalTab({ globalConfig, shells }: { globalConfig: AppConfig; shells
       <SettingRow {...settingProps('terminal.scrollbackLines')}>
         <input
           type="number"
-          value={globalConfig.terminal.scrollbackLines}
+          value={config.terminal.scrollbackLines}
           onChange={(event) => updateProject({ terminal: { scrollbackLines: Number(event.target.value) } })}
           min={1000}
           max={100000}
@@ -209,7 +226,7 @@ function TerminalTab({ globalConfig, shells }: { globalConfig: AppConfig; shells
       </SettingRow>
       <SettingRow {...settingProps('terminal.cursorStyle')}>
         <Select
-          value={globalConfig.terminal.cursorStyle}
+          value={config.terminal.cursorStyle}
           onChange={(event) => updateProject({ terminal: { cursorStyle: event.target.value as 'block' | 'underline' | 'bar' } })}
         >
           <option value="block">Block</option>
@@ -226,7 +243,7 @@ function TerminalTab({ globalConfig, shells }: { globalConfig: AppConfig; shells
           'contextBar.showProgressBar',
         ]}
       />
-      <CompactToggleList scope="global" items={[
+      <CompactToggleList items={[
         { label: 'Shell', description: 'Detected shell name', checked: globalConfig.contextBar.showShell, onChange: (value) => updateGlobal({ contextBar: { showShell: value } }), searchId: 'contextBar.showShell' },
         { label: 'Version', description: 'Claude Code version', checked: globalConfig.contextBar.showVersion, onChange: (value) => updateGlobal({ contextBar: { showVersion: value } }), searchId: 'contextBar.showVersion' },
         { label: 'Model', description: 'Active model name', checked: globalConfig.contextBar.showModel, onChange: (value) => updateGlobal({ contextBar: { showModel: value } }), searchId: 'contextBar.showModel' },
@@ -239,7 +256,7 @@ function TerminalTab({ globalConfig, shells }: { globalConfig: AppConfig; shells
   );
 }
 
-function AgentTab({ globalConfig, claudeInfo }: { globalConfig: AppConfig; claudeInfo: { found: boolean; path: string | null; version: string | null } | null }) {
+function AgentTab({ config, globalConfig, claudeInfo }: { config: AppConfig; globalConfig: AppConfig; claudeInfo: { found: boolean; path: string | null; version: string | null } | null }) {
   const updateGlobal = useScopedUpdate('global');
   const updateProject = useScopedUpdate('project');
   return (
@@ -293,7 +310,7 @@ function AgentTab({ globalConfig, claudeInfo }: { globalConfig: AppConfig; claud
       </SettingRow>
       <SettingRow {...settingProps('claude.permissionMode')}>
         <Select
-          value={globalConfig.claude.permissionMode}
+          value={config.claude.permissionMode}
           onChange={(event) => updateProject({ claude: { permissionMode: event.target.value as PermissionMode } })}
         >
           <option value="default">Default (Allowlist)</option>
@@ -381,7 +398,7 @@ function PrivacyTab() {
     <div className="space-y-4">
       <div className="inline-flex items-center gap-2 rounded-full bg-surface-hover px-3.5 py-1.5">
         <ShieldAlert className="size-5 text-fg-muted shrink-0" />
-        <span className="text-[1em] text-fg-secondary">Anonymous analytics only -- no personal data collected.</span>
+        <span className="text-[1em] text-fg-secondary">Anonymous analytics only. No personal data collected.</span>
       </div>
 
       <SectionHeader label="What We Collect" />
@@ -414,26 +431,26 @@ function PrivacyTab() {
   );
 }
 
-function GitTab({ globalConfig }: { globalConfig: AppConfig }) {
+function GitTab({ config }: { config: AppConfig }) {
   const updateProject = useScopedUpdate('project');
   return (
     <>
       <SettingRow {...settingProps('git.worktreesEnabled')}>
         <ToggleSwitch
-          checked={globalConfig.git.worktreesEnabled}
+          checked={config.git.worktreesEnabled}
           onChange={(value) => updateProject({ git: { worktreesEnabled: value } })}
         />
       </SettingRow>
       <SettingRow {...settingProps('git.autoCleanup')}>
         <ToggleSwitch
-          checked={globalConfig.git.autoCleanup}
+          checked={config.git.autoCleanup}
           onChange={(value) => updateProject({ git: { autoCleanup: value } })}
         />
       </SettingRow>
       <SettingRow {...settingProps('git.defaultBaseBranch')}>
         <BranchPicker
           variant="input"
-          value={globalConfig.git.defaultBaseBranch}
+          value={config.git.defaultBaseBranch}
           defaultBranch="main"
           onChange={(branch) => updateProject({ git: { defaultBaseBranch: branch } })}
         />
@@ -441,7 +458,7 @@ function GitTab({ globalConfig }: { globalConfig: AppConfig }) {
       <SettingRow {...settingProps('git.copyFiles')}>
         <input
           type="text"
-          value={globalConfig.git.copyFiles.join(', ')}
+          value={config.git.copyFiles.join(', ')}
           onChange={(event) => {
             const files = event.target.value.split(',').map((file) => file.trim()).filter(Boolean);
             updateProject({ git: { copyFiles: files } });
@@ -453,7 +470,7 @@ function GitTab({ globalConfig }: { globalConfig: AppConfig }) {
       <SettingRow {...settingProps('git.initScript')}>
         <input
           type="text"
-          value={globalConfig.git.initScript || ''}
+          value={config.git.initScript || ''}
           onChange={(event) => updateProject({ git: { initScript: event.target.value || null } })}
           placeholder="npm install"
           className={`${INPUT_CLASS} placeholder-fg-faint`}

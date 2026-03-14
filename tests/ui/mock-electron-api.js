@@ -151,6 +151,21 @@
     };
   }
 
+  /** Clone settings from the most recently opened project that has overrides.
+   *  Falls back to snapshotOverridableDefaults() if no projects have overrides.
+   *  KEEP IN SYNC with getLastProjectOverrides() in src/main/ipc/handlers/projects.ts */
+  function getLastProjectDefaults(excludePath) {
+    var sorted = projects.slice().sort(function (a, b) {
+      return (b.last_opened || '').localeCompare(a.last_opened || '');
+    });
+    for (var i = 0; i < sorted.length; i++) {
+      if (sorted[i].path === excludePath) continue;
+      var overrides = projectConfigs[sorted[i].path];
+      if (overrides && Object.keys(overrides).length > 0) return overrides;
+    }
+    return snapshotOverridableDefaults();
+  }
+
   var DEFAULT_SWIMLANES = [
     { name: 'Backlog', role: 'backlog', color: '#6b7280', icon: 'layers', is_archived: false, is_ghost: false, permission_strategy: null, auto_spawn: false, auto_command: null, plan_exit_target_id: null },
     { name: 'Planning', role: null, color: '#8b5cf6', icon: 'map', is_archived: false, is_ghost: false, permission_strategy: 'plan', auto_spawn: true, auto_command: null, plan_exit_target_id: '__executing__' },
@@ -182,8 +197,8 @@
           created_at: now(),
         };
         projects.push(project);
-        // Snapshot current global defaults as project overrides
-        projectConfigs[project.path] = snapshotOverridableDefaults();
+        // Clone settings from the last modified project (or global defaults)
+        projectConfigs[project.path] = getLastProjectDefaults(project.path);
         return project;
       },
       delete: async function (id) {
@@ -256,8 +271,8 @@
           created_at: now(),
         };
         projects.push(project);
-        // Snapshot current global defaults as project overrides
-        projectConfigs[project.path] = snapshotOverridableDefaults();
+        // Clone settings from the last modified project (or global defaults)
+        projectConfigs[project.path] = getLastProjectDefaults(project.path);
         currentProjectId = project.id;
         if (swimlanes.length === 0) {
           swimlanes = DEFAULT_SWIMLANES.map(function (s, i) {

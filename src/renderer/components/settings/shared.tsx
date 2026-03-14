@@ -1,11 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronDown, RotateCcw, Search, X } from 'lucide-react';
-import { useSettingsPanelContext } from './setting-scope';
+import { ChevronDown, Search, X } from 'lucide-react';
 import { useSettingVisible, useSettingsSearch } from './settings-search';
-import type { SettingScope } from './setting-scope';
 
 // Re-export scope primitives so consumers can import everything from './shared'.
-export { SettingsPanelProvider, useScopedUpdate, useSettingsPanelType } from './setting-scope';
+export { SettingsPanelProvider, useScopedUpdate } from './setting-scope';
 export type { SettingScope } from './setting-scope';
 
 type Phase = 'entering' | 'visible' | 'exiting';
@@ -18,22 +16,13 @@ export interface SettingsTabDefinition {
   icon: React.ElementType;
   /** Render a horizontal divider above this tab in the sidebar. */
   separator?: boolean;
-}
-
-/* ── Scope Tabs ── */
-
-export interface ScopeTabItem {
-  label: string;
-  icon: React.ElementType;
-  active: boolean;
-  onClick?: () => void;
-  /** Test ID for the tab element. */
-  testId?: string;
+  /** Tooltip shown on hover (e.g. "Applies to all projects"). */
+  tooltip?: string;
 }
 
 /* ── Settings Content Props ── */
 
-/** Props passed from SettingsPanel to each scope's content component. */
+/** Props passed from SettingsPanel to the unified content component. */
 export interface SettingsContentProps {
   activeTab: string;
   isSearching: boolean;
@@ -46,21 +35,20 @@ export interface SettingsContentProps {
 /* ── Panel Shell ── */
 
 interface SettingsPanelShellProps {
-  /** Scope tabs rendered inline next to "Settings" (e.g. Global / Project). */
-  scopeTabs?: ScopeTabItem[];
   onClose: () => void;
   children: React.ReactNode;
+  /** Optional project switcher rendered in the header row. */
+  projectSwitcher?: React.ReactNode;
   tabs?: SettingsTabDefinition[];
   activeTab?: string;
   onTabChange?: (tabId: string) => void;
-  footer?: React.ReactNode;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
   tabMatchCounts?: Map<string, number>;
   isSearching?: boolean;
 }
 
-export function SettingsPanelShell({ scopeTabs, onClose, children, tabs, activeTab, onTabChange, footer, searchQuery, onSearchChange, tabMatchCounts, isSearching }: SettingsPanelShellProps) {
+export function SettingsPanelShell({ onClose, children, projectSwitcher, tabs, activeTab, onTabChange, searchQuery, onSearchChange, tabMatchCounts, isSearching }: SettingsPanelShellProps) {
   const [phase, setPhase] = useState<Phase>('entering');
   const backdropMouseDown = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -126,7 +114,10 @@ export function SettingsPanelShell({ scopeTabs, onClose, children, tabs, activeT
         {/* Header */}
         <div className="flex-shrink-0 border-b border-edge">
           <div className="flex items-center justify-between px-6 py-4">
-            <h2 className="text-base font-semibold text-fg">Settings</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-base font-semibold text-fg">Settings</h2>
+              {projectSwitcher}
+            </div>
             <button
               onClick={requestClose}
               className="p-1.5 text-fg-faint hover:text-fg-tertiary hover:bg-surface-hover rounded transition-colors"
@@ -134,34 +125,6 @@ export function SettingsPanelShell({ scopeTabs, onClose, children, tabs, activeT
               <X size={16} />
             </button>
           </div>
-          {scopeTabs && scopeTabs.length > 1 && (
-            <div className="flex items-center gap-1 px-6 pt-3 border-t border-edge">
-              {scopeTabs.map((scopeTab) => {
-                const ScopeIcon = scopeTab.icon;
-                return scopeTab.active ? (
-                  <span
-                    key={scopeTab.testId || scopeTab.label}
-                    data-testid={scopeTab.testId}
-                    className="inline-flex items-center gap-1.5 px-3 pb-3 border-b-2 border-accent text-xs font-medium text-fg"
-                  >
-                    <ScopeIcon size={14} className="text-accent flex-shrink-0" />
-                    <span className="truncate max-w-[200px]">{scopeTab.label}</span>
-                  </span>
-                ) : (
-                  <button
-                    key={scopeTab.testId || scopeTab.label}
-                    type="button"
-                    data-testid={scopeTab.testId}
-                    onClick={scopeTab.onClick}
-                    className="inline-flex items-center gap-1.5 px-3 pb-3 border-b-2 border-transparent text-xs text-fg-muted hover:text-fg-secondary transition-colors"
-                  >
-                    <ScopeIcon size={14} className="flex-shrink-0" />
-                    <span className="truncate max-w-[200px]">{scopeTab.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </div>
 
         {/* Search bar */}
@@ -205,6 +168,7 @@ export function SettingsPanelShell({ scopeTabs, onClose, children, tabs, activeT
                     {tab.separator && <div className="my-1.5 mx-4 border-t border-edge" />}
                     <button
                       onClick={() => { if (!hasNoMatches) onTabChange(tab.id); }}
+                      title={tab.tooltip}
                       className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm transition-colors ${
                         hasNoMatches
                           ? 'opacity-40 cursor-default text-fg-muted'
@@ -230,11 +194,6 @@ export function SettingsPanelShell({ scopeTabs, onClose, children, tabs, activeT
               <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
                 {children}
               </div>
-              {footer && !isSearching && (
-                <div className="flex-shrink-0 px-6 py-4 border-t border-edge">
-                  {footer}
-                </div>
-              )}
             </div>
           </div>
         ) : (
@@ -311,20 +270,12 @@ interface SettingRowProps {
   label: string;
   description: string;
   children: React.ReactNode;
-  /** Controls handler dispatch and visibility filtering. See `SettingScope`. */
-  scope?: SettingScope;
-  isOverridden?: boolean;
-  onReset?: () => void;
   /** Registry ID for search filtering. */
   searchId?: string;
 }
 
-export function SettingRow({ label, description, children, scope, isOverridden, onReset, searchId }: SettingRowProps) {
-  const { panelType } = useSettingsPanelContext();
+export function SettingRow({ label, description, children, searchId }: SettingRowProps) {
   const visible = useSettingVisible(searchId);
-
-  // Global-only settings are hidden in the project panel.
-  if (scope === 'global' && panelType === 'project') return null;
 
   // Search filtering.
   if (!visible) return null;
@@ -336,16 +287,6 @@ export function SettingRow({ label, description, children, scope, isOverridden, 
           <div className="text-sm font-medium text-fg-secondary">{label}</div>
           <div className="text-xs text-fg-faint">{description}</div>
         </div>
-        {isOverridden && onReset && (
-          <button
-            onClick={onReset}
-            title="Reset to default"
-            className="p-1 text-fg-faint hover:text-accent rounded transition-colors flex-shrink-0 mt-0.5"
-            data-testid="setting-reset"
-          >
-            <RotateCcw size={14} />
-          </button>
-        )}
       </div>
       {children}
     </div>
@@ -403,13 +344,9 @@ export interface CompactToggleItem {
 /**
  * Single-column list of label + toggle pairs. Material Design-style compact
  * rows for dense boolean groups (e.g. context bar visibility toggles).
- * Hidden entirely in project panels when scope is 'global'.
  */
-export function CompactToggleList({ items, scope }: { items: CompactToggleItem[]; scope?: SettingScope }) {
-  const { panelType } = useSettingsPanelContext();
+export function CompactToggleList({ items }: { items: CompactToggleItem[] }) {
   const { isSearching, matchingIds } = useSettingsSearch();
-
-  if (scope === 'global' && panelType === 'project') return null;
 
   // When searching, filter items to those with matching searchIds.
   const visibleItems = isSearching
@@ -431,41 +368,6 @@ export function CompactToggleList({ items, scope }: { items: CompactToggleItem[]
           <ToggleSwitch checked={item.checked} onChange={item.onChange} />
         </div>
       ))}
-    </div>
-  );
-}
-
-/* ── Reset Overrides Footer ── */
-
-export function ResetOverridesFooter({ onReset }: { onReset: () => void }) {
-  const [showConfirm, setShowConfirm] = useState(false);
-
-  return (
-    <div className="pt-4 border-t border-edge">
-      {showConfirm ? (
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-fg-muted">Reset all project overrides to defaults?</span>
-          <button
-            onClick={() => { onReset(); setShowConfirm(false); }}
-            className="text-xs text-red-400 hover:text-red-300 font-medium"
-          >
-            Confirm
-          </button>
-          <button
-            onClick={() => setShowConfirm(false)}
-            className="text-xs text-fg-muted hover:text-fg-secondary"
-          >
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <button
-          onClick={() => setShowConfirm(true)}
-          className="text-xs text-fg-muted hover:text-fg-secondary transition-colors"
-        >
-          Reset all project overrides
-        </button>
-      )}
     </div>
   );
 }

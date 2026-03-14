@@ -8,12 +8,23 @@ const isMac = window.electronAPI.platform === 'darwin';
 
 export function TitleBar() {
   const currentProject = useProjectStore((s) => s.currentProject);
+  const settingsOpen = useConfigStore((s) => s.settingsOpen);
   const setSettingsOpen = useConfigStore((s) => s.setSettingsOpen);
-  const settingsScope = useConfigStore((s) => s.settingsScope);
+  const openProjectSettings = useConfigStore((s) => s.openProjectSettings);
 
   const isWorktree = currentProject?.path
     ? currentProject.path.replace(/\\/g, '/').includes('.kangentic/worktrees/')
     : false;
+
+  const handleGearClick = () => {
+    if (settingsOpen) {
+      setSettingsOpen(false);
+    } else if (currentProject) {
+      openProjectSettings(currentProject.path, currentProject.name);
+    } else {
+      setSettingsOpen(true);
+    }
+  };
 
   return (
     <div className={`relative h-10 bg-surface border-b border-edge flex items-center select-none flex-shrink-0 ${isMac ? 'pl-20 pr-3' : 'px-3'}`}
@@ -43,11 +54,11 @@ export function TitleBar() {
 
       <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         <button
-          onClick={() => setSettingsOpen(!settingsScope)}
+          onClick={handleGearClick}
           className={`p-1.5 hover:bg-surface-hover rounded transition-colors ${
-            settingsScope ? 'text-fg bg-surface-hover' : 'text-fg-muted hover:text-fg'
+            settingsOpen ? 'text-fg bg-surface-hover' : 'text-fg-muted hover:text-fg'
           }`}
-          title="App Settings"
+          title="Settings"
         >
           <Settings size={20} />
         </button>

@@ -1,36 +1,45 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FolderOpen, Globe } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ChevronDown, FolderOpen } from 'lucide-react';
 import { useConfigStore } from '../../stores/config-store';
 import { useProjectStore } from '../../stores/project-store';
-import { SettingsPanelShell, ResetOverridesFooter } from './shared';
-import type { ScopeTabItem, SettingsContentProps } from './shared';
+import { SettingsPanelShell } from './shared';
+import type { SettingsContentProps } from './shared';
 import { SettingsSearchProvider, computeSearchResults } from './settings-search';
-import { APP_TABS, PROJECT_OVERRIDABLE_TAB_IDS, AppSettingsContent } from './AppSettingsPanel';
-import { PROJECT_TABS, PROJECT_REGISTRY, ProjectSettingsContent } from './ProjectSettingsPanel';
+import { APP_TABS, GLOBAL_ONLY_TABS, SettingsContent } from './AppSettingsPanel';
 import { SETTINGS_REGISTRY } from './settings-registry';
 
 /**
- * Unified settings panel that renders a single SettingsPanelShell and switches
- * between global and project content based on `settingsScope`. The shell stays
- * mounted when switching scopes, so there is no close/reopen animation.
+ * Unified settings panel. Shows all 7 tabs when a project is open,
+ * or only the 3 shared tabs (Behavior, Notifications, Privacy) when
+ * no project is selected. No scope toggle; each setting saves to
+ * the correct target based on its position relative to the separator.
  */
 export function SettingsPanel() {
-  const settingsScope = useConfigStore((state) => state.settingsScope);
   const setSettingsOpen = useConfigStore((state) => state.setSettingsOpen);
-  const setSettingsScope = useConfigStore((state) => state.setSettingsScope);
-  const openProjectSettings = useConfigStore((state) => state.openProjectSettings);
+  const projectSettingsPath = useConfigStore((state) => state.projectSettingsPath);
   const projectSettingsProjectName = useConfigStore((state) => state.projectSettingsProjectName);
-  const projectOverrides = useConfigStore((state) => state.projectOverrides);
-  const resetAllProjectOverrides = useConfigStore((state) => state.resetAllProjectOverrides);
+  const openProjectSettings = useConfigStore((state) => state.openProjectSettings);
   const currentProject = useProjectStore((state) => state.currentProject);
+  const projects = useProjectStore((state) => state.projects);
   const detectClaude = useConfigStore((state) => state.detectClaude);
+
+  // Determine if we have a project context (either from sidebar gear icon or current project)
+  const hasProject = Boolean(projectSettingsPath || currentProject);
+
+  // Show all tabs when a project is available, otherwise only shared tabs
+  const tabs = hasProject ? APP_TABS : GLOBAL_ONLY_TABS;
+
+  // Filter registry to match visible tabs
+  const registry = useMemo(() => {
+    const visibleTabIds = new Set(tabs.map((tab) => tab.id));
+    return SETTINGS_REGISTRY.filter((setting) => visibleTabIds.has(setting.tabId));
+  }, [tabs]);
 
   const [shells, setShells] = useState<Array<{ name: string; path: string }>>([]);
   const [activeTab, setActiveTab] = useState(() => {
     const initialTab = useConfigStore.getState().projectSettingsInitialTab;
-    const scope = useConfigStore.getState().settingsScope;
-    if (scope === 'project' && initialTab) return initialTab;
-    return 'appearance';
+    if (initialTab) return initialTab;
+    return hasProject ? 'appearance' : tabs[0].id;
   });
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -39,24 +48,25 @@ export function SettingsPanel() {
     detectClaude();
   }, []);
 
-  // Clamp activeTab when scope changes (e.g. global-only tab -> project scope)
-  const previousScopeRef = useRef(settingsScope);
+  // When opening settings for a different project via sidebar gear icon,
+  // pick up the initial tab if set.
   useEffect(() => {
-    if (settingsScope === previousScopeRef.current) return;
-    previousScopeRef.current = settingsScope;
-
-    const currentTabs = settingsScope === 'project' ? PROJECT_TABS : APP_TABS;
-    const validIds = currentTabs.map((tab) => tab.id);
-
-    if (!validIds.includes(activeTab)) {
-      const initialTab = useConfigStore.getState().projectSettingsInitialTab;
-      setActiveTab(initialTab && validIds.includes(initialTab) ? initialTab : validIds[0]);
+    const initialTab = useConfigStore.getState().projectSettingsInitialTab;
+    if (initialTab) {
+      const validIds = tabs.map((tab) => tab.id);
+      if (validIds.includes(initialTab)) {
+        setActiveTab(initialTab);
+      }
     }
-  }, [settingsScope, activeTab]);
+  }, [projectSettingsPath]);
 
-  const scope = settingsScope || 'global';
-  const tabs = scope === 'project' ? PROJECT_TABS : APP_TABS;
-  const registry = scope === 'project' ? PROJECT_REGISTRY : SETTINGS_REGISTRY;
+  // Clamp activeTab when available tabs change (e.g. project opened/closed)
+  useEffect(() => {
+    const validIds = tabs.map((tab) => tab.id);
+    if (!validIds.includes(activeTab)) {
+      setActiveTab(validIds[0]);
+    }
+  }, [tabs, activeTab]);
 
   // Search computation
   const searchResults = useMemo(
@@ -92,48 +102,6 @@ export function SettingsPanel() {
     setSettingsOpen(false);
   }, [setSettingsOpen]);
 
-  // Scope tabs
-  const scopeTabs = useMemo((): ScopeTabItem[] => {
-    if (scope === 'global') {
-      const result: ScopeTabItem[] = [
-        { label: 'Global', icon: Globe, active: true, testId: 'scope-tab-global' },
-      ];
-      if (currentProject && PROJECT_OVERRIDABLE_TAB_IDS.has(activeTab) && !isSearching) {
-        result.push({
-          label: currentProject.name,
-          icon: FolderOpen,
-          active: false,
-          testId: 'scope-tab-project',
-          onClick: () => {
-            openProjectSettings(currentProject.path, currentProject.name, activeTab);
-          },
-        });
-      }
-      return result;
-    }
-    return [
-      {
-        label: 'Global',
-        icon: Globe,
-        active: false,
-        testId: 'scope-tab-global',
-        onClick: () => setSettingsScope('global'),
-      },
-      {
-        label: projectSettingsProjectName || 'Project',
-        icon: FolderOpen,
-        active: true,
-        testId: 'scope-tab-project',
-      },
-    ];
-  }, [scope, currentProject, activeTab, isSearching, projectSettingsProjectName, openProjectSettings, setSettingsScope]);
-
-  // Footer (project scope only, when overrides exist)
-  const hasAnyOverrides = projectOverrides != null && Object.keys(projectOverrides).length > 0;
-  const footer = scope === 'project' && hasAnyOverrides ? (
-    <ResetOverridesFooter onReset={resetAllProjectOverrides} />
-  ) : undefined;
-
   const contentProps: SettingsContentProps = {
     activeTab,
     isSearching,
@@ -143,25 +111,45 @@ export function SettingsPanel() {
     shells,
   };
 
+  // Project switcher dropdown: shown when projects exist, allows switching
+  // which project's settings are being edited.
+  const activeProjectPath = projectSettingsPath || currentProject?.path;
+  const projectSwitcher = projects.length > 0 ? (
+    <div className="relative">
+      <FolderOpen size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-muted pointer-events-none" />
+      <select
+        value={activeProjectPath || ''}
+        onChange={(event) => {
+          const selectedProject = projects.find((project) => project.path === event.target.value);
+          if (selectedProject) {
+            openProjectSettings(selectedProject.path, selectedProject.name);
+          }
+        }}
+        data-testid="settings-project-switcher"
+        className="appearance-none bg-surface-hover border border-edge-input rounded pl-7 pr-7 py-1 text-sm text-fg-secondary cursor-pointer hover:border-edge-hover focus:outline-none focus:border-accent max-w-[200px] truncate"
+      >
+        {projects.map((project) => (
+          <option key={project.id} value={project.path}>{project.name}</option>
+        ))}
+      </select>
+      <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-muted pointer-events-none" />
+    </div>
+  ) : null;
+
   return (
     <SettingsPanelShell
-      scopeTabs={scopeTabs}
       onClose={handleClose}
+      projectSwitcher={projectSwitcher}
       tabs={tabs}
       activeTab={activeTab}
       onTabChange={setActiveTab}
-      footer={footer}
       searchQuery={searchQuery}
       onSearchChange={handleSearchChange}
       tabMatchCounts={searchResults.tabMatchCounts}
       isSearching={isSearching}
     >
       <SettingsSearchProvider query={searchQuery} matchingIds={searchResults.matchingIds}>
-        {scope === 'global' ? (
-          <AppSettingsContent {...contentProps} />
-        ) : (
-          <ProjectSettingsContent {...contentProps} />
-        )}
+        <SettingsContent {...contentProps} />
       </SettingsSearchProvider>
     </SettingsPanelShell>
   );

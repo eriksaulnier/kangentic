@@ -102,7 +102,7 @@ scripts/          # Build and dev scripts
 - **PTY sessions** handle cross-platform shells (PowerShell needs `& ` prefix, WSL splits into exe + args, fish/nushell skip `--login`)
 - **Claude CLI** is invoked with `cwd` set to the project directory (or worktree path) so that `.claude/`, `CLAUDE.md`, and commands are loaded into context
 - **HMR store re-sync** — The `vite:afterUpdate` handler in `App.tsx` re-fetches every IPC-backed Zustand store after HMR replaces modules. If you add a new store with a `load*` or `sync*` method, add the call there. A unit test (`hmr-resync.test.ts`) enforces this.
-- **Settings tab separator** — In `AppSettingsPanel`, tabs above the `separator: true` marker are project-overridable (also shown in `ProjectSettingsPanel`). Tabs below it (Behavior, Notifications, Privacy) are global-only and never appear in project settings. When adding new settings, decide if they are per-project or global and place the tab accordingly.
+- **Settings tab separator** — In `AppSettingsPanel`, tabs above the `separator: true` marker are per-project settings (saved to `.kangentic/config.json`). Tabs below the separator (Behavior, Notifications, Privacy) are shared settings that apply across all projects (saved to global config). When a project is open, all 7 tabs are shown. When no project is selected, only the 3 shared tabs appear. There is no Global/Project scope toggle. When adding new settings, decide if they are per-project or shared and place the tab accordingly.
 
 ### Shutdown (CRITICAL)
 

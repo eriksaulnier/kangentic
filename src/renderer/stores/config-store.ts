@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { AppConfig, DeepPartial } from '../../shared/types';
 import { DEFAULT_CONFIG } from '../../shared/types';
-import { deepEqual, deepMergeConfig, getNestedValue, hasNestedKey, removeNestedKey } from '../../shared/object-utils';
+import { deepMergeConfig } from '../../shared/object-utils';
 
 /** Extract the version number from the raw string (e.g. "2.1.50 (Claude Code)" -> "2.1.50"). */
 function parseClaudeVersion(version: string | null): string | null {
@@ -30,24 +30,19 @@ interface ConfigStore {
   detectGit: () => Promise<void>;
 
   // -- Settings panel UI --
-  settingsScope: 'global' | 'project' | null;
+  settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
-  setSettingsScope: (scope: 'global' | 'project') => void;
 
   // -- Project Settings --
   projectSettingsPath: string | null;
   projectSettingsProjectName: string | null;
   projectSettingsInitialTab: string | null;
   openProjectSettings: (projectPath: string, projectName: string, initialTab?: string) => void;
-  setProjectSettingsOpen: (open: boolean) => void;
 
   // -- Project overrides --
   projectOverrides: DeepPartial<AppConfig> | null;
   loadProjectOverrides: () => Promise<void>;
   updateProjectOverride: (partial: DeepPartial<AppConfig>) => Promise<void>;
-  removeProjectOverride: (keyPath: string) => Promise<void>;
-  resetAllProjectOverrides: () => Promise<void>;
-  isOverridden: (keyPath: string) => boolean;
 
 }
 
@@ -68,7 +63,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   claudeVersionNumber: null,
   gitInfo: null,
   loading: true,
-  settingsScope: null,
+  settingsOpen: false,
   projectSettingsPath: null,
   projectSettingsProjectName: null,
   projectSettingsInitialTab: null,
@@ -106,36 +101,15 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
 
   setSettingsOpen: (open) => {
     if (open) {
-      set({ settingsScope: 'global' });
+      set({ settingsOpen: true });
     } else {
-      const wasProject = get().settingsScope === 'project';
       set({
-        settingsScope: null,
-        ...(wasProject ? {
-          projectSettingsPath: null,
-          projectSettingsProjectName: null,
-          projectSettingsInitialTab: null,
-          projectOverrides: null,
-        } : {}),
-      });
-      if (wasProject) {
-        refreshConfigs().then((configs) => set(configs));
-      }
-    }
-  },
-
-  setSettingsScope: (scope) => {
-    const wasProject = get().settingsScope === 'project';
-    set({
-      settingsScope: scope,
-      ...(wasProject && scope === 'global' ? {
+        settingsOpen: false,
         projectSettingsPath: null,
         projectSettingsProjectName: null,
         projectSettingsInitialTab: null,
         projectOverrides: null,
-      } : {}),
-    });
-    if (wasProject && scope === 'global') {
+      });
       refreshConfigs().then((configs) => set(configs));
     }
   },
@@ -144,7 +118,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   openProjectSettings: (projectPath, projectName, initialTab) => {
     const currentPath = get().projectSettingsPath;
     set({
-      settingsScope: 'project',
+      settingsOpen: true,
       projectSettingsPath: projectPath,
       projectSettingsProjectName: projectName,
       projectSettingsInitialTab: initialTab || null,
@@ -155,19 +129,6 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         set({ projectOverrides: overrides });
       }
     });
-  },
-
-  setProjectSettingsOpen: (open) => {
-    if (!open) {
-      set({
-        settingsScope: null,
-        projectSettingsPath: null,
-        projectSettingsProjectName: null,
-        projectSettingsInitialTab: null,
-        projectOverrides: null,
-      });
-      refreshConfigs().then((configs) => set(configs));
-    }
   },
 
   loadProjectOverrides: async () => {
@@ -187,35 +148,6 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     await window.electronAPI.config.setProjectOverridesByPath(projectPath, merged);
     const effective = deepMergeConfig(get().globalConfig, merged);
     set({ projectOverrides: merged, config: effective });
-  },
-
-  removeProjectOverride: async (keyPath) => {
-    const projectPath = get().projectSettingsPath;
-    if (!projectPath) return;
-    const current = get().projectOverrides;
-    if (!current) return;
-    const cloned = JSON.parse(JSON.stringify(current)) as Record<string, unknown>;
-    removeNestedKey(cloned, keyPath);
-    const updated = cloned as DeepPartial<AppConfig>;
-    await window.electronAPI.config.setProjectOverridesByPath(projectPath, updated);
-    const effective = deepMergeConfig(get().globalConfig, cloned);
-    set({ projectOverrides: updated, config: effective });
-  },
-
-  resetAllProjectOverrides: async () => {
-    const projectPath = get().projectSettingsPath;
-    if (!projectPath) return;
-    await window.electronAPI.config.setProjectOverridesByPath(projectPath, {});
-    set({ projectOverrides: {}, config: { ...get().globalConfig } });
-  },
-
-  isOverridden: (keyPath) => {
-    const overrides = get().projectOverrides;
-    if (!overrides) return false;
-    if (!hasNestedKey(overrides, keyPath)) return false;
-    const overrideValue = getNestedValue(overrides, keyPath);
-    const globalValue = getNestedValue(get().globalConfig, keyPath);
-    return !deepEqual(overrideValue, globalValue);
   },
 
 }));

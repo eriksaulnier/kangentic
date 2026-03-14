@@ -11,8 +11,10 @@ import { getProjectDb, closeProjectDb } from '../../db/database';
 import { PATHS } from '../../config/paths';
 import { ensureGitignore, getProjectRepos } from '../helpers';
 import { trackEvent } from '../../analytics/analytics';
-import type { Project, Task } from '../../../shared/types';
+import type { Project, Task, AppConfig } from '../../../shared/types';
 import type { IpcContext } from '../ipc-context';
+import type { ProjectRepository } from '../../db/repositories/project-repository';
+import type { ConfigManager } from '../../config/config-manager';
 
 /**
  * Detach Kangentic from a project: kill PTY sessions, cleanly remove git
@@ -187,6 +189,27 @@ export async function pruneStaleWorktreeProjects(context: IpcContext): Promise<v
 }
 
 /**
+ * Find the project-overridable settings from the most recently opened
+ * project that has overrides. Used to seed new projects so they inherit
+ * settings from the last configured project rather than from global defaults.
+ * Falls back to getProjectOverridableDefaults() if no projects have overrides.
+ */
+function getLastProjectOverrides(
+  projectRepo: ProjectRepository,
+  configManager: ConfigManager,
+  excludePath?: string,
+): Partial<AppConfig> {
+  const projects = projectRepo.list()
+    .sort((a, b) => (b.last_opened || '').localeCompare(a.last_opened || ''));
+  for (const project of projects) {
+    if (project.path === excludePath) continue;
+    const overrides = configManager.loadProjectOverrides(project.path);
+    if (overrides && Object.keys(overrides).length > 0) return overrides;
+  }
+  return configManager.getProjectOverridableDefaults();
+}
+
+/**
  * Find an existing project by path, or create one and open it.
  * Returns the project object.
  */
@@ -204,9 +227,8 @@ export async function openProjectByPath(context: IpcContext, projectPath: string
     project = context.projectRepo.create({ name, path: normalized });
     // Initialize the project database (creates tables + default swimlanes)
     getProjectDb(project.id);
-    // Snapshot current global defaults as project overrides so future
-    // global changes don't retroactively alter this project's settings.
-    const defaults = context.configManager.getProjectOverridableDefaults();
+    // Clone settings from the last modified project (or global defaults if none).
+    const defaults = getLastProjectOverrides(context.projectRepo, context.configManager, normalized);
     context.configManager.saveProjectOverrides(normalized, defaults);
   }
 
@@ -296,9 +318,8 @@ export function registerProjectHandlers(context: IpcContext): void {
     const project = context.projectRepo.create(input);
     // Initialize the project database (creates tables + default swimlanes)
     getProjectDb(project.id);
-    // Snapshot current global defaults as project overrides so future
-    // global changes don't retroactively alter this project's settings.
-    const defaults = context.configManager.getProjectOverridableDefaults();
+    // Clone settings from the last modified project (or global defaults if none).
+    const defaults = getLastProjectOverrides(context.projectRepo, context.configManager, project.path);
     context.configManager.saveProjectOverrides(project.path, defaults);
     trackEvent('project_create');
     return project;

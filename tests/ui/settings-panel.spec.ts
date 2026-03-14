@@ -16,9 +16,9 @@ test.afterAll(async () => {
   await browser?.close();
 });
 
-/** Open the App Settings panel by clicking the gear button in the title bar. */
-async function openAppSettings() {
-  await page.locator('button[title="App Settings"]').click();
+/** Open the Settings panel by clicking the gear button in the title bar. */
+async function openSettings() {
+  await page.locator('button[title="Settings"]').click();
   await page.locator('h2:has-text("Settings")').waitFor({ state: 'visible', timeout: 3000 });
 }
 
@@ -37,23 +37,32 @@ async function closeSettings() {
   await page.locator('h2:has-text("Settings")').waitFor({ state: 'hidden', timeout: 2000 });
 }
 
-test.describe('App Settings Panel', () => {
-  test('titlebar gear opens App Settings panel', async () => {
-    await openAppSettings();
+test.describe('Settings Panel', () => {
+  test('titlebar gear opens Settings panel with all 7 tabs when project is open', async () => {
+    await openSettings();
     await expect(page.locator('h2:has-text("Settings")')).toBeVisible();
-    await expect(page.getByTestId('scope-tab-global')).toBeVisible();
+
+    // All 7 tabs should be visible
+    await expect(page.getByRole('button', { name: 'Appearance' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Terminal' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Agent' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Git' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Behavior' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Notifications' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Privacy' })).toBeVisible();
+
     await closeSettings();
   });
 
   test('shows Appearance section with Theme', async () => {
-    await openAppSettings();
+    await openSettings();
     await expect(page.locator('text=Theme')).toBeVisible();
     await expect(page.locator('text=Color scheme for the interface')).toBeVisible();
     await closeSettings();
   });
 
   test('shows Agent section with CLI Path, Max Sessions, and Idle Timeout', async () => {
-    await openAppSettings();
+    await openSettings();
     await page.getByRole('button', { name: 'Agent' }).click();
     await expect(page.locator('text=CLI Path')).toBeVisible();
     await expect(page.locator('text=Max Concurrent Sessions')).toBeVisible();
@@ -63,7 +72,7 @@ test.describe('App Settings Panel', () => {
   });
 
   test('shows Behavior section with toggles', async () => {
-    await openAppSettings();
+    await openSettings();
     await page.getByRole('button', { name: 'Behavior' }).click();
     await expect(page.locator('text=Skip Task Delete Confirmation')).toBeVisible();
     await expect(page.locator('text=Auto-Focus Idle Sessions')).toBeVisible();
@@ -73,7 +82,7 @@ test.describe('App Settings Panel', () => {
   });
 
   test('shows Notifications tab with event grid and delivery settings', async () => {
-    await openAppSettings();
+    await openSettings();
     await page.getByRole('button', { name: 'Notifications' }).click();
     // Event rows with Desktop/Toast inline labels
     await expect(page.getByText('Agent Idle')).toBeVisible();
@@ -85,7 +94,7 @@ test.describe('App Settings Panel', () => {
   });
 
   test('shows Terminal tab with shell, font size, font family, scrollback, and cursor style', async () => {
-    await openAppSettings();
+    await openSettings();
     await page.getByRole('button', { name: 'Terminal' }).click();
 
     await expect(page.getByText('Terminal shell used for agent sessions')).toBeVisible();
@@ -99,7 +108,7 @@ test.describe('App Settings Panel', () => {
   });
 
   test('shows Git tab with worktree and branch settings', async () => {
-    await openAppSettings();
+    await openSettings();
     await page.getByRole('button', { name: 'Git' }).click();
 
     await expect(page.locator('text=Enable Worktrees')).toBeVisible();
@@ -109,16 +118,15 @@ test.describe('App Settings Panel', () => {
   });
 
   test('Escape key closes panel', async () => {
-    await openAppSettings();
-    await expect(page.getByTestId('scope-tab-global')).toBeVisible();
+    await openSettings();
+    await expect(page.locator('h2:has-text("Settings")')).toBeVisible();
 
     await page.keyboard.press('Escape');
     await page.locator('h2:has-text("Settings")').waitFor({ state: 'hidden', timeout: 2000 });
-    await expect(page.getByTestId('scope-tab-global')).not.toBeVisible({ timeout: 2000 });
   });
 
   test('settings gear shows active state when panel is open', async () => {
-    const gearButton = page.locator('button[title="App Settings"]');
+    const gearButton = page.locator('button[title="Settings"]');
 
     await gearButton.click();
     await page.locator('h2:has-text("Settings")').waitFor({ state: 'visible', timeout: 3000 });
@@ -128,7 +136,7 @@ test.describe('App Settings Panel', () => {
   });
 
   test('CLI path status indicator appears after panel opens', async () => {
-    await openAppSettings();
+    await openSettings();
     await page.getByRole('button', { name: 'Agent' }).click();
     // The mock returns { found: true }, so the indicator div has a "Detected:" title
     await expect(page.locator('[title^="Detected:"]')).toBeVisible();
@@ -136,7 +144,7 @@ test.describe('App Settings Panel', () => {
   });
 
   test('permission strategy dropdown has correct options (no Plan)', async () => {
-    await openAppSettings();
+    await openSettings();
     await page.getByRole('button', { name: 'Agent' }).click();
 
     const permissionsLabel = page.getByText('Permissions', { exact: true });
@@ -158,15 +166,15 @@ test.describe('App Settings Panel', () => {
   });
 
   test('board remains visible behind settings panel', async () => {
-    await openAppSettings();
+    await openSettings();
     await expect(page.locator('[data-swimlane-name="Backlog"]')).toBeAttached();
     await expect(page.locator('[data-swimlane-name="Planning"]')).toBeAttached();
     await closeSettings();
   });
 });
 
-test.describe('Project Settings Panel', () => {
-  test('sidebar gear icon opens Project Settings panel', async () => {
+test.describe('Project Settings via Sidebar', () => {
+  test('sidebar gear icon opens Settings panel', async () => {
     // Hover over the project row to reveal the gear icon
     const projectRow = page.locator('[role="button"]').filter({ hasText: 'Settings Test' }).first();
     await projectRow.hover();
@@ -176,56 +184,33 @@ test.describe('Project Settings Panel', () => {
     await gearButton.click();
     await page.locator('h2:has-text("Settings")').waitFor({ state: 'visible', timeout: 3000 });
 
-    // Should show "Settings" header with project name subtitle
     await expect(page.locator('h2:has-text("Settings")')).toBeVisible();
 
     await closeSettings();
   });
 
-  test('shows Appearance, Terminal, Agent, and Git sections', async () => {
+  test('shows all tabs including per-project and shared settings', async () => {
     const projectRow = page.locator('[role="button"]').filter({ hasText: 'Settings Test' }).first();
     await projectRow.hover();
     await page.locator('button[title="Project settings"]').first().click();
     await page.locator('h2:has-text("Settings")').waitFor({ state: 'visible', timeout: 3000 });
 
-    // Appearance tab (default)
-    await expect(page.locator('text=Theme')).toBeVisible();
+    // All tabs visible (no separate project panel with fewer tabs)
+    await expect(page.getByRole('button', { name: 'Appearance' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Terminal' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Agent' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Git' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Behavior' })).toBeVisible();
 
-    // Terminal tab
-    await page.getByRole('button', { name: 'Terminal' }).click();
-    await expect(page.getByText('Shell', { exact: true })).toBeVisible();
-    await expect(page.getByText('Font Size', { exact: true })).toBeVisible();
-
-    // Agent tab
+    // Agent tab should show ALL settings (no more filtering)
     await page.getByRole('button', { name: 'Agent' }).click();
-    await expect(page.getByText('Permissions', { exact: true })).toBeVisible();
-
-    // Git tab
-    await page.getByRole('button', { name: 'Git' }).click();
-    await expect(page.locator('text=Enable Worktrees')).toBeVisible();
-    await expect(page.locator('text=Auto-cleanup')).toBeVisible();
+    await expect(page.locator('text=CLI Path')).toBeVisible();
+    await expect(page.locator('text=Max Concurrent Sessions')).toBeVisible();
 
     await closeSettings();
   });
 
-  test('does NOT show app-only settings', async () => {
-    const projectRow = page.locator('[role="button"]').filter({ hasText: 'Settings Test' }).first();
-    await projectRow.hover();
-    await page.locator('button[title="Project settings"]').first().click();
-    await page.locator('h2:has-text("Settings")').waitFor({ state: 'visible', timeout: 3000 });
-
-    // Agent tab -- should NOT have CLI Path, Max Sessions, etc.
-    await page.getByRole('button', { name: 'Agent' }).click();
-    await expect(page.locator('text=CLI Path')).not.toBeVisible();
-    await expect(page.locator('text=Max Concurrent Sessions')).not.toBeVisible();
-
-    // Behavior tab should not exist
-    await expect(page.getByRole('button', { name: 'Behavior' })).not.toBeVisible();
-
-    await closeSettings();
-  });
-
-  test('Escape closes project settings', async () => {
+  test('Escape closes settings', async () => {
     const projectRow = page.locator('[role="button"]').filter({ hasText: 'Settings Test' }).first();
     await projectRow.hover();
     await page.locator('button[title="Project settings"]').first().click();
@@ -240,75 +225,24 @@ test.describe('Project Settings Panel', () => {
   });
 });
 
-test.describe('Settings Scope Tabs', () => {
-  test('project scope tab visible on overridable tabs, hidden on global-only tabs', async () => {
-    await openAppSettings();
-
-    // Appearance is project-overridable -- project scope tab should be visible
-    const projectTab = page.getByTestId('scope-tab-project');
-    await expect(projectTab).toBeVisible();
-
-    // Switch to Behavior (global-only) -- project tab should disappear
-    await page.getByRole('button', { name: 'Behavior' }).click();
-    await expect(projectTab).not.toBeVisible();
-
-    // Switch back to Terminal (project-overridable) -- project tab reappears
-    await page.getByRole('button', { name: 'Terminal' }).click();
-    await expect(projectTab).toBeVisible();
-
-    await closeSettings();
-  });
-
-  test('clicking project scope tab opens project settings on same tab', async () => {
-    await openAppSettings();
-
-    // Switch to Terminal tab, then click the project scope tab
-    await page.getByRole('button', { name: 'Terminal' }).click();
-    const projectTab = page.getByTestId('scope-tab-project');
-    await expect(projectTab).toBeVisible();
-    await projectTab.click();
-
-    // Project Settings should open with project scope tab active
-    await page.locator('h2:has-text("Settings")').waitFor({ state: 'visible', timeout: 3000 });
-    await expect(page.getByTestId('scope-tab-project')).toBeVisible();
-
-    // Should be on the Terminal tab (the tab we were on in App Settings)
-    await expect(page.getByText('Shell', { exact: true })).toBeVisible();
-
-    await closeSettings();
-  });
-
-  test('clicking global scope tab from project settings navigates back', async () => {
-    // Open project settings
-    const projectRow = page.locator('[role="button"]').filter({ hasText: 'Settings Test' }).first();
-    await projectRow.hover();
-    await page.locator('button[title="Project settings"]').first().click();
-    await page.locator('h2:has-text("Settings")').waitFor({ state: 'visible', timeout: 3000 });
-
-    // Verify global scope tab is visible and clickable
-    const globalTab = page.getByTestId('scope-tab-global');
-    await expect(globalTab).toBeVisible();
-
-    // Click it to navigate to global settings
-    await globalTab.click();
-
-    // App Settings should open with Global scope tab active
-    await page.locator('h2:has-text("Settings")').waitFor({ state: 'visible', timeout: 3000 });
-    await expect(page.getByTestId('scope-tab-global')).toBeVisible();
-
+test.describe('Shared Settings Tooltip', () => {
+  test('Behavior tab has tooltip "Applies to all projects"', async () => {
+    await openSettings();
+    const behaviorTab = page.getByRole('button', { name: 'Behavior' });
+    await expect(behaviorTab).toHaveAttribute('title', 'Applies to all projects');
     await closeSettings();
   });
 });
 
 test.describe('Settings Search', () => {
-  test('search bar is visible in App Settings', async () => {
-    await openAppSettings();
+  test('search bar is visible in Settings', async () => {
+    await openSettings();
     await expect(page.getByTestId('settings-search')).toBeVisible();
     await closeSettings();
   });
 
   test('searching "font" shows Font Size and Font Family from Terminal tab', async () => {
-    await openAppSettings();
+    await openSettings();
     const searchInput = page.getByTestId('settings-search');
     await searchInput.fill('font');
 
@@ -323,7 +257,7 @@ test.describe('Settings Search', () => {
   });
 
   test('searching "context bar" shows context bar toggles', async () => {
-    await openAppSettings();
+    await openSettings();
     const searchInput = page.getByTestId('settings-search');
     await searchInput.fill('context bar');
 
@@ -336,7 +270,7 @@ test.describe('Settings Search', () => {
   });
 
   test('searching "theme" shows appearance theme setting', async () => {
-    await openAppSettings();
+    await openSettings();
     const searchInput = page.getByTestId('settings-search');
     await searchInput.fill('theme');
 
@@ -349,7 +283,7 @@ test.describe('Settings Search', () => {
   });
 
   test('searching "worktree" shows git worktree settings', async () => {
-    await openAppSettings();
+    await openSettings();
     const searchInput = page.getByTestId('settings-search');
     await searchInput.fill('worktree');
 
@@ -360,7 +294,7 @@ test.describe('Settings Search', () => {
   });
 
   test('searching nonsense shows empty state', async () => {
-    await openAppSettings();
+    await openSettings();
     const searchInput = page.getByTestId('settings-search');
     await searchInput.fill('xyznonexistent');
 
@@ -370,7 +304,7 @@ test.describe('Settings Search', () => {
   });
 
   test('clearing search returns to normal tab view', async () => {
-    await openAppSettings();
+    await openSettings();
     const searchInput = page.getByTestId('settings-search');
 
     // Search for something
@@ -388,7 +322,7 @@ test.describe('Settings Search', () => {
   });
 
   test('Escape clears search before closing panel', async () => {
-    await openAppSettings();
+    await openSettings();
     const searchInput = page.getByTestId('settings-search');
     await searchInput.fill('font');
 
@@ -402,7 +336,7 @@ test.describe('Settings Search', () => {
   });
 
   test('zero-match tabs are dimmed during search', async () => {
-    await openAppSettings();
+    await openSettings();
     const searchInput = page.getByTestId('settings-search');
     await searchInput.fill('theme');
 
@@ -417,7 +351,7 @@ test.describe('Settings Search', () => {
     await closeSettings();
   });
 
-  test('search works in Project Settings panel', async () => {
+  test('search works from sidebar gear icon', async () => {
     const projectRow = page.locator('[role="button"]').filter({ hasText: 'Settings Test' }).first();
     await projectRow.hover();
     await page.locator('button[title="Project settings"]').first().click();
