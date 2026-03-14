@@ -135,6 +135,7 @@ const api: ElectronAPI = {
     getDefault: () => ipcRenderer.invoke(IPC.SHELL_GET_DEFAULT),
     openPath: (dirPath: string) => ipcRenderer.invoke(IPC.SHELL_OPEN_PATH, dirPath),
     openExternal: (url: string) => ipcRenderer.invoke(IPC.SHELL_OPEN_EXTERNAL, url),
+    exec: (command: string, cwd: string) => ipcRenderer.invoke(IPC.SHELL_EXEC, command, cwd),
   },
 
   git: {
@@ -190,6 +191,13 @@ const api: ElectronAPI = {
       ipcRenderer.on(IPC.BOARD_CONFIG_CHANGED, handler);
       return () => ipcRenderer.removeListener(IPC.BOARD_CONFIG_CHANGED, handler);
     },
+    onShortcutsChanged: (callback) => {
+      const handler = (_event: Electron.IpcRendererEvent, projectId: string) => callback(projectId);
+      ipcRenderer.on(IPC.BOARD_CONFIG_SHORTCUTS_CHANGED, handler);
+      return () => ipcRenderer.removeListener(IPC.BOARD_CONFIG_SHORTCUTS_CHANGED, handler);
+    },
+    getShortcuts: () => ipcRenderer.invoke(IPC.BOARD_CONFIG_GET_SHORTCUTS),
+    setShortcuts: (actions, target) => ipcRenderer.invoke(IPC.BOARD_CONFIG_SET_SHORTCUTS, actions, target),
   },
 
   platform: process.platform,

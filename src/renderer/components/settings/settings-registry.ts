@@ -52,6 +52,9 @@ export const SETTINGS_REGISTRY: SettingDefinition[] = [
   { id: 'git.copyFiles', tabId: 'git', label: 'Copy Files', description: 'Additional files copied into each worktree', scope: 'project', keywords: ['env', 'dotfiles'] },
   { id: 'git.initScript', tabId: 'git', label: 'Post-Worktree Script', description: 'Shell script to run after worktree creation', scope: 'project', keywords: ['install', 'setup', 'hook'] },
 
+  // ── Shortcuts ──
+  { id: 'quickActions', tabId: 'quickActions', label: 'Shortcuts', description: 'Custom commands accessible from the task detail dialog', scope: 'project', keywords: ['command', 'shortcut', 'tool', 'open', 'launch', 'tortoisegit', 'vscode', 'terminal', 'explorer', 'quick action'] },
+
   // ── Behavior ──
   { id: 'skipDeleteConfirm', tabId: 'behavior', label: 'Skip Task Delete Confirmation', description: 'Delete tasks immediately without a confirmation dialog', scope: 'global', keywords: ['confirm', 'dialog'] },
   { id: 'autoFocusIdleSession', tabId: 'behavior', label: 'Auto-Focus Idle Sessions', description: 'Automatically switch the bottom panel to the most recently idle session', scope: 'global', keywords: ['switch', 'panel', 'attention'] },
@@ -79,6 +82,7 @@ export const TAB_LABELS: Record<string, string> = {
   terminal: 'Terminal',
   agent: 'Agent',
   git: 'Git',
+  quickActions: 'Shortcuts',
   behavior: 'Behavior',
   notifications: 'Notifications',
   privacy: 'Privacy',

@@ -340,6 +340,11 @@ export function App() {
         }
       }));
     }
+    if (boardConfig?.onShortcutsChanged) {
+      cleanups.push(boardConfig.onShortcutsChanged(() => {
+        useBoardStore.getState().loadShortcuts();
+      }));
+    }
 
     // Task auto-moved (plan exit → next column)
     const tasks = window.electronAPI?.tasks;

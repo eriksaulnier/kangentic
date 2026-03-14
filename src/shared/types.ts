@@ -627,11 +627,23 @@ export interface BoardTransitionConfig {
   actions: string[]; // action names
 }
 
+export type ShortcutDisplay = 'header' | 'menu' | 'both';
+
+export interface ShortcutConfig {
+  id?: string;           // UUID for merge identity (assigned on write-back)
+  label: string;         // "Open in VS Code"
+  icon?: string;         // Lucide icon key: 'code', 'git-branch', etc. Default: 'zap'
+  command: string;       // "code \"{{cwd}}\"" -- template with variables
+  display?: ShortcutDisplay; // where the shortcut appears (default: 'both')
+}
+
 export interface BoardConfig {
   version: number;
   columns: BoardColumnConfig[];
   actions: BoardActionConfig[];
   transitions: BoardTransitionConfig[];
+  shortcuts?: ShortcutConfig[];
+  _modifiedBy?: string;
 }
 
 // === Preload API (exposed to renderer via contextBridge) ===
@@ -742,6 +754,7 @@ export interface ElectronAPI {
     getDefault: () => Promise<string>;
     openPath: (dirPath: string) => Promise<string>;
     openExternal: (url: string) => Promise<void>;
+    exec: (command: string, cwd: string) => Promise<{ pid: number | undefined }>;
   };
 
   // Git
@@ -793,6 +806,9 @@ export interface ElectronAPI {
     export: () => Promise<void>;
     apply: (projectId: string) => Promise<string[]>;
     onChanged: (callback: (projectId: string) => void) => () => void;
+    onShortcutsChanged: (callback: (projectId: string) => void) => () => void;
+    getShortcuts: () => Promise<(ShortcutConfig & { source: 'team' | 'local' })[]>;
+    setShortcuts: (actions: ShortcutConfig[], target: 'team' | 'local') => Promise<void>;
   };
 
   // Platform

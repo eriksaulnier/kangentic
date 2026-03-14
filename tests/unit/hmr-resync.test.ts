@@ -23,6 +23,7 @@ const EXCLUDED_METHODS = new Set([
   'loadAppVersion',    // static, doesn't change during a session
   'detectClaude',      // static CLI detection, doesn't change during a session
   'loadProjectOverrides', // called internally by loadConfig
+  'loadShortcuts',     // called internally by loadBoard
 ]);
 
 describe('HMR store re-sync', () => {

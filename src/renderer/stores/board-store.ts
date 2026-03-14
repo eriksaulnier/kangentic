@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { arrayMove } from '@dnd-kit/sortable';
-import type { Task, Swimlane, TaskCreateInput, TaskUpdateInput, TaskMoveInput, TaskUnarchiveInput, SwimlaneCreateInput, SwimlaneUpdateInput } from '../../shared/types';
+import type { Task, Swimlane, TaskCreateInput, TaskUpdateInput, TaskMoveInput, TaskUnarchiveInput, SwimlaneCreateInput, SwimlaneUpdateInput, ShortcutConfig } from '../../shared/types';
 import { useConfigStore } from './config-store';
 import { useSessionStore } from './session-store';
 import { useToastStore } from './toast-store';
@@ -19,6 +19,7 @@ interface BoardStore {
   tasks: Task[];
   swimlanes: Swimlane[];
   archivedTasks: Task[];
+  shortcuts: (ShortcutConfig & { source: 'team' | 'local' })[];
   loading: boolean;
 
   // Board config warnings (shown as banner when kangentic.json has errors)
@@ -30,6 +31,7 @@ interface BoardStore {
   recentlyArchivedId: string | null;
 
   loadBoard: () => Promise<void>;
+  loadShortcuts: () => Promise<void>;
 
   // Tasks
   createTask: (input: TaskCreateInput) => Promise<Task>;
@@ -80,6 +82,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   tasks: [],
   swimlanes: [],
   archivedTasks: [],
+  shortcuts: [],
   loading: false,
   configWarnings: [],
   pendingConfigChange: null,
@@ -93,6 +96,18 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       window.electronAPI.tasks.listArchived(),
     ]);
     set({ tasks, swimlanes, archivedTasks, loading: false });
+
+    // Load shortcuts separately (non-blocking)
+    get().loadShortcuts();
+  },
+
+  loadShortcuts: async () => {
+    try {
+      const shortcuts = await window.electronAPI.boardConfig.getShortcuts();
+      set({ shortcuts });
+    } catch {
+      // Non-fatal: shortcuts are optional
+    }
   },
 
   createTask: async (input) => {

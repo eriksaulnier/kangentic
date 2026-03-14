@@ -17,7 +17,10 @@ import { useProjectStore } from '../../stores/project-store';
 import { useSessionDisplayState } from '../../utils/session-display-state';
 import { BranchPicker } from './BranchPicker';
 import { WorktreeChip } from './WorktreeChip';
-import type { Task, TaskAttachment, ClaudeCommand } from '../../../shared/types';
+import type { Task, TaskAttachment, ClaudeCommand, ShortcutConfig } from '../../../shared/types';
+import { resolveShortcutCommand } from '../../../shared/template-vars';
+import { ICON_REGISTRY } from '../../utils/swimlane-icons';
+import { Zap } from 'lucide-react';
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10MB
 
@@ -241,6 +244,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
   const unarchiveTask = useBoardStore((s) => s.unarchiveTask);
   const updateAttachmentCount = useBoardStore((s) => s.updateAttachmentCount);
   const swimlanes = useBoardStore((s) => s.swimlanes);
+  const shortcuts = useBoardStore((s) => s.shortcuts);
   const projectPath = useProjectStore((s) => s.currentProject?.path ?? null);
   const killSession = useSessionStore((s) => s.killSession);
   const suspendSession = useSessionStore((s) => s.suspendSession);
@@ -579,6 +583,27 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
     }
   };
 
+  const headerShortcuts = useMemo(
+    () => shortcuts.filter((action) => action.command && (!action.display || action.display === 'header' || action.display === 'both')),
+    [shortcuts],
+  );
+
+  const menuShortcuts = useMemo(
+    () => shortcuts.filter((action) => action.command && (!action.display || action.display === 'menu' || action.display === 'both')),
+    [shortcuts],
+  );
+
+  const executeShortcut = useCallback((action: ShortcutConfig) => {
+    const cwd = task.worktree_path ?? projectPath ?? '';
+    const resolved = resolveShortcutCommand(action.command, {
+      cwd,
+      branchName: task.branch_name ?? '',
+      taskTitle: task.title,
+      projectPath: projectPath ?? '',
+    });
+    window.electronAPI.shell.exec(resolved, cwd);
+  }, [task, projectPath]);
+
   // Capture-phase Escape listener: close dialog when mouse is outside content
   // (xterm swallows Escape in bubble phase, so we must use capture phase)
   useEffect(() => {
@@ -791,7 +816,7 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
       )}
 
       {/* Commands button */}
-      {isSessionActive && !isEditing && (
+      {!isEditing && (
         <div className="relative flex-shrink-0" ref={commandButtonRef}>
           <button
             onClick={() => setShowCommandPalette(!showCommandPalette)}
@@ -812,6 +837,23 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
           )}
         </div>
       )}
+
+      {/* Shortcut header pills */}
+      {headerShortcuts.map((action) => {
+        const ActionIcon = ICON_REGISTRY.get(action.icon ?? 'zap') ?? Zap;
+        return (
+          <button
+            key={action.id ?? action.label}
+            onClick={() => executeShortcut(action)}
+            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-hover/50 text-xs text-fg-muted hover:text-fg-secondary hover:bg-surface-hover transition-colors flex-shrink-0"
+            title={action.command}
+            data-testid={`shortcut-pill-${action.label.toLowerCase().replace(/\s+/g, '-')}`}
+          >
+            <ActionIcon size={14} />
+            {action.label}
+          </button>
+        );
+      })}
 
       {/* Spacer */}
       <div className="flex-1" />
@@ -962,26 +1004,44 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
               </div>
             )}
 
-            {/* Divider */}
-            <div className="my-2 mx-2 border-t border-edge-input" />
+            {/* Shortcuts */}
+            {menuShortcuts.length > 0 && (
+              <>
+                <div className="my-1 mx-2 border-t border-edge-input/50" />
+                {menuShortcuts.map((action) => {
+                  const ActionIcon = ICON_REGISTRY.get(action.icon ?? 'zap') ?? Zap;
+                  return (
+                    <button
+                      key={action.id ?? action.label}
+                      onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); setShowCommandsSubmenu(false); executeShortcut(action); }}
+                      className="w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 text-fg-tertiary hover:bg-surface-hover hover:text-fg"
+                      data-testid={`shortcut-kebab-${action.label.toLowerCase().replace(/\s+/g, '-')}`}
+                    >
+                      <ActionIcon size={14} />
+                      {action.label}
+                    </button>
+                  );
+                })}
+              </>
+            )}
+
+            {/* Divider before destructive actions */}
+            <div className="my-1 mx-2 border-t border-edge-input/50" />
 
             {!isArchived && (
               <button
                 onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); setShowCommandsSubmenu(false); handleArchive(); }}
-                className="w-full text-left px-3 py-2 text-xs text-fg-tertiary hover:bg-surface-hover hover:text-fg transition-colors flex items-center gap-2"
+                className="w-full text-left px-3 py-1.5 text-xs text-fg-tertiary hover:bg-surface-hover hover:text-fg transition-colors flex items-center gap-2"
               >
                 <Archive size={14} />
                 Archive
               </button>
             )}
 
-            {/* Danger zone divider -- only when both Archive and Delete are shown */}
-            {!isArchived && <div className="my-2 mx-2 border-t border-edge-input" />}
-
             {/* Delete -- always available */}
             <button
               onClick={() => { setShowKebabMenu(false); setShowMoveSubmenu(false); setShowCommandsSubmenu(false); skipDeleteConfirm ? handleDelete(false) : setConfirmDelete(true); }}
-              className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-400/10 hover:text-red-300 transition-colors flex items-center gap-2"
+              className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-red-400/10 hover:text-red-300 transition-colors flex items-center gap-2"
             >
               <Trash2 size={14} />
               Delete

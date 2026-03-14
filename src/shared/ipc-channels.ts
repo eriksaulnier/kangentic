@@ -88,6 +88,7 @@ export const IPC = {
   // Shell utilities
   SHELL_OPEN_PATH: 'shell:openPath',
   SHELL_OPEN_EXTERNAL: 'shell:openExternal',
+  SHELL_EXEC: 'shell:exec',
 
   // Git
   GIT_DETECT: 'git:detect',
@@ -118,6 +119,9 @@ export const IPC = {
   BOARD_CONFIG_EXPORT: 'boardConfig:export',
   BOARD_CONFIG_APPLY: 'boardConfig:apply',
   BOARD_CONFIG_CHANGED: 'boardConfig:changed',
+  BOARD_CONFIG_GET_SHORTCUTS: 'boardConfig:getShortcuts',
+  BOARD_CONFIG_SET_SHORTCUTS: 'boardConfig:setShortcuts',
+  BOARD_CONFIG_SHORTCUTS_CHANGED: 'boardConfig:shortcutsChanged',
 
   // Updater
   UPDATE_CHECK: 'updater:check',

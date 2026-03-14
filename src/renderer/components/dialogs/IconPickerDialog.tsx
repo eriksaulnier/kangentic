@@ -7,16 +7,22 @@ interface IconPickerDialogProps {
   onClose: () => void;
   onSelect: (iconName: string | null) => void;
   selectedIcon: string | null;
-  accentColor: string;
-  usedIcons: Set<string>;
+  accentColor?: string;
+  usedIcons?: Set<string>;
+  /** Hide the "None" option (color dot). Useful when a selection is required. */
+  hideNone?: boolean;
 }
+
+const EMPTY_SET = new Set<string>();
+const DEFAULT_ACCENT = '#3b82f6';
 
 export function IconPickerDialog({
   onClose,
   onSelect,
   selectedIcon,
-  accentColor,
-  usedIcons,
+  accentColor = DEFAULT_ACCENT,
+  usedIcons = EMPTY_SET,
+  hideNone = false,
 }: IconPickerDialogProps) {
   const [query, setQuery] = useState('');
 
@@ -61,22 +67,24 @@ export function IconPickerDialog({
       {/* Scrollable icon grid */}
       <div className="px-4 py-3 overflow-y-auto flex-1 min-h-0">
         <div className="flex flex-wrap gap-1">
-          {/* None option -- always visible */}
-          <button
-            type="button"
-            onClick={() => onSelect(null)}
-            className={`w-8 h-8 rounded flex items-center justify-center border transition-all ${
-              selectedIcon === null
-                ? 'border-white bg-surface-hover'
-                : 'border-transparent text-fg-muted hover:text-fg-secondary hover:bg-surface-raised'
-            }`}
-            title="None"
-          >
-            <div
-              className="w-2.5 h-2.5 rounded-full"
-              style={{ backgroundColor: accentColor }}
-            />
-          </button>
+          {/* None option */}
+          {!hideNone && (
+            <button
+              type="button"
+              onClick={() => onSelect(null)}
+              className={`w-8 h-8 rounded flex items-center justify-center border transition-all ${
+                selectedIcon === null
+                  ? 'border-white bg-surface-hover'
+                  : 'border-transparent text-fg-muted hover:text-fg-secondary hover:bg-surface-raised'
+              }`}
+              title="None"
+            >
+              <div
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: accentColor }}
+              />
+            </button>
+          )}
 
           {/* Icon buttons */}
           {filtered.map((entry) => {

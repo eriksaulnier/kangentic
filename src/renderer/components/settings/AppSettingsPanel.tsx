@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
-import { Bell, Bot, Check, CircleAlert, GitBranch, Palette, ShieldAlert, ShieldCheck, SlidersHorizontal, Terminal } from 'lucide-react';
+import { Bell, Bot, Check, CircleAlert, GitBranch, Palette, ShieldAlert, ShieldCheck, SlidersHorizontal, Terminal, Zap } from 'lucide-react';
 import { useConfigStore } from '../../stores/config-store';
 import { BranchPicker } from '../dialogs/BranchPicker';
 import { SettingsPanelProvider, SectionHeader, SettingRow, Select, ToggleSwitch, CompactToggleList, INPUT_CLASS, useScopedUpdate, SearchTabGroupHeader, NoSearchResults } from './shared';
@@ -8,6 +8,7 @@ import type { AppConfig, DeepPartial, NotificationConfig, PermissionMode, ThemeM
 import { NAMED_THEMES } from '../../../shared/types';
 import { deepMergeConfig } from '../../../shared/object-utils';
 import { settingProps } from './settings-registry';
+import { ShortcutsTab } from './ShortcutsTab';
 
 /**
  * Settings tab layout:
@@ -25,6 +26,7 @@ export const APP_TABS: SettingsTabDefinition[] = [
   { id: 'terminal', label: 'Terminal', icon: Terminal },
   { id: 'agent', label: 'Agent', icon: Bot },
   { id: 'git', label: 'Git', icon: GitBranch },
+  { id: 'quickActions', label: 'Shortcuts', icon: Zap },
   // -- Shared settings (separator marks the boundary) --
   { id: 'behavior', label: 'Behavior', icon: SlidersHorizontal, separator: true, tooltip: 'Applies to all projects' },
   { id: 'notifications', label: 'Notifications', icon: Bell, tooltip: 'Applies to all projects' },
@@ -125,6 +127,7 @@ export function SettingsContent({ activeTab, isSearching, searchQuery, matchingT
                 {tab.id === 'terminal' && <TerminalTab config={effectiveConfig} globalConfig={globalConfig} shells={shells} />}
                 {tab.id === 'agent' && <AgentTab config={effectiveConfig} globalConfig={globalConfig} claudeInfo={claudeInfo} />}
                 {tab.id === 'git' && <GitTab config={effectiveConfig} />}
+                {tab.id === 'quickActions' && <ShortcutsTab />}
                 {tab.id === 'behavior' && <BehaviorTab globalConfig={globalConfig} />}
                 {tab.id === 'notifications' && <NotificationsTab globalConfig={globalConfig} />}
                 {tab.id === 'privacy' && <PrivacyTab />}
@@ -144,6 +147,7 @@ export function SettingsContent({ activeTab, isSearching, searchQuery, matchingT
           {activeTab === 'notifications' && <NotificationsTab globalConfig={globalConfig} />}
           {activeTab === 'privacy' && <PrivacyTab />}
           {activeTab === 'git' && <GitTab config={effectiveConfig} />}
+          {activeTab === 'quickActions' && <ShortcutsTab />}
         </>
       )}
     </SettingsPanelProvider>

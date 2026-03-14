@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { app, ipcMain, Notification, dialog, shell } from 'electron';
 import { IPC } from '../../../shared/ipc-channels';
 import { WorktreeManager, isGitRepo } from '../../git/worktree-manager';
@@ -147,6 +148,25 @@ export function registerSystemHandlers(context: IpcContext): void {
   ipcMain.handle(IPC.SHELL_GET_DEFAULT, () => context.shellResolver.getDefaultShell());
   ipcMain.handle(IPC.SHELL_OPEN_PATH, (_, dirPath: string) => shell.openPath(dirPath));
   ipcMain.handle(IPC.SHELL_OPEN_EXTERNAL, (_, url: string) => shell.openExternal(url));
+
+  ipcMain.handle(IPC.SHELL_EXEC, (_, command: string, cwd: string) => {
+    if (!command || typeof command !== 'string' || !command.trim()) {
+      throw new Error('shell:exec requires a non-empty command string');
+    }
+    if (!cwd || typeof cwd !== 'string' || !fs.existsSync(cwd)) {
+      throw new Error(`shell:exec requires a valid cwd directory (got "${cwd}")`);
+    }
+    console.log(`[shell:exec] command="${command}" cwd="${cwd}"`);
+    const child = spawn(command, [], {
+      cwd,
+      shell: true,
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false,
+    });
+    child.unref();
+    return { pid: child.pid };
+  });
 
   // === Git ===
   ipcMain.handle(IPC.GIT_DETECT, () => context.gitDetector.detect());

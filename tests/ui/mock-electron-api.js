@@ -728,6 +728,9 @@
       openExternal: async function () {
         return;
       },
+      exec: async function (/* command, cwd */) {
+        return { pid: 12345 };
+      },
     },
 
     git: {
@@ -755,6 +758,9 @@
       export: async function () {},
       apply: async function (/* projectId */) { return []; },
       onChanged: function (/* callback(projectId) */) { return noop; },
+      onShortcutsChanged: function (/* callback(projectId) */) { return noop; },
+      getShortcuts: async function () { return []; },
+      setShortcuts: async function (/* actions, target */) {},
     },
 
     updater: {

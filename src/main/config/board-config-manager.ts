@@ -13,6 +13,7 @@ import type {
   BoardConfig,
   BoardColumnConfig,
   PermissionMode,
+  ShortcutConfig,
   SwimlaneRole,
 } from '../../shared/types';
 
@@ -31,6 +32,7 @@ const CURRENT_VERSION = 1;
  */
 export class BoardConfigManager {
   private readonly isEphemeral: boolean;
+  private readonly fingerprint: string;
   private activeProjectId: string | null = null;
   private activeProjectPath: string | null = null;
   private mainWindow: BrowserWindow | null = null;
@@ -43,6 +45,10 @@ export class BoardConfigManager {
 
   constructor(options?: { ephemeral?: boolean }) {
     this.isEphemeral = options?.ephemeral ?? false;
+    this.fingerprint = crypto.createHash('sha256')
+      .update(os.hostname() + '\0' + os.userInfo().username)
+      .digest('hex')
+      .slice(0, 12);
   }
 
   /**
@@ -406,6 +412,104 @@ export class BoardConfigManager {
     return { warnings };
   }
 
+  // --- Shortcuts ---
+
+  getShortcuts(): (ShortcutConfig & { source: 'team' | 'local' })[] {
+    if (!this.activeProjectPath) return [];
+
+    const team = this.loadTeamConfig();
+    const local = this.loadLocalOverrides();
+
+    const result: (ShortcutConfig & { source: 'team' | 'local' })[] = [];
+    const localOverrideIds = new Set<string>();
+
+    // Collect local override IDs for deduplication
+    if (local?.shortcuts) {
+      for (const action of local.shortcuts) {
+        if (action.id) localOverrideIds.add(action.id);
+      }
+    }
+
+    // Team actions first (original order), skipping those overridden by local
+    if (team?.shortcuts) {
+      for (const action of team.shortcuts) {
+        if (action.id && localOverrideIds.has(action.id)) {
+          // Local override replaces team action in-place
+          const localVersion = local!.shortcuts!.find((localAction) => localAction.id === action.id)!;
+          result.push({ ...localVersion, source: 'local' });
+        } else {
+          result.push({ ...action, source: 'team' });
+        }
+      }
+    }
+
+    // Append local-only actions (those without a matching team ID)
+    if (local?.shortcuts) {
+      for (const action of local.shortcuts) {
+        if (!action.id || !team?.shortcuts?.some((teamAction) => teamAction.id === action.id)) {
+          result.push({ ...action, source: 'local' });
+        }
+      }
+    }
+
+    return result;
+  }
+
+  setShortcuts(actions: ShortcutConfig[], target: 'team' | 'local'): void {
+    if (!this.activeProjectPath) return;
+
+    const fileName = target === 'team' ? TEAM_FILE : LOCAL_FILE;
+    const filePath = path.join(this.activeProjectPath, fileName);
+
+    // Ensure all actions have an id
+    const actionsWithIds = actions.map((action) => ({
+      ...action,
+      id: action.id || crypto.randomUUID(),
+    }));
+
+    let existing: Partial<BoardConfig> = {};
+    try {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      existing = JSON.parse(raw) as Partial<BoardConfig>;
+    } catch {
+      // File doesn't exist yet, start fresh
+      if (target === 'team') {
+        existing = { version: CURRENT_VERSION, columns: [], actions: [], transitions: [] };
+      }
+    }
+
+    existing.shortcuts = actionsWithIds;
+    if (target === 'team') {
+      (existing as BoardConfig)._modifiedBy = this.fingerprint;
+    }
+
+    this.isWritingBack = true;
+    try {
+      const tmpPath = filePath + '.tmp.' + process.pid;
+      const content = JSON.stringify(existing, null, 2) + os.EOL;
+      fs.writeFileSync(tmpPath, content);
+      fs.renameSync(tmpPath, filePath);
+
+      const contentHash = crypto.createHash('sha256').update(content).digest('hex');
+      if (target === 'team') {
+        this.lastTeamContentHash = contentHash;
+      } else {
+        this.lastLocalContentHash = contentHash;
+      }
+    } catch (error) {
+      console.warn(`[BOARD_CONFIG] setShortcuts(${target}) failed:`, error);
+    } finally {
+      setTimeout(() => {
+        this.isWritingBack = false;
+      }, 1000);
+    }
+
+    // No sendChangedEvent here: shortcut changes don't affect board structure
+    // (columns, actions, transitions). The ShortcutsTab reloads directly via
+    // loadShortcuts() after saving. Sending BOARD_CONFIG_CHANGED would trigger
+    // the "Board configuration changed" reconciliation dialog unnecessarily.
+  }
+
   // --- Write-back (DB -> file) ---
 
   writeBack(): void {
@@ -496,6 +600,15 @@ export class BoardConfigManager {
 
       boardConfig.transitions = Array.from(transitionGroups.values());
 
+      // Preserve shortcuts from the existing team file (not stored in DB)
+      const existingTeam = this.loadTeamConfig();
+      if (existingTeam?.shortcuts && existingTeam.shortcuts.length > 0) {
+        boardConfig.shortcuts = existingTeam.shortcuts;
+      }
+
+      // Stamp fingerprint so the file watcher knows we wrote this
+      boardConfig._modifiedBy = this.fingerprint;
+
       // Atomic write: tmp file + rename
       const teamFilePath = path.join(this.activeProjectPath, TEAM_FILE);
       const tmpPath = teamFilePath + '.tmp.' + process.pid;
@@ -546,30 +659,52 @@ export class BoardConfigManager {
   }
 
   private onFileChanged(projectId: string, source: 'team' | 'local'): void {
-    // Fast path: suppress write-back echo for the active project
+    // Fast path: suppress during active write-back
     if (this.isWritingBack && projectId === this.activeProjectId) return;
-
     if (!this.activeProjectPath) return;
 
-    // Content hash comparison: only notify if file content actually changed
-    const filePath = path.join(
-      this.activeProjectPath,
-      source === 'team' ? TEAM_FILE : LOCAL_FILE,
-    );
-    const currentHash = this.hashFileContent(filePath);
-    if (currentHash === null) return;
-
-    const lastHash = source === 'team' ? this.lastTeamContentHash : this.lastLocalContentHash;
-    if (currentHash === lastHash) return;
-
-    // Content actually changed: update stored hash and notify renderer
-    if (source === 'team') {
-      this.lastTeamContentHash = currentHash;
-    } else {
-      this.lastLocalContentHash = currentHash;
+    // Local overrides are user-specific and gitignored.
+    // Never show the reconciliation dialog for local changes.
+    // Just silently reload shortcuts in case they changed.
+    if (source === 'local') {
+      this.lastLocalContentHash = this.hashFileContent(
+        path.join(this.activeProjectPath, LOCAL_FILE),
+      );
+      this.sendShortcutsChangedEvent(projectId);
+      return;
     }
 
+    // --- Team file (kangentic.json) ---
+    const filePath = path.join(this.activeProjectPath, TEAM_FILE);
+
+    // Content hash: fast path for no-change (watcher echo)
+    const currentHash = this.hashFileContent(filePath);
+    if (currentHash === null) return;
+    if (currentHash === this.lastTeamContentHash) return;
+    this.lastTeamContentHash = currentHash;
+
+    // Fingerprint check: did WE write this file?
+    try {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      const config = JSON.parse(raw);
+      if (config._modifiedBy === this.fingerprint) {
+        // We wrote it. Silently reload shortcuts (in case they changed)
+        // but do NOT show the reconciliation dialog.
+        this.sendShortcutsChangedEvent(projectId);
+        return;
+      }
+    } catch {
+      // Parse failure: treat as external change
+    }
+
+    // External change: show reconciliation dialog
     this.sendChangedEvent(projectId);
+  }
+
+  /** Send BOARD_CONFIG_SHORTCUTS_CHANGED event for silent shortcut reload. */
+  private sendShortcutsChangedEvent(projectId: string): void {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.webContents.send(IPC.BOARD_CONFIG_SHORTCUTS_CHANGED, projectId);
   }
 
   /** Send BOARD_CONFIG_CHANGED event to renderer with projectId. */
@@ -714,6 +849,22 @@ export function mergeBoardConfigs(team: BoardConfig, local: Partial<BoardConfig>
       }
     }
     result.transitions = mergedTransitions;
+  }
+
+  // Merge shortcuts by id
+  if (local.shortcuts) {
+    const mergedShortcuts = [...(team.shortcuts || [])];
+    for (const localAction of local.shortcuts) {
+      const existingIndex = mergedShortcuts.findIndex(
+        (action) => action.id && action.id === localAction.id,
+      );
+      if (existingIndex >= 0) {
+        mergedShortcuts[existingIndex] = localAction;
+      } else {
+        mergedShortcuts.push(localAction);
+      }
+    }
+    result.shortcuts = mergedShortcuts;
   }
 
   return result;

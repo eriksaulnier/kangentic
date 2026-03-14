@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { IPC } from '../../../shared/ipc-channels';
 import { getProjectRepos } from '../helpers';
+import type { ShortcutConfig } from '../../../shared/types';
 import type { IpcContext } from '../ipc-context';
 
 /** Trigger write-back if kangentic.json exists. */
@@ -127,5 +128,13 @@ export function registerBoardHandlers(context: IpcContext): void {
     if (!project) throw new Error(`Project ${projectId} not found`);
     const result = context.boardConfigManager.applyFileChange(projectId, project.path);
     return result.warnings;
+  });
+
+  ipcMain.handle(IPC.BOARD_CONFIG_GET_SHORTCUTS, () => {
+    return context.boardConfigManager.getShortcuts();
+  });
+
+  ipcMain.handle(IPC.BOARD_CONFIG_SET_SHORTCUTS, (_, actions: ShortcutConfig[], target: 'team' | 'local') => {
+    context.boardConfigManager.setShortcuts(actions, target);
   });
 }
