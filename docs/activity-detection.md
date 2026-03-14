@@ -158,6 +158,7 @@ When idle is caused by a `PermissionRequest` (detail='permission'), a `permissio
 **Stale thinking safety timer:**
 - A background interval (every 15s) checks all sessions in the `thinking` state
 - If no signal (hook event or status.json update) has arrived for 45 seconds, the session transitions to idle
+- **Pending tool suppression:** If any tools are in-flight (`pendingToolCount > 0`), the timer resets instead of transitioning to idle. This prevents false idle during long-running tools (e.g. `npm run build`, `npx playwright test`) and subagent executions (the `Agent` tool stays pending for the entire subagent lifetime). The timer resumes normal behavior once all tools complete.
 - This catches cases where hooks fail to fire (e.g. Ctrl+C during model inference, not during a tool call, so no `PostToolUseFailure` hook fires)
 - A synthetic `idle` event with `detail: 'timeout'` is emitted to the activity log so the user can see why it went idle
 - Any subsequent event or usage update resets the 45-second timer
@@ -169,13 +170,15 @@ When idle is caused by a `PermissionRequest` (detail='permission'), a `permissio
 2. **Permission approved + no subagents:** Next `tool_start` at depth 0 transitions to thinking via Guard 1 (correct)
 3. **Permission approved + subagents still running:** Card stays idle while subagents work (tool_starts suppressed at depth > 0). Recovery happens when depth returns to 0 (correct)
 4. **False idle with no event recovery:** Heartbeat detects token increase after 1s idle → card transitions to thinking (correct)
-5. **Ctrl+C during model inference (no tool running):** No hook fires; stale thinking timer detects 45s without signals → card transitions to idle with `detail: 'timeout'` (correct)
-6. **User sends new message:** `prompt` always transitions regardless of depth (correct)
-7. **Main agent spawns subagent then fires Stop:** Idle suppressed, card stays thinking while subagent works (correct)
-8. **Last subagent finishes after deferred idle:** Card transitions to idle when depth reaches 0 (correct)
-9. **User presses Escape while subagents run:** `interrupted` always goes through, card shows idle immediately (correct)
-10. **Prompt fires while idle is deferred:** Pending flag cleared, no stale idle emitted when subagents finish (correct)
-11. **Nested subagents with deferred idle:** Idle only emits when ALL subagents finish (depth 0), not on intermediate stops (correct)
+5. **Long-running tool (e.g. npm run build):** `tool_start` fires at launch, no events during execution, `tool_end` fires on completion. `pendingToolCount > 0` suppresses the stale thinking timer throughout. Card stays thinking (correct)
+6. **Subagent thinking gap:** Agent tool_start fires at subagent launch. Subagent thinks for >45s between its own tool calls. `pendingToolCount > 0` (Agent tool still pending) suppresses the timer. Card stays thinking (correct)
+7. **Ctrl+C during model inference (no tool running):** No hook fires; stale thinking timer detects 45s without signals → card transitions to idle with `detail: 'timeout'` (correct)
+8. **User sends new message:** `prompt` always transitions regardless of depth (correct)
+9. **Main agent spawns subagent then fires Stop:** Idle suppressed, card stays thinking while subagent works (correct)
+10. **Last subagent finishes after deferred idle:** Card transitions to idle when depth reaches 0 (correct)
+11. **User presses Escape while subagents run:** `interrupted` always goes through, card shows idle immediately (correct)
+12. **Prompt fires while idle is deferred:** Pending flag cleared, no stale idle emitted when subagents finish (correct)
+13. **Nested subagents with deferred idle:** Idle only emits when ALL subagents finish (depth 0), not on intermediate stops (correct)
 
 ## Hook Configuration
 

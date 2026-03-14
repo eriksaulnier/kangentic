@@ -45,6 +45,7 @@ export class SessionManager extends EventEmitter {
   private usageCache = new Map<string, SessionUsage>();
   private activityCache = new Map<string, ActivityState>();
   private subagentDepth = new Map<string, number>();
+  private pendingToolCount = new Map<string, number>();
   private pendingIdleWhileSubagent = new Map<string, boolean>();
   private permissionIdle = new Map<string, boolean>();
   private idleTimestamp = new Map<string, number>();
@@ -118,6 +119,13 @@ export class SessionManager extends EventEmitter {
 
       const lastSignal = this.lastThinkingSignal.get(sessionId);
       if (lastSignal && (now - lastSignal) > STALE_THINKING_THRESHOLD_MS) {
+        // If tools are in-flight, the agent is busy (not stale). Reset the
+        // timer and re-check later instead of transitioning to idle.
+        if ((this.pendingToolCount.get(sessionId) || 0) > 0) {
+          this.lastThinkingSignal.set(sessionId, now);
+          continue;
+        }
+
         this.activityCache.set(sessionId, 'idle');
         this.permissionIdle.set(sessionId, false);
         this.idleTimestamp.set(sessionId, Date.now());
@@ -249,6 +257,7 @@ export class SessionManager extends EventEmitter {
       this.usageCache.delete(existing.id);
       this.activityCache.delete(existing.id);
       this.subagentDepth.delete(existing.id);
+      this.pendingToolCount.delete(existing.id);
       this.pendingIdleWhileSubagent.delete(existing.id);
       this.permissionIdle.delete(existing.id);
       this.idleTimestamp.delete(existing.id);
@@ -377,6 +386,7 @@ export class SessionManager extends EventEmitter {
     // feedback during startup (before usage data arrives).
     this.activityCache.set(id, 'idle');
     this.subagentDepth.delete(id);
+    this.pendingToolCount.delete(id);
     this.pendingIdleWhileSubagent.delete(id);
     this.permissionIdle.delete(id);
     this.idleTimestamp.set(id, Date.now());
@@ -470,6 +480,7 @@ export class SessionManager extends EventEmitter {
     this.usageCache.delete(sessionId);
     this.activityCache.delete(sessionId);
     this.subagentDepth.delete(sessionId);
+    this.pendingToolCount.delete(sessionId);
     this.pendingIdleWhileSubagent.delete(sessionId);
     this.permissionIdle.delete(sessionId);
     this.idleTimestamp.delete(sessionId);
@@ -522,6 +533,7 @@ export class SessionManager extends EventEmitter {
 
     // Clear subagent depth -- session is no longer active
     this.subagentDepth.delete(sessionId);
+    this.pendingToolCount.delete(sessionId);
     this.pendingIdleWhileSubagent.delete(sessionId);
     this.permissionIdle.delete(sessionId);
     this.idleTimestamp.delete(sessionId);
@@ -778,6 +790,16 @@ export class SessionManager extends EventEmitter {
 
           events.push(event);
           this.emit('event', session.id, event);
+
+          // Track pending tool count so checkStaleThinking() knows when
+          // a long-running tool (e.g. npm run build) is legitimately active.
+          if (event.type === EventType.ToolStart) {
+            const currentCount = this.pendingToolCount.get(session.id) || 0;
+            this.pendingToolCount.set(session.id, currentCount + 1);
+          } else if (event.type === EventType.ToolEnd || event.type === EventType.Interrupted) {
+            const currentCount = this.pendingToolCount.get(session.id) || 0;
+            this.pendingToolCount.set(session.id, Math.max(0, currentCount - 1));
+          }
 
           // Detect ExitPlanMode → emit plan-exit
           // Uses ToolStart (PreToolUse) because ExitPlanMode is a mode-transition

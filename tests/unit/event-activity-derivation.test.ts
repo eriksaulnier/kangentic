@@ -1394,14 +1394,39 @@ describe('Event-derived activity state', () => {
       const { session, eventsPath } = await spawnWithEventsFake();
       const states = collectActivity(fakeManager, session.id);
 
-      // Transition to thinking via event
+      // Transition to thinking via a complete tool cycle (start + end)
       appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Read' });
+      appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolEnd, tool: 'Read' });
       triggerEventRead(fakeManager, session.id);
       expect(fakeManager.getActivityCache()[session.id]).toBe('thinking');
 
       // Advance past threshold (45s) + check interval (15s)
       vi.advanceTimersByTime(60_000);
 
+      expect(fakeManager.getActivityCache()[session.id]).toBe('idle');
+      expect(states).toEqual(['thinking', 'idle']);
+    });
+
+    it('pending tool prevents stale thinking transition to idle', async () => {
+      const { session, eventsPath } = await spawnWithEventsFake();
+      const states = collectActivity(fakeManager, session.id);
+
+      // Start a long-running tool (no ToolEnd yet)
+      appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolStart, tool: 'Bash' });
+      triggerEventRead(fakeManager, session.id);
+      expect(fakeManager.getActivityCache()[session.id]).toBe('thinking');
+
+      // Advance well past threshold -- should NOT transition to idle
+      vi.advanceTimersByTime(120_000);
+      expect(fakeManager.getActivityCache()[session.id]).toBe('thinking');
+      expect(states).toEqual(['thinking']);
+
+      // Tool completes
+      appendEvent(eventsPath, { ts: Date.now(), type: EventType.ToolEnd, tool: 'Bash' });
+      triggerEventRead(fakeManager, session.id);
+
+      // Now the stale thinking timer should work again
+      vi.advanceTimersByTime(60_000);
       expect(fakeManager.getActivityCache()[session.id]).toBe('idle');
       expect(states).toEqual(['thinking', 'idle']);
     });

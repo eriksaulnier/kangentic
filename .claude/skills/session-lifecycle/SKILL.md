@@ -103,6 +103,7 @@ Resume happens in three coordinated layers:
 - Tool events at depth > 0 suppress `idle -> thinking` transitions (lines 658-664)
 - `thinking -> idle` deferred while subagents are active via `pendingIdleWhileSubagent` flag (lines 669-674)
 - Synthetic `session_end` event emitted when PTY is killed (lines 500-513)
+- `pendingToolCount` map tracks in-flight tools per session (incremented on `tool_start`, decremented on `tool_end`/`interrupted`). When > 0, `checkStaleThinking()` resets its timer instead of transitioning to idle. This prevents false idle during long-running tools (e.g. Bash running `npm run build`) and subagent executions (Agent tool stays pending for the entire subagent lifetime).
 
 ## DB vs Live Session Divergence
 
