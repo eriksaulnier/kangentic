@@ -1,6 +1,7 @@
 ---
 description: Open dev server for previewing live code changes
 allowed-tools: Bash(node:*), Bash(npm:*)
+argument-hint: [--fresh]
 ---
 
 # Preview
