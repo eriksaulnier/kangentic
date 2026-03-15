@@ -268,9 +268,11 @@ export class SessionManager extends EventEmitter {
       this.idleTimestamp.delete(existing.id);
     }
 
-    // Carry over scrollback from the previous session so the terminal
-    // shows the full conversation history when a session is resumed.
-    const previousScrollback = existing?.scrollback || '';
+    // When resuming, Claude CLI replays conversation history via --resume,
+    // so carrying over the old PTY's raw ANSI output causes duplicated and
+    // garbled content. For non-resume respawns, keep the previous scrollback
+    // so terminal output is preserved across column transitions.
+    const previousScrollback = input.resuming ? '' : (existing?.scrollback || '');
 
     // Determine shell args and actual executable based on shell type
     const shellName = shell.toLowerCase();

@@ -74,7 +74,7 @@ describe('Session respawn (column transition)', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
 
-  async function spawnForTask(taskId: string, options?: { statusOutputPath?: string }) {
+  async function spawnForTask(taskId: string, options?: { statusOutputPath?: string; resuming?: boolean }) {
     const mock = createMockPty();
     vi.mocked(pty.spawn).mockReturnValue(mock.mockPty as unknown as pty.IPty);
     const session = await manager.spawn({
@@ -82,6 +82,7 @@ describe('Session respawn (column transition)', () => {
       command: '',
       cwd: tmpDir,
       statusOutputPath: options?.statusOutputPath,
+      resuming: options?.resuming,
     });
     return { session, ...mock };
   }
@@ -148,18 +149,31 @@ describe('Session respawn (column transition)', () => {
     expect(activity[first.id]).toBeUndefined();
   });
 
-  it('scrollback is carried over from old session to new session', async () => {
+  it('scrollback is carried over for non-resume respawns', async () => {
     const { session: first, feedData } = await spawnForTask('task-6');
 
-    // Feed some data to the first session
     feedData('previous output');
 
     manager.suspend(first.id);
     const { session: second } = await spawnForTask('task-6');
 
-    // New session inherits scrollback from old session
+    // Non-resume respawn preserves scrollback across column transitions
     const scrollback = manager.getScrollback(second.id);
     expect(scrollback).toContain('previous output');
+  });
+
+  it('scrollback is NOT carried over when resuming (Claude CLI replays history)', async () => {
+    const { session: first, feedData } = await spawnForTask('task-6b');
+
+    feedData('previous output');
+
+    manager.suspend(first.id);
+    const { session: second } = await spawnForTask('task-6b', { resuming: true });
+
+    // Resume spawns start empty because Claude CLI replays conversation
+    // history via --resume. Carrying over raw ANSI causes duplication.
+    const scrollback = manager.getScrollback(second.id);
+    expect(scrollback).toBe('');
   });
 
   it('old session scrollback is no longer accessible after respawn', async () => {
