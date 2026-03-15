@@ -129,6 +129,11 @@ export class SessionRepository {
     this.db.prepare('DELETE FROM sessions WHERE task_id = ?').run(taskId);
   }
 
+  /** Update the working directory of a session record (e.g. after enabling a worktree). */
+  updateCwd(id: string, cwd: string): void {
+    this.db.prepare('UPDATE sessions SET cwd = ? WHERE id = ?').run(cwd, id);
+  }
+
   /** Find the latest session record for a given task */
   getLatestForTask(taskId: string): SessionRecord | undefined {
     return this.db.prepare(

@@ -454,6 +454,19 @@
           if (tIdx >= 0) tasks.splice(tIdx, 1);
         }
       },
+      switchBranch: async function (input) {
+        var idx = tasks.findIndex(function (t) { return t.id === input.taskId; });
+        if (idx < 0) throw new Error('Task not found: ' + input.taskId);
+        var task = tasks[idx];
+        var updates = { base_branch: input.newBaseBranch || null, updated_at: now() };
+        if (input.enableWorktree && !task.worktree_path) {
+          updates.worktree_path = '/mock/worktrees/' + task.id.slice(0, 8);
+          updates.branch_name = 'kanban/' + task.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
+          updates.use_worktree = 1;
+        }
+        tasks[idx] = Object.assign({}, task, updates);
+        return withAttachmentCount(tasks[idx]);
+      },
       bulkUnarchive: async function (ids, targetSwimlaneId) {
         for (var i = 0; i < ids.length; i++) {
           var idx = archivedTasks.findIndex(function (t) { return t.id === ids[i]; });

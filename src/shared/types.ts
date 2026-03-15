@@ -528,6 +528,12 @@ export interface TaskUpdateInput {
   use_worktree?: number | null;
 }
 
+export interface TaskSwitchBranchInput {
+  taskId: string;
+  newBaseBranch: string;
+  enableWorktree?: boolean;
+}
+
 export interface TaskMoveInput {
   taskId: string;
   targetSwimlaneId: string;
@@ -675,6 +681,7 @@ export interface ElectronAPI {
     unarchive: (input: TaskUnarchiveInput) => Promise<Task>;
     bulkDelete: (ids: string[]) => Promise<void>;
     bulkUnarchive: (ids: string[], targetSwimlaneId: string) => Promise<void>;
+    switchBranch: (input: TaskSwitchBranchInput) => Promise<Task>;
     onAutoMoved: (callback: (taskId: string, targetSwimlaneId: string, taskTitle: string, projectId?: string) => void) => () => void;
   };
 

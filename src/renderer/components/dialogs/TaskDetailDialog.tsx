@@ -663,21 +663,80 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
     setIsEditing(false);
   };
 
+  const [showEnableWorktreeConfirm, setShowEnableWorktreeConfirm] = useState(false);
+  const pendingSaveRef = useRef<(() => Promise<void>) | null>(null);
+
   const handleSave = async () => {
-    const payload: Parameters<typeof updateTask>[0] = { id: task.id, title, description };
-    if (!hasSessionContext) {
-      const trimmed = baseBranch.trim();
-      const original = task.base_branch || '';
-      if (trimmed !== original) {
-        payload.base_branch = trimmed || null;
-      }
-      const originalWorktree = task.use_worktree != null ? Boolean(task.use_worktree) : null;
-      if (useWorktree !== originalWorktree) {
-        payload.use_worktree = useWorktree != null ? (useWorktree ? 1 : 0) : null;
-      }
+    const trimmedBranch = baseBranch.trim();
+    const originalBranch = task.base_branch || '';
+    const branchChanged = trimmedBranch !== originalBranch;
+    const originalWorktree = task.use_worktree != null ? Boolean(task.use_worktree) : null;
+    const worktreeChanged = useWorktree !== originalWorktree;
+    const enablingWorktree = !task.worktree_path && useWorktree === true && (originalWorktree !== true);
+
+    // Confirm when enabling worktree on a task with resumable session history.
+    // Uses hasSessionContext (covers suspended sessions) rather than isSessionActive
+    // (only running/queued) because suspended sessions have a CWD that will change.
+    if (enablingWorktree && hasSessionContext) {
+      pendingSaveRef.current = async () => {
+        await executeSave(branchChanged, worktreeChanged, enablingWorktree, trimmedBranch);
+      };
+      setShowEnableWorktreeConfirm(true);
+      return;
     }
-    await updateTask(payload);
-    onClose();
+
+    await executeSave(branchChanged, worktreeChanged, enablingWorktree, trimmedBranch);
+  };
+
+  const executeSave = async (
+    branchChanged: boolean,
+    worktreeChanged: boolean,
+    enablingWorktree: boolean,
+    trimmedBranch: string,
+  ) => {
+    // Use switchBranch IPC when: (a) worktree exists and branch changed, or (b) enabling worktree
+    const needsSwitchBranch = (task.worktree_path && branchChanged) || enablingWorktree;
+
+    if (needsSwitchBranch) {
+      try {
+        await window.electronAPI.tasks.switchBranch({
+          taskId: task.id,
+          newBaseBranch: trimmedBranch,
+          enableWorktree: enablingWorktree || undefined,
+        });
+        // Save title/description if they changed (switchBranch only updates branch/worktree fields)
+        if (title !== task.title || description !== task.description) {
+          await updateTask({ id: task.id, title, description });
+        }
+        // Reload board to pick up worktree_path and branch_name changes
+        await useBoardStore.getState().loadBoard();
+      } catch (error) {
+        console.error('switchBranch failed:', error);
+        useToastStore.getState().addToast({
+          message: `Failed to switch branch: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          variant: 'warning',
+        });
+        return;
+      }
+    } else {
+      // Standard save path
+      const payload: Parameters<typeof updateTask>[0] = { id: task.id, title, description };
+      if (!isSessionActive && !isArchived) {
+        if (branchChanged) {
+          payload.base_branch = trimmedBranch || null;
+        }
+        if (worktreeChanged) {
+          payload.use_worktree = useWorktree != null ? (useWorktree ? 1 : 0) : null;
+        }
+      }
+      await updateTask(payload);
+    }
+
+    if (!session) {
+      onClose();
+    } else {
+      setIsEditing(false);
+    }
   };
 
   const archiveTask = useBoardStore((s) => s.archiveTask);
@@ -1156,11 +1215,15 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
               )}
             </div>
             {thumbnailStrip}
-            {!task.worktree_path && !hasSessionContext && (
+            {!isSessionActive && !isArchived && (
               <div className="flex items-center gap-2">
                 <BranchPicker value={baseBranch} defaultBranch={defaultBaseBranch || 'main'} onChange={setBaseBranch} />
-                <div className="w-px h-5 bg-edge-input" />
-                <WorktreeChip enabled={effectiveWorktree} onToggle={() => setUseWorktree(effectiveWorktree ? false : true)} />
+                {!task.worktree_path && (
+                  <>
+                    <div className="w-px h-5 bg-edge-input" />
+                    <WorktreeChip enabled={effectiveWorktree} onToggle={() => setUseWorktree(effectiveWorktree ? false : true)} />
+                  </>
+                )}
               </div>
             )}
             {isDragOver && (
@@ -1247,6 +1310,27 @@ export function TaskDetailDialog({ task, onClose, initialEdit }: TaskDetailDialo
           )
         )}
       </BaseDialog>
+
+      {/* Enable worktree confirmation */}
+      {showEnableWorktreeConfirm && (
+        <ConfirmDialog
+          title="Enable worktree?"
+          message="This will create an isolated worktree for this task. Your session history will be preserved and the agent will continue from where it left off in the new worktree."
+          confirmLabel="Enable"
+          variant="default"
+          onConfirm={async () => {
+            setShowEnableWorktreeConfirm(false);
+            if (pendingSaveRef.current) {
+              await pendingSaveRef.current();
+              pendingSaveRef.current = null;
+            }
+          }}
+          onCancel={() => {
+            setShowEnableWorktreeConfirm(false);
+            pendingSaveRef.current = null;
+          }}
+        />
+      )}
 
       {/* Full-size preview overlay */}
       {previewAttachment && (

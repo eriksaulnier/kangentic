@@ -40,7 +40,7 @@ All channels defined in `src/shared/ipc-channels.ts`. The preload bridge in `src
 | `project:reorder` | invoke | Reorder projects by ID array |
 | `project:autoOpened` | on | Event: project auto-opened on launch |
 
-### Tasks (10 channels)
+### Tasks (11 channels)
 | Channel | Pattern | Purpose |
 |---------|---------|---------|
 | `task:list` | invoke | Fetch tasks, optionally by swimlane |
@@ -52,6 +52,7 @@ All channels defined in `src/shared/ipc-channels.ts`. The preload bridge in `src
 | `task:unarchive` | invoke | Restore archived task |
 | `task:bulk-delete` | invoke | Delete multiple archived tasks by ID array |
 | `task:bulk-unarchive` | invoke | Restore multiple archived tasks to a target swimlane |
+| `task:switchBranch` | invoke | Switch base branch or enable worktree for a task |
 | `task:autoMoved` | on | Event: task was auto-moved by transition engine |
 
 ### Attachments (4 channels)
