@@ -4,8 +4,19 @@ import { useProjectStore } from './project-store';
 
 const MAX_EVENTS_PER_SESSION = 500;
 
+/** Build a taskId→Session lookup Map from the sessions array. */
+function buildSessionByTaskId(sessions: Session[]): Map<string, Session> {
+  const map = new Map<string, Session>();
+  for (const session of sessions) {
+    map.set(session.taskId, session);
+  }
+  return map;
+}
+
 interface SessionStore {
   sessions: Session[];
+  /** Derived O(1) lookup: taskId → Session. Rebuilt whenever `sessions` changes. */
+  _sessionByTaskId: Map<string, Session>;
   // ACTIVITY_TAB = activity log tab; session UUID = individual tab; null = none
   activeSessionId: string | null;
   openTaskId: string | null;
@@ -45,6 +56,7 @@ interface SessionStore {
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
+  _sessionByTaskId: new Map(),
   activeSessionId: null,
   openTaskId: null,
   dialogSessionId: null,
@@ -107,6 +119,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // are strictly more recent than the cache snapshot.
     set({
       sessions: mergedSessions,
+      _sessionByTaskId: buildSessionByTaskId(mergedSessions),
       activeSessionId: stillExists ? currentState.activeSessionId : null,
       sessionUsage: { ...cachedUsage, ...currentState.sessionUsage },
       sessionActivity: { ...cachedActivity, ...currentState.sessionActivity },
@@ -116,41 +129,51 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   spawnSession: async (input) => {
     const session = await window.electronAPI.sessions.spawn(input);
-    set((s) => ({
-      sessions: [...s.sessions.filter((sess) => sess.id !== session.id && sess.taskId !== session.taskId), session],
-      activeSessionId: session.id,
-    }));
+    set((s) => {
+      const sessions = [...s.sessions.filter((sess) => sess.id !== session.id && sess.taskId !== session.taskId), session];
+      return {
+        sessions,
+        _sessionByTaskId: buildSessionByTaskId(sessions),
+        activeSessionId: session.id,
+      };
+    });
     return session;
   },
 
   killSession: async (id) => {
     await window.electronAPI.sessions.kill(id);
-    set((s) => ({
-      sessions: s.sessions.map((sess) =>
+    set((s) => {
+      const sessions = s.sessions.map((sess) =>
         sess.id === id ? { ...sess, status: 'exited' as const, exitCode: -1 } : sess
-      ),
-    }));
+      );
+      return { sessions, _sessionByTaskId: buildSessionByTaskId(sessions) };
+    });
   },
 
   suspendSession: async (taskId) => {
     // Optimistically mark session as suspended
-    set((s) => ({
-      sessions: s.sessions.map((sess) =>
+    set((s) => {
+      const sessions = s.sessions.map((sess) =>
         sess.taskId === taskId ? { ...sess, status: 'suspended' as const } : sess
-      ),
-    }));
+      );
+      return { sessions, _sessionByTaskId: buildSessionByTaskId(sessions) };
+    });
     await window.electronAPI.sessions.suspend(taskId);
   },
 
   resumeSession: async (taskId, resumePrompt?) => {
     const newSession = await window.electronAPI.sessions.resume(taskId, resumePrompt);
-    set((s) => ({
-      sessions: [
+    set((s) => {
+      const sessions = [
         ...s.sessions.filter((sess) => sess.taskId !== taskId),
         newSession,
-      ],
-      activeSessionId: newSession.id,
-    }));
+      ];
+      return {
+        sessions,
+        _sessionByTaskId: buildSessionByTaskId(sessions),
+        activeSessionId: newSession.id,
+      };
+    });
     return newSession;
   },
 
@@ -159,11 +182,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   setDialogSessionId: (id) => set({ dialogSessionId: id }),
 
   updateSessionStatus: (id, updates) => {
-    set((s) => ({
-      sessions: s.sessions.map((sess) =>
+    set((s) => {
+      const sessions = s.sessions.map((sess) =>
         sess.id === id ? { ...sess, ...updates } : sess
-      ),
-    }));
+      );
+      return { sessions, _sessionByTaskId: buildSessionByTaskId(sessions) };
+    });
   },
 
   updateUsage: (sessionId, data) => {

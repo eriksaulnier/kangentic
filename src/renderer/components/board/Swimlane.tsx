@@ -15,11 +15,9 @@ export interface SwimlaneProps {
   tasks: Task[];
   /** Event listeners for the drag handle (only for sortable/custom columns) */
   dragHandleProps?: Record<string, unknown>;
-  /** Whether this column is the current drop target during a drag */
-  isDropTarget?: boolean;
 }
 
-export const Swimlane = React.memo(function Swimlane({ swimlane, tasks, dragHandleProps, isDropTarget }: SwimlaneProps) {
+export const Swimlane = React.memo(function Swimlane({ swimlane, tasks, dragHandleProps }: SwimlaneProps) {
   const [showNewTask, setShowNewTask] = useState(false);
   const [showEditColumn, setShowEditColumn] = useState(false);
   const { setNodeRef } = useDroppable({
@@ -41,10 +39,11 @@ export const Swimlane = React.memo(function Swimlane({ swimlane, tasks, dragHand
     <div
       data-testid="swimlane"
       data-swimlane-name={swimlane.name}
+      data-swimlane-id={swimlane.id}
       className={`flex-shrink-0 w-72 h-full flex flex-col rounded-lg ${
         isGhost ? 'opacity-50 border-2 border-dashed border-fg-disabled' : ''
       } ${
-        isDropTarget ? 'ring-2 ring-accent/40' : isSystemColumn ? 'ring-1 ring-edge/50' : ''
+        isSystemColumn ? 'ring-1 ring-edge/50' : ''
       } ${isSystemColumn ? 'bg-surface-raised/70' : 'bg-surface-raised/50'}`}
       title={isGhost ? 'Removed from team config. Move tasks to continue.' : undefined}
     >
@@ -109,9 +108,8 @@ export const Swimlane = React.memo(function Swimlane({ swimlane, tasks, dragHand
       {/* Task list */}
       <div
         ref={setNodeRef}
-        className={`flex-1 overflow-y-auto p-2 space-y-2 min-h-[100px] transition-colors ${
-          isDropTarget ? 'bg-surface-hover/30' : ''
-        }`}
+        data-swimlane-task-list={swimlane.id}
+        className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[100px] transition-colors"
       >
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (

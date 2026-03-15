@@ -39,7 +39,7 @@ const SHAPE_CLASSES: Record<PillShape, string> = {
  * padding/gap/text, shape rounding). Callers own colors, hover states,
  * transitions, and extras via `className`.
  */
-export const Pill = React.forwardRef<HTMLElement, PillProps>(function Pill(
+export const Pill = React.memo(React.forwardRef<HTMLElement, PillProps>(function Pill(
   { size = 'md', shape = 'round', as, className, children, ...rest },
   ref,
 ) {
@@ -56,4 +56,4 @@ export const Pill = React.forwardRef<HTMLElement, PillProps>(function Pill(
   }
 
   return React.createElement(Element, elementProps, children);
-});
+}));

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -38,7 +38,7 @@ import { useToastStore } from '../../stores/toast-store';
 /** Wrapper that registers a column with @dnd-kit/sortable.
  *  All columns participate so dnd-kit knows their positions,
  *  but only custom columns (role === null) get a drag handle. */
-const SortableSwimlane = React.memo(function SortableSwimlane({ swimlane, tasks, isDropTarget }: SwimlaneProps) {
+const SortableSwimlane = React.memo(function SortableSwimlane({ swimlane, tasks }: SwimlaneProps) {
   const {
     attributes,
     listeners,
@@ -78,7 +78,6 @@ const SortableSwimlane = React.memo(function SortableSwimlane({ swimlane, tasks,
         swimlane={swimlane}
         tasks={tasks}
         dragHandleProps={isDraggable ? listeners : undefined}
-        isDropTarget={isDropTarget}
       />
     </div>
   );
@@ -232,9 +231,13 @@ function ConfigChangeDialog({ projectId, onConfirm, onCancel }: {
   );
 }
 
+/** Module-level empty array constant to avoid new-reference memo defeats. */
+const EMPTY_TASKS: Task[] = [];
+
 export function KanbanBoard() {
   const swimlanes = useBoardStore((s) => s.swimlanes);
   const tasks = useBoardStore((s) => s.tasks);
+  const archivedTasks = useBoardStore((s) => s.archivedTasks);
   const moveTask = useBoardStore((s) => s.moveTask);
   const setCompletingTask = useBoardStore((s) => s.setCompletingTask);
   const reorderSwimlanes = useBoardStore((s) => s.reorderSwimlanes);
@@ -244,7 +247,9 @@ export function KanbanBoard() {
   const dismissConfigChange = useBoardStore((s) => s.dismissConfigChange);
   const updateConfig = useConfigStore((s) => s.updateConfig);
   const [activeTask, setActiveTask] = React.useState<Task | null>(null);
-  const [hoveringSwimlaneId, setHoveringSwimlaneId] = useState<string | null>(null);
+
+  // Ref-based drop highlight: avoids React re-renders during drag
+  const hoveringSwimlaneIdRef = useRef<string | null>(null);
 
   // Track the original swimlane when drag starts (for proper transitions)
   const dragOriginRef = useRef<string | null>(null);
@@ -286,14 +291,19 @@ export function KanbanBoard() {
     return map;
   }, [swimlanes, tasks]);
 
+  /** O(1) taskId → swimlaneId lookup covering both active and archived tasks. */
+  const taskToSwimlane = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const task of tasks) map.set(task.id, task.swimlane_id);
+    for (const task of archivedTasks) map.set(task.id, task.swimlane_id);
+    return map;
+  }, [tasks, archivedTasks]);
+
   /** Resolve which swimlane a draggable/droppable ID belongs to. */
   const findSwimlane = useCallback((id: string): string | undefined => {
     if (swimlaneIds.has(id)) return id;
-    const state = useBoardStore.getState();
-    const task = state.tasks.find((t) => t.id === id)
-      ?? state.archivedTasks.find((t) => t.id === id);
-    return task?.swimlane_id;
-  }, [swimlaneIds]);
+    return taskToSwimlane.get(id);
+  }, [swimlaneIds, taskToSwimlane]);
 
   const collisionDetection = useCallback<CollisionDetection>((args) => {
     // Column drags: closestCorners (unchanged)
@@ -360,25 +370,45 @@ export function KanbanBoard() {
     });
   }, [findSwimlane, doneLaneId, swimlaneIds]);
 
+  /** Toggle .drop-highlight class on swimlane DOM elements without React re-render. */
+  const updateDropHighlight = useCallback((targetId: string | null) => {
+    const previousId = hoveringSwimlaneIdRef.current;
+    if (previousId === targetId) return;
+    if (previousId) {
+      const previousElement = document.querySelector(`[data-swimlane-id="${previousId}"]`);
+      previousElement?.classList.remove('drop-highlight');
+    }
+    if (targetId) {
+      const targetElement = document.querySelector(`[data-swimlane-id="${targetId}"]`);
+      targetElement?.classList.add('drop-highlight');
+    }
+    hoveringSwimlaneIdRef.current = targetId;
+  }, []);
+
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const id = event.active.id as string;
     if (!id.startsWith('column:')) {
-      const state = useBoardStore.getState();
-      const task = state.tasks.find((t) => t.id === id)
-        ?? state.archivedTasks.find((t) => t.id === id);
-      if (task) {
-        setActiveTask(task);
-        dragOriginRef.current = task.swimlane_id;
+      const swimlaneId = taskToSwimlane.get(id);
+      if (swimlaneId) {
+        const state = useBoardStore.getState();
+        const task = state.tasks.find((t) => t.id === id)
+          ?? state.archivedTasks.find((t) => t.id === id);
+        if (task) {
+          setActiveTask(task);
+          dragOriginRef.current = task.swimlane_id;
+        }
       }
+      document.documentElement.classList.add('dragging');
     }
-  }, []);
+  }, [taskToSwimlane]);
 
   // Track which swimlane the pointer is hovering over for column highlights.
   // Done is excluded -- it has its own drop-zone animation (green spinning border)
   // via useDroppable's isOver, so the generic blue ring would conflict.
+  // Uses ref + direct DOM class toggling to avoid React re-renders on every mouse move.
   const handleDragOver = useCallback((event: DragOverEvent) => {
     if (!event.over) {
-      setHoveringSwimlaneId(null);
+      updateDropHighlight(null);
       return;
     }
 
@@ -386,15 +416,16 @@ export function KanbanBoard() {
     if (activeId.startsWith('column:')) return;
 
     const targetLane = findSwimlane(String(event.over.id)) ?? null;
-    setHoveringSwimlaneId(targetLane === doneLaneId ? null : targetLane);
-  }, [findSwimlane, doneLaneId]);
+    updateDropHighlight(targetLane === doneLaneId ? null : targetLane);
+  }, [findSwimlane, doneLaneId, updateDropHighlight]);
 
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
     const originalSwimlane = dragOriginRef.current;
     dragOriginRef.current = null;
     setActiveTask(null);
-    setHoveringSwimlaneId(null);
+    updateDropHighlight(null);
+    document.documentElement.classList.remove('dragging');
 
     if (!over) {
       // Cancelled -- reload from DB to restore original positions
@@ -513,14 +544,15 @@ export function KanbanBoard() {
         variant: 'error',
       });
     }
-  }, [moveTask, setCompletingTask, findSwimlane, swimlanes, swimlaneIds, reorderSwimlanes, reorderTaskInColumn]);
+  }, [moveTask, setCompletingTask, findSwimlane, swimlanes, swimlaneIds, reorderSwimlanes, reorderTaskInColumn, updateDropHighlight]);
 
   const handleDragCancel = useCallback(() => {
     setActiveTask(null);
-    setHoveringSwimlaneId(null);
+    updateDropHighlight(null);
+    document.documentElement.classList.remove('dragging');
     dragOriginRef.current = null;
     useBoardStore.getState().loadBoard();
-  }, []);
+  }, [updateDropHighlight]);
 
   const handleConfigConfirm = useCallback((dontAskAgain: boolean) => {
     if (dontAskAgain) {
@@ -549,8 +581,7 @@ export function KanbanBoard() {
               <SortableSwimlane
                 key={swimlane.id}
                 swimlane={swimlane}
-                tasks={tasksPerLane.get(swimlane.id) ?? []}
-                isDropTarget={hoveringSwimlaneId === swimlane.id}
+                tasks={tasksPerLane.get(swimlane.id) ?? EMPTY_TASKS}
               />
             ))}
             <AddColumnButton />

@@ -403,9 +403,22 @@
   50%      { opacity: 1; }
 }
 
-/* Pause animations during drag to reduce paint pressure */
-:has(.drag-overlay) .animate-pulse-subtle,
-:has(.drag-overlay) .animate-spin {
+/* Pause animations during drag to reduce paint pressure.
+   Uses .dragging class on <html> (toggled by drag handlers) instead of
+   :has(.drag-overlay) which forces expensive upward DOM traversal per frame. */
+.dragging .animate-pulse-subtle,
+.dragging .animate-spin {
   animation-play-state: paused;
+}
+
+/* Drop-target highlight applied via direct DOM class toggle (no React re-render).
+   Matches the previous Tailwind ring-2 ring-accent/40 + bg-surface-hover/30 styles. */
+.drop-highlight {
+  --tw-ring-color: color-mix(in srgb, var(--kng-accent) 40%, transparent);
+  box-shadow: 0 0 0 2px var(--tw-ring-color);
+}
+
+.drop-highlight [data-swimlane-task-list] {
+  background-color: color-mix(in srgb, var(--kng-surface-hover) 30%, transparent);
 }
 

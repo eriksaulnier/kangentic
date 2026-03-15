@@ -61,7 +61,7 @@ export function useSessionDisplayState(sessionId: string | undefined): SessionDi
   const taskSession = useSessionStore(
     useCallback(
       (s: ReturnType<typeof useSessionStore.getState>) =>
-        s.sessions.find((session) => session.id === sessionId),
+        sessionId ? s.sessions.find((session) => session.id === sessionId) : undefined,
       [sessionId],
     ),
   );

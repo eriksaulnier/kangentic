@@ -31,11 +31,11 @@ interface TaskCardProps {
 const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete, summary }: TaskCardProps) {
   const [showDetail, setShowDetail] = useState(false);
 
-  // Extract sessionId once -- all other selectors derive from this single .find()
+  // Extract sessionId once via O(1) Map lookup -- all other selectors derive from this
   const sessionId = useSessionStore(
     useCallback(
       (s: ReturnType<typeof useSessionStore.getState>) =>
-        s.sessions.find((session) => session.taskId === task.id)?.id,
+        s._sessionByTaskId.get(task.id)?.id,
       [task.id],
     ),
   );
@@ -62,12 +62,12 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
       [task.swimlane_id],
     ),
   );
-  // Lookup by sessionId (already extracted) instead of re-scanning by taskId
+  // Lookup by taskId via O(1) Map instead of scanning by sessionId
   const isResuming = useSessionStore(
     useCallback(
       (s: ReturnType<typeof useSessionStore.getState>) =>
-        sessionId ? (s.sessions.find((session) => session.id === sessionId)?.resuming ?? false) : false,
-      [sessionId],
+        sessionId ? (s._sessionByTaskId.get(task.id)?.resuming ?? false) : false,
+      [sessionId, task.id],
     ),
   );
   const hasCommand = !!pendingCommandLabel;
@@ -96,7 +96,7 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform) ?? 'translate3d(0, 0, 0)',
-    transition: transition ?? 'transform 200ms ease',
+    transition: transition || undefined,
     opacity: isDragging ? 0.4 : 1,
     contain: 'layout style paint',
   };

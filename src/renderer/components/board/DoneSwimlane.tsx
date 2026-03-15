@@ -18,7 +18,7 @@ export interface DoneSwimlaneProps {
   dragHandleProps?: Record<string, unknown>;
 }
 
-export function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
+export const DoneSwimlane = React.memo(function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
   const [search, setSearch] = useState('');
   const [showEditColumn, setShowEditColumn] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -256,4 +256,4 @@ export function DoneSwimlane({ swimlane, tasks }: DoneSwimlaneProps) {
       )}
     </div>
   );
-}
+});
