@@ -6,6 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 <!-- releases -->
 
+## [v0.6.0] - 2026-03-15
+
+### Features
+- Add /pull-request command and fix /merge-back branch docs (b9b6f9a)
+- Add --demo flag for ephemeral demo mode in launcher (5756ae7)
+- Add muted Project/System section headers to settings tab sidebar (3b32350)
+- Add ability to switch base branch or enable worktree after task creation (8d91e6d)
+- Add search bar for filtering tasks across columns (0ecb713)
+- Redesign Done column with capped preview and enhanced completed dialog (b67647c)
+- Restrict "Add task" button to Backlog column only (207d895)
+- Add Completed Tasks dialog with sortable data table (1d9af35)
+
+### Fixes
+- Remove @xterm/addon-fit from Vite manual chunks (2ecf94f)
+- Improve terminal panel collapse/expand and drag-resize behavior (f39b9f8)
+- Capture metrics before suspend in auto_spawn=false and auto_command paths (644817c)
+- Close task detail dialog on save instead of returning to view mode (5fa1533)
+- Prevent completed date wrapping and expand title column width (62847fc)
+- Skip scrollback carryover on resume to prevent duplicated terminal output (5723d83)
+- Compute timeline/duration from task creation, aggregate multi-session metrics (3ce4fc3)
+- Skip kangentic.json write-back when content is unchanged (b2fcb32)
+
+### Performance
+- Optimize drag-and-drop for smooth 60fps interaction (4957f52)
+
+### Other
+- Improve CLA with version, third-party clause, and narrower scope (86e4cf9)
+- Replace .clabot with CLA Assistant GitHub Action (c92bad4)
+- Reorder task detail header pills so Commands appears before Worktree (66d387f)
+- Rewrite README features section for product launch (975c54d)
+- Replace @xterm/addon-fit with custom FitAddon and simplify resize (fc330e9)
+
 ## [v0.5.0] - 2026-03-14
 
 ### Features
