@@ -27,6 +27,11 @@
   <a href="https://www.kangentic.com"><img src="resources/kanban-demo.png" alt="Kangentic Kanban Board" width="800" /></a>
 </p>
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=jviSrT47F0o"><img src="https://img.youtube.com/vi/jviSrT47F0o/maxresdefault.jpg" alt="Kangentic Demo Video" width="600" /></a>
+</p>
+<p align="center"><a href="https://www.youtube.com/watch?v=jviSrT47F0o">Watch the demo</a></p>
+
 ## Features
 
 - **Visual agent orchestration** - drag tasks between columns to spawn, suspend, and resume Claude Code sessions automatically

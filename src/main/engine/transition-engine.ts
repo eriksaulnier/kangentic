@@ -126,10 +126,10 @@ export class TransitionEngine {
     const permissionMode = permissionOverride ?? appConfig.permissionMode;
     const cwd = task.worktree_path || appConfig.projectPath || process.cwd();
 
-    // Pre-populate trust so the agent doesn't block on the trust dialog
-    if (cwd !== appConfig.projectPath) {
-      ensureWorktreeTrust(cwd);
-    }
+    // Pre-populate trust so the agent doesn't block on the trust dialog.
+    // This covers both worktree paths and the main project path (important
+    // for demo mode where the project has never been opened in Claude Code).
+    ensureWorktreeTrust(cwd);
 
     // Check for a previous session to resume (only explicitly suspended sessions)
     const previousSession = this.sessionRepo?.getLatestForTask(task.id);

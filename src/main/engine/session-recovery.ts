@@ -355,10 +355,8 @@ export async function recoverSessions(
         continue;
       }
 
-      // Pre-populate trust for worktree paths
-      if (record.cwd !== projectPath) {
-        ensureWorktreeTrust(record.cwd);
-      }
+      // Pre-populate trust so the agent doesn't block on the trust dialog
+      ensureWorktreeTrust(record.cwd);
 
       // Resolution order: lane override → global config.
       // Use the task's current swimlane to resolve permission mode.
@@ -646,10 +644,8 @@ export async function reconcileSessions(
           continue;
         }
 
-        // Pre-populate trust for worktree paths
-        if (cwd !== projectPath) {
-          ensureWorktreeTrust(cwd);
-        }
+        // Pre-populate trust so the agent doesn't block on the trust dialog
+        ensureWorktreeTrust(cwd);
 
         // Generate a Claude session ID upfront so recovery can resume
         const claudeSessionId = randomUUID();
