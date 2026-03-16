@@ -27,6 +27,7 @@ const PRESETS: { label: string; action: Omit<ShortcutConfig, 'id'>; platform?: s
   { label: 'Sublime Text', category: 'Editors', action: { label: 'Sublime Text', icon: 'code', command: 'subl "{{cwd}}"' } },
   { label: 'WebStorm', category: 'Editors', action: { label: 'WebStorm', icon: 'code', command: 'webstorm "{{cwd}}"' } },
   { label: 'IntelliJ IDEA', category: 'Editors', action: { label: 'IntelliJ IDEA', icon: 'code', command: 'idea "{{cwd}}"' } },
+  { label: 'Visual Studio', category: 'Editors', action: { label: 'Visual Studio', icon: 'code', command: 'for /f "usebackq tokens=*" %i in (`"C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe" -latest -property productPath`) do start "" "%i" "{{cwd}}"', display: 'both' }, platform: 'win32' },
 
   // Git (cross-platform unless noted)
   { label: 'GitHub Desktop', category: 'Git', action: { label: 'GitHub Desktop', icon: 'github', command: 'github "{{cwd}}"' }, platform: ['win32', 'darwin'] },
