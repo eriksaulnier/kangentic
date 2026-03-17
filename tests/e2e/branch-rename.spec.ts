@@ -223,7 +223,7 @@ test.describe('Branch Rename on Title Edit', () => {
 
     // Wait for branch to be set on the task (worktree creation is async)
     const originalBranch = await waitForBranch(page, originalTitle);
-    expect(originalBranch).toContain('kanban/rename-test-');
+    expect(originalBranch).toContain('rename-test-');
 
     // Verify worktree directory exists
     const task = await getTaskByTitle(page, originalTitle);
@@ -240,7 +240,7 @@ test.describe('Branch Rename on Title Edit', () => {
 
     // Verify the branch was renamed
     const updatedTask = await getTaskByTitle(page, newTitle);
-    expect(updatedTask?.branch_name).toContain('kanban/renamed-task-');
+    expect(updatedTask?.branch_name).toContain('renamed-task-');
     expect(updatedTask?.branch_name).not.toBe(originalBranch);
 
     // Verify via git that old branch is gone and new one exists
@@ -273,7 +273,7 @@ test.describe('Branch Rename on Title Edit', () => {
     await waitForMoveSettle(page, 'Planning', originalTitle);
 
     const originalBranch = await waitForBranch(page, originalTitle);
-    expect(originalBranch).toContain('kanban/slug-same-');
+    expect(originalBranch).toContain('slug-same-');
 
     await editTaskTitle(page, originalTitle, newTitle);
 

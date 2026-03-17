@@ -5,7 +5,6 @@ import { getProjectDb } from '../db/database';
 import { SessionRepository } from '../db/repositories/session-repository';
 import { TaskRepository } from '../db/repositories/task-repository';
 import { ActionRepository } from '../db/repositories/action-repository';
-import { AttachmentRepository } from '../db/repositories/attachment-repository';
 import { SwimlaneRepository } from '../db/repositories/swimlane-repository';
 import { SessionManager } from '../pty/session-manager';
 import { ClaudeDetector } from '../agent/claude-detector';
@@ -14,7 +13,6 @@ import { ConfigManager } from '../config/config-manager';
 import type { SessionRecord, ActionConfig, Task, PermissionMode } from '../../shared/types';
 import { ensureWorktreeTrust } from '../agent/trust-manager';
 import { sessionOutputPaths } from './session-paths';
-import { sanitizeForPty } from '../../shared/paths';
 import { app } from 'electron';
 
 // ---------------------------------------------------------------------------
@@ -186,8 +184,6 @@ export async function recoverSessions(
   const db = getProjectDb(projectId);
   const sessionRepo = new SessionRepository(db);
   const taskRepo = new TaskRepository(db);
-  const actionRepo = new ActionRepository(db);
-  const attachmentRepo = new AttachmentRepository(db);
 
   // 1. Mark leftover 'running' records as orphaned (crash case).
   //    SKIP records whose task already has a live PTY session -- this prevents
@@ -303,10 +299,6 @@ export async function recoverSessions(
     return;
   }
 
-  // Cache transitions and actions for prompt lookup during recovery
-  const allTransitions = actionRepo.listTransitions();
-  const allActions = actionRepo.list();
-
   // Detect Claude CLI once
   const config = configManager.getEffectiveConfig(projectPath);
   const claude = await claudeDetector.detect(config.claude.cliPath);
@@ -375,39 +367,9 @@ export async function recoverSessions(
         prompt = undefined;
       } else {
         claudeSessionId = randomUUID();
-
-        const incomingTransition = allTransitions.find(
-          (t) =>
-            t.to_swimlane_id === task.swimlane_id &&
-            allActions.find((a) => a.id === t.action_id)?.type === 'spawn_agent',
-        );
-        const action = incomingTransition
-          ? allActions.find((a) => a.id === incomingTransition.action_id)
-          : undefined;
-        let actionConfig: ActionConfig | undefined;
-        if (action) {
-          try {
-            actionConfig = JSON.parse(action.config_json) as ActionConfig;
-          } catch {
-            console.error(`[SESSION_RECOVERY] Malformed config for action ${action.id} -- using defaults`);
-          }
-        }
-
-        const cleanTitle = sanitizeForPty(task.title);
-        const cleanDesc = sanitizeForPty(task.description);
-        const attachmentPaths = attachmentRepo.getPathsForTask(task.id);
-        prompt = actionConfig?.promptTemplate
-          ? commandBuilder.interpolateTemplate(actionConfig.promptTemplate, {
-              title: cleanTitle,
-              description: cleanDesc ? `: ${cleanDesc}` : '',
-              taskId: task.id,
-              worktreePath: task.worktree_path || '',
-              branchName: task.branch_name || '',
-              attachments: attachmentPaths.length > 0
-                ? ` [Review images: ${attachmentPaths.join(', ')}]`
-                : '',
-            })
-          : undefined;
+        // Recovery is resuming previously-started work, not starting fresh.
+        // Don't re-send the original task description as it would duplicate context.
+        prompt = undefined;
       }
 
       // Ensure the per-session directory exists
@@ -541,7 +503,6 @@ export async function reconcileSessions(
   const taskRepo = new TaskRepository(db);
   const actionRepo = new ActionRepository(db);
   const sessionRepo = new SessionRepository(db);
-  const attachmentRepo = new AttachmentRepository(db);
   const config = configManager.getEffectiveConfig(projectPath);
 
   // Determine which columns should have active agents (auto_spawn=true)
@@ -649,21 +610,9 @@ export async function reconcileSessions(
 
         // Generate a Claude session ID upfront so recovery can resume
         const claudeSessionId = randomUUID();
-        const cleanTitle = sanitizeForPty(task.title);
-        const cleanDesc = sanitizeForPty(task.description);
-        const attachmentPaths = attachmentRepo.getPathsForTask(task.id);
-        const prompt = actionConfig?.promptTemplate
-          ? commandBuilder.interpolateTemplate(actionConfig.promptTemplate, {
-              title: cleanTitle,
-              description: cleanDesc ? `: ${cleanDesc}` : '',
-              taskId: task.id,
-              worktreePath: task.worktree_path || '',
-              branchName: task.branch_name || '',
-              attachments: attachmentPaths.length > 0
-                ? ` [Review images: ${attachmentPaths.join(', ')}]`
-                : '',
-            })
-          : undefined;
+        // Reconciliation is resuming previously-started work, not starting fresh.
+        // Don't re-send the original task description as it would duplicate context.
+        const prompt = undefined;
 
         // Ensure the per-session directory exists
         const sessionDir = path.join(projectPath, '.kangentic', 'sessions', claudeSessionId);

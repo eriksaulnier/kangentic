@@ -30,14 +30,14 @@ export class TransitionEngine {
    * Resume a suspended session for a task. Used when moving out of
    * Backlog/Done into a non-agent column (no spawn_agent transition fires).
    */
-  async resumeSuspendedSession(task: Task, permissionOverride?: PermissionMode | null, resumePrompt?: string): Promise<void> {
+  async resumeSuspendedSession(task: Task, permissionOverride?: PermissionMode | null, skipPromptTemplate?: boolean, resumePrompt?: string): Promise<void> {
     const attachmentPaths = this.attachmentRepo?.getPathsForTask(task.id) ?? [];
     const cleanTitle = sanitizeForPty(task.title);
     const cleanDesc = sanitizeForPty(task.description);
     // {{description}} includes its own ": " separator when non-empty,
     // producing "Title: Description" or just "Title" when blank.
     await this.executeSpawnAgent({
-      promptTemplate: '{{title}}{{description}}{{attachments}}',
+      promptTemplate: skipPromptTemplate ? undefined : '{{title}}{{description}}{{attachments}}',
     }, task, {
       title: cleanTitle,
       description: cleanDesc ? `: ${cleanDesc}` : '',
@@ -50,7 +50,7 @@ export class TransitionEngine {
     }, permissionOverride, resumePrompt);
   }
 
-  async executeTransition(task: Task, fromSwimlaneId: string, toSwimlaneId: string, permissionOverride?: PermissionMode | null): Promise<void> {
+  async executeTransition(task: Task, fromSwimlaneId: string, toSwimlaneId: string, permissionOverride?: PermissionMode | null, skipPromptTemplate?: boolean): Promise<void> {
     const transitions = this.actionRepo.getTransitionsFor(fromSwimlaneId, toSwimlaneId);
     if (transitions.length === 0) return;
 
@@ -58,11 +58,11 @@ export class TransitionEngine {
       const action = this.actionRepo.getById(transition.action_id);
       if (!action) continue;
 
-      await this.executeAction(action, task, permissionOverride);
+      await this.executeAction(action, task, permissionOverride, skipPromptTemplate);
     }
   }
 
-  private async executeAction(action: Action, task: Task, permissionOverride?: PermissionMode | null): Promise<void> {
+  private async executeAction(action: Action, task: Task, permissionOverride?: PermissionMode | null, skipPromptTemplate?: boolean): Promise<void> {
     let config: ActionConfig;
     try {
       config = JSON.parse(action.config_json);
@@ -86,6 +86,9 @@ export class TransitionEngine {
 
     switch (action.type) {
       case 'spawn_agent':
+        if (skipPromptTemplate) {
+          config.promptTemplate = undefined;
+        }
         await this.executeSpawnAgent(config, task, templateVars, permissionOverride);
         break;
 

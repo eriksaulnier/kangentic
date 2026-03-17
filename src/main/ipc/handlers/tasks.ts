@@ -141,7 +141,13 @@ export async function handleTaskMove(
   if (!task) throw new Error(`Task ${input.taskId} not found`);
 
   const fromSwimlaneId = task.swimlane_id;
+  const fromLane = swimlanes.getById(fromSwimlaneId);
   const toLane = swimlanes.getById(input.targetSwimlaneId);
+
+  // Only send the full prompt template (title + description + attachments) when
+  // starting from backlog. Non-backlog sources are resuming previously-started
+  // work, so re-sending the original description would duplicate context.
+  const skipPromptTemplate = fromLane?.role !== 'backlog';
 
   // Move the task in the database
   tasks.move(input);
@@ -275,7 +281,7 @@ export async function handleTaskMove(
   const engine = createTransitionEngine(context, actions, tasks, sessionRepo, attachments, resolvedProjectId, resolvedProjectPath);
 
   try {
-    await engine.executeTransition(task, fromSwimlaneId, input.targetSwimlaneId, toLane?.permission_mode);
+    await engine.executeTransition(task, fromSwimlaneId, input.targetSwimlaneId, toLane?.permission_mode, skipPromptTemplate);
   } catch (err) {
     console.error('[TASK_MOVE] Transition engine error:', err);
   }
@@ -300,7 +306,7 @@ export async function handleTaskMove(
       : undefined;
 
     try {
-      await engine.resumeSuspendedSession(finalTask, toLane.permission_mode, resumePrompt);
+      await engine.resumeSuspendedSession(finalTask, toLane.permission_mode, skipPromptTemplate, resumePrompt);
       finalTask = tasks.getById(task.id);
     } catch (err) {
       console.error('[TASK_MOVE] Failed to start session:', err);
@@ -510,7 +516,7 @@ export function registerTaskHandlers(context: IpcContext): void {
         const engine = createTransitionEngine(context, actions, tasks, sessionRepo, attachmentRepo, resolvedProjectId, resolvedProjectPath);
 
         try {
-          await engine.executeTransition(task, doneLane.id, input.targetSwimlaneId, toLane?.permission_mode);
+          await engine.executeTransition(task, doneLane.id, input.targetSwimlaneId, toLane?.permission_mode, true);
         } catch (err) {
           console.error('[TASK_UNARCHIVE] Transition engine error:', err);
         }
@@ -520,7 +526,7 @@ export function registerTaskHandlers(context: IpcContext): void {
         if (finalTask && !finalTask.session_id && toLane?.auto_spawn) {
           console.log(`[TASK_UNARCHIVE] Ensuring agent for task ${task.id.slice(0, 8)}`);
           try {
-            await engine.resumeSuspendedSession(finalTask, toLane.permission_mode);
+            await engine.resumeSuspendedSession(finalTask, toLane.permission_mode, true);
             finalTask = tasks.getById(task.id);
           } catch (err) {
             console.error('[TASK_UNARCHIVE] Failed to start session:', err);
@@ -588,7 +594,7 @@ export function registerTaskHandlers(context: IpcContext): void {
           const engine = createTransitionEngine(context, actions, tasks, sessionRepo, attachmentRepo, resolvedProjectId, resolvedProjectPath);
 
           try {
-            await engine.executeTransition(task, doneLane.id, targetSwimlaneId, toLane?.permission_mode);
+            await engine.executeTransition(task, doneLane.id, targetSwimlaneId, toLane?.permission_mode, true);
           } catch (error) {
             console.error('[TASK_BULK_UNARCHIVE] Transition engine error:', error);
           }
@@ -596,7 +602,7 @@ export function registerTaskHandlers(context: IpcContext): void {
           let finalTask = tasks.getById(task.id);
           if (finalTask && !finalTask.session_id && toLane?.auto_spawn) {
             try {
-              await engine.resumeSuspendedSession(finalTask, toLane.permission_mode);
+              await engine.resumeSuspendedSession(finalTask, toLane.permission_mode, true);
               finalTask = tasks.getById(task.id);
             } catch (error) {
               console.error('[TASK_BULK_UNARCHIVE] Failed to start session:', error);
