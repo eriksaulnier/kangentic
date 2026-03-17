@@ -389,6 +389,7 @@ app.whenReady().then(async () => {
   // Fire app_launch event (analytics initialized before app.whenReady above).
   // trackEvent is a no-op if analytics is disabled, so no guard needed here.
   trackEvent('app_launch', { platform: process.platform, arch: process.arch });
+  setInterval(() => trackEvent('app_heartbeat'), 5 * 60 * 1000);
 
   // Load React DevTools extension in development (fire-and-forget, after window is visible)
   if (!app.isPackaged) {
