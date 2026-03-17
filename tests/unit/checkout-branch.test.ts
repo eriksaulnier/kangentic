@@ -13,6 +13,7 @@ const mockGit = {
   revparse: vi.fn(),
   status: vi.fn(),
   checkout: vi.fn(),
+  raw: vi.fn(),
 };
 
 vi.mock('simple-git', () => ({
@@ -229,5 +230,176 @@ describe('ensureTaskBranchCheckout', () => {
     await ensureTaskBranchCheckout(task, '/project');
 
     expect(mockGit.checkout).toHaveBeenCalledWith('develop');
+  });
+
+  it('skips custom branch path for auto-generated branches', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    // checkoutBranch needs revparse (current branch) + status + checkout
+    mockGit.revparse.mockResolvedValue('develop\n');
+    mockGit.status.mockResolvedValue({ files: [] });
+    mockGit.checkout.mockResolvedValue(undefined);
+
+    // Auto-generated branch matches the pattern: slugify('Test task') + '-' + taskId.slice(0,8)
+    // slugify('Test task') = 'test-task', taskId starts with 'task-123' so shortId = 'task-123'
+    const task = makeTask({ branch_name: 'test-task-task-123', base_branch: 'main' });
+    await ensureTaskBranchCheckout(task, '/project');
+
+    // Should NOT call raw (custom branch path), should fall through to base_branch checkout
+    expect(mockGit.raw).not.toHaveBeenCalled();
+    expect(mockGit.checkout).toHaveBeenCalledWith('main');
+  });
+});
+
+// ── Custom branch checkout tests ──────────────────────────────────────────
+
+describe('ensureTaskBranchCheckout - custom branch name', () => {
+  /** Set up mocks so isGitRepo returns true and checkoutBranch succeeds. */
+  function setupCheckoutMocks() {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    mockGit.revparse.mockResolvedValue('main\n');
+    mockGit.status.mockResolvedValue({ files: [] });
+    mockGit.checkout.mockResolvedValue(undefined);
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('fetches from origin before checking branch existence', async () => {
+    setupCheckoutMocks();
+    // Branch exists locally
+    mockGit.raw.mockResolvedValue('');
+
+    const task = makeTask({ branch_name: 'maint/59294', base_branch: 'develop' });
+    await ensureTaskBranchCheckout(task, '/project');
+
+    // First raw call should be the fetch
+    expect(mockGit.raw).toHaveBeenCalledWith(['fetch', 'origin', 'maint/59294']);
+  });
+
+  it('checks out local branch when it already exists', async () => {
+    setupCheckoutMocks();
+    // All raw calls succeed (fetch, rev-parse for local)
+    mockGit.raw.mockResolvedValue('');
+
+    const task = makeTask({ branch_name: 'maint/59294', base_branch: 'develop' });
+    await ensureTaskBranchCheckout(task, '/project');
+
+    // Should checkout the custom branch, not base_branch
+    expect(mockGit.checkout).toHaveBeenCalledWith('maint/59294');
+    // Should NOT have tried to create a branch (no 'branch' raw call)
+    const branchCreateCalls = mockGit.raw.mock.calls.filter(
+      (call: string[][]) => call[0]?.[0] === 'branch',
+    );
+    expect(branchCreateCalls).toHaveLength(0);
+  });
+
+  it('creates local branch from remote when branch only exists on origin', async () => {
+    setupCheckoutMocks();
+    mockGit.raw.mockImplementation((args: string[]) => {
+      // fetch succeeds
+      if (args[0] === 'fetch') return Promise.resolve('');
+      // local rev-parse fails (branch not local)
+      if (args[0] === 'rev-parse' && args[2] === 'maint/59294') {
+        return Promise.reject(new Error('fatal: not a valid object name'));
+      }
+      // remote rev-parse succeeds (branch exists on origin)
+      if (args[0] === 'rev-parse' && args[2] === 'origin/maint/59294') {
+        return Promise.resolve('abc123');
+      }
+      // branch creation succeeds
+      if (args[0] === 'branch') return Promise.resolve('');
+      return Promise.resolve('');
+    });
+
+    const task = makeTask({ branch_name: 'maint/59294', base_branch: 'develop' });
+    await ensureTaskBranchCheckout(task, '/project');
+
+    // Should create from remote tracking branch
+    expect(mockGit.raw).toHaveBeenCalledWith(['branch', 'maint/59294', 'origin/maint/59294']);
+    expect(mockGit.checkout).toHaveBeenCalledWith('maint/59294');
+  });
+
+  it('creates branch from base_branch when it does not exist anywhere', async () => {
+    setupCheckoutMocks();
+    mockGit.raw.mockImplementation((args: string[]) => {
+      // fetch fails (branch not on remote)
+      if (args[0] === 'fetch') return Promise.reject(new Error('fatal: could not read'));
+      // local rev-parse fails
+      if (args[0] === 'rev-parse' && args[2] === 'maint/59294') {
+        return Promise.reject(new Error('fatal: not a valid object name'));
+      }
+      // remote rev-parse also fails
+      if (args[0] === 'rev-parse' && args[2] === 'origin/maint/59294') {
+        return Promise.reject(new Error('fatal: not a valid object name'));
+      }
+      // branch creation succeeds
+      if (args[0] === 'branch') return Promise.resolve('');
+      return Promise.resolve('');
+    });
+
+    const task = makeTask({ branch_name: 'maint/59294', base_branch: 'develop' });
+    await ensureTaskBranchCheckout(task, '/project');
+
+    // Should create from base_branch
+    expect(mockGit.raw).toHaveBeenCalledWith(['branch', 'maint/59294', 'develop']);
+    expect(mockGit.checkout).toHaveBeenCalledWith('maint/59294');
+  });
+
+  it('defaults to main when creating from base_branch and base_branch is null', async () => {
+    setupCheckoutMocks();
+    mockGit.raw.mockImplementation((args: string[]) => {
+      if (args[0] === 'fetch') return Promise.reject(new Error('no remote'));
+      if (args[0] === 'rev-parse') return Promise.reject(new Error('not found'));
+      if (args[0] === 'branch') return Promise.resolve('');
+      return Promise.resolve('');
+    });
+
+    const task = makeTask({ branch_name: 'hotfix/urgent', base_branch: null });
+    await ensureTaskBranchCheckout(task, '/project');
+
+    // Should default to 'main' as the base
+    expect(mockGit.raw).toHaveBeenCalledWith(['branch', 'hotfix/urgent', 'main']);
+  });
+
+  it('fetch failure is silent and does not block checkout', async () => {
+    setupCheckoutMocks();
+    let fetchCalled = false;
+    mockGit.raw.mockImplementation((args: string[]) => {
+      if (args[0] === 'fetch') {
+        fetchCalled = true;
+        return Promise.reject(new Error('network timeout'));
+      }
+      // local rev-parse fails, remote rev-parse fails, branch create succeeds
+      if (args[0] === 'rev-parse') return Promise.reject(new Error('not found'));
+      if (args[0] === 'branch') return Promise.resolve('');
+      return Promise.resolve('');
+    });
+
+    const task = makeTask({ branch_name: 'feature/offline', base_branch: 'main' });
+    await ensureTaskBranchCheckout(task, '/project');
+
+    expect(fetchCalled).toBe(true);
+    // Should still proceed to create and checkout
+    expect(mockGit.checkout).toHaveBeenCalledWith('feature/offline');
+  });
+
+  it('skips custom branch path when task has no branch_name', async () => {
+    setupCheckoutMocks();
+    const task = makeTask({ branch_name: null, base_branch: 'develop' });
+    await ensureTaskBranchCheckout(task, '/project');
+
+    // Should use base_branch checkout path, not custom branch path
+    expect(mockGit.raw).not.toHaveBeenCalled();
+    expect(mockGit.checkout).toHaveBeenCalledWith('develop');
+  });
+
+  it('skips entirely when task has no branch_name and no base_branch', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    const task = makeTask({ branch_name: null, base_branch: null });
+    await ensureTaskBranchCheckout(task, '/project');
+
+    expect(mockGit.raw).not.toHaveBeenCalled();
+    expect(mockGit.checkout).not.toHaveBeenCalled();
   });
 });

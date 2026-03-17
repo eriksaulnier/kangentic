@@ -482,7 +482,7 @@ describe('WorktreeManager -- ensureWorktree', () => {
     );
 
     expect(result).not.toBeNull();
-    expect(result!.branchName).toContain('kanban/');
+    expect(result!.branchName).toBe('test-abcd1234');
     // Should have used 'develop' (task override) not 'main' (config default)
     expect(mockProjectGit.raw).toHaveBeenCalledWith(['fetch', 'origin', 'develop']);
   });

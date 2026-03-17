@@ -519,6 +519,7 @@ export interface TaskCreateInput {
   swimlane_id: string;
   baseBranch?: string;
   useWorktree?: boolean | null;
+  customBranchName?: string;
   pendingAttachments?: Array<{
     filename: string;
     data: string; // base64

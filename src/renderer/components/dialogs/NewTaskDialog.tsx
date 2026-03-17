@@ -1,11 +1,13 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, X, Image } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Plus, X, Image, Info } from 'lucide-react';
 import { useBoardStore } from '../../stores/board-store';
 import { useConfigStore } from '../../stores/config-store';
 import { useToastStore } from '../../stores/toast-store';
 import { BaseDialog } from './BaseDialog';
 import { BranchPicker } from './BranchPicker';
 import { WorktreeChip } from './WorktreeChip';
+import { isValidGitBranchName } from '../../../shared/git-utils';
+import { slugify } from '../../../shared/slugify';
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10MB
 
@@ -38,6 +40,50 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
   const [baseBranch, setBaseBranch] = useState('');
   const [useWorktree, setUseWorktree] = useState<boolean | null>(null);
   const effectiveWorktree = useWorktree ?? worktreesEnabled;
+  const [customBranchName, setCustomBranchName] = useState('');
+  const branchNameError = customBranchName.trim() && !isValidGitBranchName(customBranchName.trim())
+    ? 'Invalid git branch name'
+    : '';
+  const [knownBranches, setKnownBranches] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    window.electronAPI.git.listBranches()
+      .then(branches => setKnownBranches(new Set(branches)))
+      .catch(() => setKnownBranches(new Set()));
+  }, []);
+  const branchExists = useMemo(
+    () => customBranchName.trim() ? knownBranches.has(customBranchName.trim()) : false,
+    [customBranchName, knownBranches],
+  );
+  const effectiveBaseBranch = baseBranch.trim() || defaultBaseBranch || 'main';
+  const branchPlaceholder = (() => {
+    if (effectiveWorktree) {
+      const slug = slugify(title.trim()) || 'task-title';
+      return `${slug}-ab12cd34`;
+    }
+    return effectiveBaseBranch;
+  })();
+  const branchHint = useMemo(() => {
+    const pill = (text: string) => (
+      <span className="font-mono text-fg-faint">{text}</span>
+    );
+    const branch = customBranchName.trim();
+    if (branch) {
+      if (branchExists) {
+        if (effectiveWorktree) {
+          return <>{pill(branch)} exists and will be checked out in a new worktree</>;
+        }
+        return <>{pill(branch)} exists and will be checked out</>;
+      }
+      if (effectiveWorktree) {
+        return <>{pill(branch)} will be created from {pill(effectiveBaseBranch)} in a new worktree</>;
+      }
+      return <>{pill(branch)} will be created from {pill(effectiveBaseBranch)}</>;
+    }
+    if (effectiveWorktree) {
+      return <>Auto-generated branch will be created from {pill(effectiveBaseBranch)} in a new worktree</>;
+    }
+    return <>Agent will work directly on {pill(effectiveBaseBranch)}</>;
+  }, [customBranchName, branchExists, effectiveWorktree, effectiveBaseBranch]);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [previewAttachment, setPreviewAttachment] = useState<PendingAttachment | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -46,7 +92,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const nextIdRef = useRef(0);
 
-  const isDirty = title.trim() !== '' || description.trim() !== '' || attachments.length > 0;
+  const isDirty = title.trim() !== '' || description.trim() !== '' || customBranchName.trim() !== '' || attachments.length > 0;
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -167,6 +213,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+    if (branchNameError) return;
     const taskTitle = title.trim();
     await createTask({
       title: taskTitle,
@@ -174,6 +221,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
       swimlane_id: swimlaneId,
       ...(baseBranch.trim() ? { baseBranch: baseBranch.trim() } : {}),
       ...(useWorktree !== null ? { useWorktree } : {}),
+      ...(customBranchName.trim() ? { customBranchName: customBranchName.trim() } : {}),
       ...(attachments.length > 0 ? {
         pendingAttachments: attachments.map((a) => ({
           filename: a.filename,
@@ -211,7 +259,8 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 text-xs bg-accent-emphasis hover:bg-accent text-accent-on rounded transition-colors"
+                disabled={!!branchNameError}
+                className="px-4 py-1.5 text-xs bg-accent-emphasis hover:bg-accent text-accent-on rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Create
               </button>
@@ -291,10 +340,31 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
               </div>
             )}
 
-            <div className="flex items-center gap-2">
-              <BranchPicker value={baseBranch} defaultBranch={defaultBaseBranch || 'main'} onChange={setBaseBranch} />
-              <div className="w-px h-5 bg-edge-input" />
-              <WorktreeChip enabled={effectiveWorktree} onToggle={() => setUseWorktree(effectiveWorktree ? false : true)} />
+            <div>
+              <label className="text-[10px] text-fg-muted mb-1 block">Branch</label>
+              <div className="flex items-center gap-2">
+                <input
+                  data-testid="custom-branch-name-input"
+                  type="text"
+                  placeholder={branchPlaceholder}
+                  value={customBranchName}
+                  onChange={(e) => setCustomBranchName(e.target.value)}
+                  className={`flex-1 min-w-0 bg-surface border rounded px-3 py-1.5 text-xs text-fg placeholder-fg-faint focus:outline-none ${
+                    branchNameError
+                      ? 'border-red-500 focus:border-red-500'
+                      : 'border-edge-input focus:border-accent'
+                  }`}
+                />
+                <span className="text-xs text-fg-disabled shrink-0">from</span>
+                <BranchPicker value={baseBranch} defaultBranch={defaultBaseBranch || 'main'} onChange={setBaseBranch} />
+                <div className="w-px h-5 bg-edge-input shrink-0" />
+                <WorktreeChip enabled={effectiveWorktree} onToggle={() => setUseWorktree(effectiveWorktree ? false : true)} />
+              </div>
+              {branchNameError ? (
+                <p className="text-xs text-red-500 mt-0.5">{branchNameError}</p>
+              ) : (
+                <span className="text-xs text-fg-disabled mt-1 flex items-center gap-1"><Info size={12} className="shrink-0" />{branchHint}</span>
+              )}
             </div>
 
             {/* Drag overlay */}

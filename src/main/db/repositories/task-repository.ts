@@ -52,7 +52,7 @@ export class TaskRepository {
       agent: null,
       session_id: null,
       worktree_path: null,
-      branch_name: null,
+      branch_name: input.customBranchName?.trim() || null,
       pr_number: null,
       pr_url: null,
       base_branch: input.baseBranch || null,

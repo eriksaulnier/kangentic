@@ -369,7 +369,7 @@
           agent: null,
           session_id: null,
           worktree_path: null,
-          branch_name: null,
+          branch_name: input.customBranchName || null,
           pr_number: null,
           pr_url: null,
           base_branch: input.baseBranch || null,
@@ -511,7 +511,7 @@
         var updates = { base_branch: input.newBaseBranch || null, updated_at: now() };
         if (input.enableWorktree && !task.worktree_path) {
           updates.worktree_path = '/mock/worktrees/' + task.id.slice(0, 8);
-          updates.branch_name = 'kanban/' + task.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
+          updates.branch_name = task.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40) + '-' + task.id.slice(0, 8);
           updates.use_worktree = 1;
         }
         tasks[idx] = Object.assign({}, task, updates);
