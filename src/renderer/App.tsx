@@ -98,7 +98,7 @@ export function App() {
       useSessionStore.setState({
         activeSessionId: null,
         dialogSessionId: null,
-        openTaskId: null,
+        detailTaskId: null,
         sessionEvents: {},
       });
 
@@ -115,7 +115,7 @@ export function App() {
         const pendingTaskId = useSessionStore.getState()._pendingOpenTaskId;
         if (pendingTaskId) {
           useSessionStore.getState().setPendingOpenTaskId(null);
-          useSessionStore.getState().setOpenTaskId(pendingTaskId);
+          useSessionStore.getState().setDetailTaskId(pendingTaskId);
         }
       });
     } else {
@@ -123,7 +123,7 @@ export function App() {
       useSessionStore.setState({
         activeSessionId: null,
         dialogSessionId: null,
-        openTaskId: null,
+        detailTaskId: null,
       });
       loadConfig(); // Reset effective config to global defaults (no project overrides)
     }
@@ -320,7 +320,7 @@ export function App() {
       cleanups.push(notifications.onClicked((projectId, taskId) => {
         const alreadyActive = useProjectStore.getState().currentProject?.id === projectId;
         if (taskId && alreadyActive) {
-          useSessionStore.getState().setOpenTaskId(taskId);
+          useSessionStore.getState().setDetailTaskId(taskId);
         } else {
           if (taskId) {
             useSessionStore.getState().setPendingOpenTaskId(taskId);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Loader2, Trash2, CirclePause, Mail, Image, Images } from 'lucide-react';
@@ -29,7 +29,13 @@ interface TaskCardProps {
 }
 
 const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete, summary }: TaskCardProps) {
-  const [showDetail, setShowDetail] = useState(false);
+  const showDetail = useSessionStore(
+    useCallback(
+      (s: ReturnType<typeof useSessionStore.getState>) => s.detailTaskId === task.id,
+      [task.id],
+    ),
+  );
+  const setDetailTaskId = useSessionStore((s) => s.setDetailTaskId);
 
   // Extract sessionId once via O(1) Map lookup -- all other selectors derive from this
   const sessionId = useSessionStore(
@@ -47,8 +53,6 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
       [sessionId],
     ),
   );
-  const openTaskId = useSessionStore((s) => s.openTaskId);
-  const setOpenTaskId = useSessionStore((s) => s.setOpenTaskId);
   const displayState = useSessionDisplayState(sessionId);
 
   // Derive contextual label for the initializing state (mirrors TerminalTab logic)
@@ -73,15 +77,6 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
   const hasCommand = !!pendingCommandLabel;
   const initializingLabel = deriveInitializingLabel(pendingCommandLabel, isResuming);
 
-  useEffect(() => {
-    if (openTaskId === task.id) {
-      setShowDetail(true);
-      setOpenTaskId(null);
-    } else if (openTaskId !== null) {
-      setShowDetail(false);
-    }
-  }, [openTaskId, task.id, setOpenTaskId]);
-
   const {
     attributes,
     listeners,
@@ -104,7 +99,7 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
   const handleClick = (e: React.MouseEvent) => {
     if (isDragOverlay) return;
     e.stopPropagation();
-    setShowDetail(true);
+    setDetailTaskId(task.id);
   };
 
   if (compact) {
@@ -144,7 +139,7 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
         </div>
 
         {showDetail && (
-          <TaskDetailDialog task={task} onClose={() => setShowDetail(false)} initialEdit={displayState.kind === 'none' && !task.archived_at} />
+          <TaskDetailDialog task={task} onClose={() => setDetailTaskId(null)} initialEdit={displayState.kind === 'none' && !task.archived_at} />
         )}
       </>
     );
@@ -260,7 +255,7 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
       </div>
 
       {showDetail && (
-        <TaskDetailDialog task={task} onClose={() => setShowDetail(false)} initialEdit={displayState.kind === 'none' && !task.archived_at} />
+        <TaskDetailDialog task={task} onClose={() => setDetailTaskId(null)} initialEdit={displayState.kind === 'none' && !task.archived_at} />
       )}
     </>
   );

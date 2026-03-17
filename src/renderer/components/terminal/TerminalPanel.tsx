@@ -21,7 +21,7 @@ export function TerminalPanel({ collapsed = false, showContent = true, onToggleC
   const currentProjectId = useProjectStore((s) => s.currentProject?.id ?? null);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const setActiveSession = useSessionStore((s) => s.setActiveSession);
-  const setOpenTaskId = useSessionStore((s) => s.setOpenTaskId);
+  const setDetailTaskId = useSessionStore((s) => s.setDetailTaskId);
   const dialogSessionId = useSessionStore((s) => s.dialogSessionId);
   const sessionActivity = useSessionStore((s) => s.sessionActivity);
 
@@ -108,7 +108,7 @@ export function TerminalPanel({ collapsed = false, showContent = true, onToggleC
               <button
                 key={session.id}
                 onClick={() => setActiveSession(session.id)}
-                onDoubleClick={() => setOpenTaskId(session.taskId)}
+                onDoubleClick={() => setDetailTaskId(session.taskId)}
                 title={`${label} (${shellDisplayName(session.shell)})`}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-edge transition-colors whitespace-nowrap ${
                   effectiveActiveId === session.id

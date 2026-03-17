@@ -19,7 +19,7 @@ interface SessionStore {
   _sessionByTaskId: Map<string, Session>;
   // ACTIVITY_TAB = activity log tab; session UUID = individual tab; null = none
   activeSessionId: string | null;
-  openTaskId: string | null;
+  detailTaskId: string | null;
   dialogSessionId: string | null;
   sessionUsage: Record<string, SessionUsage>;
   sessionActivity: Record<string, ActivityState>;
@@ -33,12 +33,12 @@ interface SessionStore {
   syncSessions: () => Promise<void>;
   _bumpSyncGeneration: () => number;
   setPendingOpenTaskId: (id: string | null) => void;
+  setDetailTaskId: (id: string | null) => void;
   spawnSession: (input: SpawnSessionInput) => Promise<Session>;
   killSession: (id: string) => Promise<void>;
   suspendSession: (taskId: string) => Promise<void>;
   resumeSession: (taskId: string, resumePrompt?: string) => Promise<Session>;
   setActiveSession: (id: string | null) => void;
-  setOpenTaskId: (id: string | null) => void;
   setDialogSessionId: (id: string | null) => void;
   updateSessionStatus: (id: string, updates: Partial<Session>) => void;
   updateUsage: (sessionId: string, data: SessionUsage) => void;
@@ -58,7 +58,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
   _sessionByTaskId: new Map(),
   activeSessionId: null,
-  openTaskId: null,
+  detailTaskId: null,
   dialogSessionId: null,
   sessionUsage: {},
   sessionActivity: {},
@@ -178,7 +178,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   setActiveSession: (id) => set({ activeSessionId: id }),
-  setOpenTaskId: (id) => set({ openTaskId: id }),
+  setDetailTaskId: (id) => set({ detailTaskId: id }),
   setDialogSessionId: (id) => set({ dialogSessionId: id }),
 
   updateSessionStatus: (id, updates) => {
