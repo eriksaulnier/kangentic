@@ -9,7 +9,7 @@ import { WorktreeManager, isGitRepo, isInsideWorktree, isKangenticWorktree } fro
 import { stripKangenticHooks } from '../../agent/hook-manager';
 import { getProjectDb, closeProjectDb } from '../../db/database';
 import { PATHS } from '../../config/paths';
-import { ensureGitignore, getProjectRepos } from '../helpers';
+import { ensureGitignore, removeGitignoreEntries, getGlobalGitExcludesPath, getProjectRepos } from '../helpers';
 import { trackEvent } from '../../analytics/analytics';
 import type { Project, Task, AppConfig } from '../../../shared/types';
 import type { IpcContext } from '../ipc-context';
@@ -104,25 +104,26 @@ export async function cleanupProject(context: IpcContext, projectId: string, pro
   // and should not be modified by ephemeral cleanup.
   const isWorktree = isInsideWorktree(projectPath);
 
-  // 6. Remove our `.kangentic/` entry from .gitignore (delete file if it becomes empty)
+  // 6. Remove our entries from gitignore (project .gitignore or global excludes)
+  //    ORDERING: must run before step 7 which deletes .kangentic/ (including config.json)
   if (!isWorktree) {
-    try {
-      const gitignorePath = path.join(projectPath, '.gitignore');
-      if (fs.existsSync(gitignorePath)) {
-        const content = fs.readFileSync(gitignorePath, 'utf-8');
-        const filtered = content.split('\n').filter(
-          (l) => l.trim() !== '.kangentic' && l.trim() !== '.kangentic/'
-            && l.trim() !== '.claude/settings.local.json'
-            && l.trim() !== 'kangentic.local.json',
-        );
-        const newContent = filtered.join('\n');
-        if (newContent.replace(/\s/g, '').length === 0) {
-          fs.unlinkSync(gitignorePath);
-        } else {
-          fs.writeFileSync(gitignorePath, newContent);
-        }
+    // Determine what scope this project used
+    const projectConfig = context.configManager.loadProjectOverrides(projectPath);
+    const scope = projectConfig?.git?.gitignoreScope ?? 'project';
+
+    if (scope === 'user') {
+      // Only remove from global excludes if no other project uses 'user' scope
+      const otherProjects = context.projectRepo.list().filter((p) => p.path !== projectPath);
+      const otherUsesUserScope = otherProjects.some((p) => {
+        const overrides = context.configManager.loadProjectOverrides(p.path);
+        return overrides?.git?.gitignoreScope === 'user';
+      });
+      if (!otherUsesUserScope) {
+        removeGitignoreEntries(getGlobalGitExcludesPath(), false);
       }
-    } catch { /* non-fatal */ }
+    } else {
+      removeGitignoreEntries(path.join(projectPath, '.gitignore'));
+    }
   }
 
   // 6b. Remove kangentic.json and kangentic.local.json from project root
@@ -239,7 +240,8 @@ export async function openProjectByPath(context: IpcContext, projectPath: string
   context.currentProjectId = project.id;
   context.currentProjectPath = project.path;
   context.projectRepo.updateLastOpened(project.id);
-  ensureGitignore(project.path);
+  const effectiveConfig = context.configManager.getEffectiveConfig(project.path);
+  ensureGitignore(project.path, effectiveConfig.git.gitignoreScope);
 
   // Attach board config manager for file watching and reconciliation
   context.boardConfigManager.attach(project.id, project.path, context.mainWindow);
@@ -252,9 +254,8 @@ export async function openProjectByPath(context: IpcContext, projectPath: string
   // Always export DB state to kangentic.json so teams can commit it
   context.boardConfigManager.exportFromDb();
 
-  const config = context.configManager.getEffectiveConfig(project.path);
-  context.sessionManager.setMaxConcurrent(config.claude.maxConcurrentSessions);
-  context.sessionManager.setShell(config.terminal.shell);
+  context.sessionManager.setMaxConcurrent(effectiveConfig.claude.maxConcurrentSessions);
+  context.sessionManager.setShell(effectiveConfig.terminal.shell);
 
   if (!isReopen) {
     // Prune tasks whose worktrees have been deleted externally
@@ -290,7 +291,8 @@ export async function activateAllProjects(context: IpcContext): Promise<void> {
 
   const results = await Promise.allSettled(
     otherProjects.map(async (project) => {
-      ensureGitignore(project.path);
+      const projectConfig = context.configManager.getEffectiveConfig(project.path);
+      ensureGitignore(project.path, projectConfig.git.gitignoreScope);
       const db = getProjectDb(project.id);
       const taskRepo = new TaskRepository(db);
       const sessionRepo = new SessionRepository(db);
@@ -344,7 +346,8 @@ export function registerProjectHandlers(context: IpcContext): void {
     context.currentProjectId = id;
     context.currentProjectPath = project.path;
     context.projectRepo.updateLastOpened(id);
-    ensureGitignore(project.path);
+    const config = context.configManager.getEffectiveConfig(project.path);
+    ensureGitignore(project.path, config.git.gitignoreScope);
 
     // Attach board config manager for file watching and reconciliation
     context.boardConfigManager.attach(id, project.path, context.mainWindow);
@@ -358,7 +361,6 @@ export function registerProjectHandlers(context: IpcContext): void {
     context.boardConfigManager.exportFromDb();
 
     // Apply project config overrides (always -- config may have changed)
-    const config = context.configManager.getEffectiveConfig(project.path);
     context.sessionManager.setMaxConcurrent(config.claude.maxConcurrentSessions);
     context.sessionManager.setShell(config.terminal.shell);
 

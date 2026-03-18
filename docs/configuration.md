@@ -41,7 +41,7 @@ These settings appear in both App Settings (as defaults) and Project Settings (a
 - `theme`
 - `terminal.shell`, `terminal.fontSize`, `terminal.fontFamily`, `terminal.scrollbackLines`, `terminal.cursorStyle`
 - `claude.permissionMode`
-- `git.worktreesEnabled`, `git.autoCleanup`, `git.defaultBaseBranch`, `git.copyFiles`, `git.initScript`
+- `git.gitignoreScope`, `git.worktreesEnabled`, `git.autoCleanup`, `git.defaultBaseBranch`, `git.copyFiles`, `git.initScript`
 
 ## Full AppConfig Reference
 
@@ -98,6 +98,7 @@ All five modes are available in both the global App Settings "Permissions" dropd
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| `git.gitignoreScope` | `'project'` \| `'user'` | `'project'` | Where to add ignore entries: project `.gitignore` or user global git excludes |
 | `git.worktreesEnabled` | boolean | `true` | Enable git worktrees for task isolation |
 | `git.autoCleanup` | boolean | `true` | Delete branches when worktrees are removed |
 | `git.defaultBaseBranch` | string | `'main'` | Default base branch for worktrees |

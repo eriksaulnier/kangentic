@@ -193,6 +193,7 @@ All five permission modes are available in both the global App Settings dropdown
 
 | Setting | Description |
 |---------|-------------|
+| Gitignore Scope | Where to add ignore entries for Kangentic files: project `.gitignore` (default) or user global git excludes file |
 | Worktrees Enabled | Create isolated branches per task |
 | Auto Cleanup | Delete branches when worktrees are removed |
 | Default Base Branch | Branch to create worktrees from (default: main) |

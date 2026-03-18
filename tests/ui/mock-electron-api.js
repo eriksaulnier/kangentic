@@ -43,6 +43,7 @@
       idleTimeoutMinutes: 0,
     },
     git: {
+      gitignoreScope: 'project',
       worktreesEnabled: true,
       autoCleanup: true,
       defaultBaseBranch: 'main',
@@ -144,6 +145,7 @@
         permissionMode: config.claude.permissionMode,
       },
       git: {
+        gitignoreScope: config.git.gitignoreScope,
         worktreesEnabled: config.git.worktreesEnabled,
         autoCleanup: config.git.autoCleanup,
         defaultBaseBranch: config.git.defaultBaseBranch,

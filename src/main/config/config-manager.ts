@@ -87,6 +87,7 @@ export class ConfigManager {
         permissionMode: global.claude.permissionMode,
       },
       git: {
+        gitignoreScope: global.git.gitignoreScope,
         worktreesEnabled: global.git.worktreesEnabled,
         autoCleanup: global.git.autoCleanup,
         defaultBaseBranch: global.git.defaultBaseBranch,

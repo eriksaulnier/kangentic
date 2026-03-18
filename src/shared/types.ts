@@ -402,6 +402,7 @@ export interface AppConfig {
   };
 
   git: {
+    gitignoreScope: 'project' | 'user';
     worktreesEnabled: boolean;
     autoCleanup: boolean;
     defaultBaseBranch: string;
@@ -456,6 +457,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     width: 400,
   },
   git: {
+    gitignoreScope: 'project',
     worktreesEnabled: true,
     autoCleanup: true,
     defaultBaseBranch: 'main',

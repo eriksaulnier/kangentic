@@ -46,6 +46,7 @@ export const SETTINGS_REGISTRY: SettingDefinition[] = [
   { id: 'claude.permissionMode', tabId: 'agent', label: 'Permissions', description: 'How Claude handles tool approvals', scope: 'project', keywords: ['allowlist', 'bypass', 'approve'] },
 
   // ── Git ──
+  { id: 'git.gitignoreScope', tabId: 'git', label: 'Gitignore Scope', description: 'Where to add ignore entries for Kangentic files', scope: 'project', keywords: ['gitignore', 'global', 'excludes', 'user'] },
   { id: 'git.worktreesEnabled', tabId: 'git', label: 'Enable Worktrees', description: 'Create git worktrees for agent tasks', scope: 'project', keywords: ['branch', 'isolate'] },
   { id: 'git.autoCleanup', tabId: 'git', label: 'Auto-cleanup', description: 'Remove worktrees when tasks complete', scope: 'project', keywords: ['remove', 'delete'] },
   { id: 'git.defaultBaseBranch', tabId: 'git', label: 'Default Base Branch', description: 'Branch to create worktrees from', scope: 'project', keywords: ['main', 'master'] },

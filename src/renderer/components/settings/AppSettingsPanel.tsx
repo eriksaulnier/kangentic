@@ -448,6 +448,15 @@ function GitTab({ config }: { config: AppConfig }) {
   const updateProject = useScopedUpdate('project');
   return (
     <>
+      <SettingRow {...settingProps('git.gitignoreScope')}>
+        <Select
+          value={config.git.gitignoreScope}
+          onChange={(event) => updateProject({ git: { gitignoreScope: event.target.value as 'project' | 'user' } })}
+        >
+          <option value="project">Project .gitignore</option>
+          <option value="user">User global excludes</option>
+        </Select>
+      </SettingRow>
       <SettingRow {...settingProps('git.worktreesEnabled')}>
         <ToggleSwitch
           checked={config.git.worktreesEnabled}

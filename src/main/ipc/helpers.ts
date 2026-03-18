@@ -1,5 +1,7 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import simpleGit from 'simple-git';
 import { TaskRepository } from '../db/repositories/task-repository';
 import { SwimlaneRepository } from '../db/repositories/swimlane-repository';
@@ -12,60 +14,141 @@ import { getProjectDb } from '../db/database';
 import type { Task } from '../../shared/types';
 import type { IpcContext } from './ipc-context';
 
+/** Entries managed by Kangentic in gitignore files. */
+export const MANAGED_GITIGNORE_ENTRIES = ['.kangentic/', '.claude/settings.local.json', 'kangentic.local.json'];
+
 /**
- * Ensure `.kangentic/` and `.claude/settings.local.json` are listed in the
- * project's `.gitignore`.  Fully wrapped in try-catch -- a read-only project
- * directory or permission issue must never prevent the app from opening.
+ * Resolve the global git excludes file path.
+ * Uses `core.excludesFile` if configured, otherwise falls back to `~/.config/git/ignore`.
  */
-export function ensureGitignore(projectPath: string): void {
+export function getGlobalGitExcludesPath(): string {
+  try {
+    const raw = execSync('git config --global core.excludesFile', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+    if (raw) {
+      // Expand leading ~ to home directory
+      if (raw.startsWith('~/') || raw === '~') {
+        return path.join(os.homedir(), raw.slice(1));
+      }
+      return raw;
+    }
+  } catch {
+    // Not configured -- use XDG default
+  }
+  return path.join(os.homedir(), '.config', 'git', 'ignore');
+}
+
+/** Add managed entries to a gitignore-style file, creating it if needed. */
+function addEntriesToIgnoreFile(filePath: string, entries: string[], projectPath?: string): void {
+  // Ensure parent directory exists
+  const parentDir = path.dirname(filePath);
+  fs.mkdirSync(parentDir, { recursive: true });
+
+  let content = '';
+  try {
+    content = fs.readFileSync(filePath, 'utf-8');
+  } catch {
+    // File doesn't exist yet -- we'll create one
+  }
+
+  let changed = false;
+  for (const entry of entries) {
+    const lines = content.split('\n');
+    const alreadyPresent = lines.some((line) => line.trim() === entry || (entry === '.kangentic/' && line.trim() === '.kangentic'));
+    if (alreadyPresent) continue;
+
+    // For .claude/settings.local.json in project scope, skip if intentionally tracked
+    if (entry === '.claude/settings.local.json' && projectPath) {
+      if (isFileTracked(projectPath, '.claude/settings.local.json')) continue;
+    }
+
+    const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
+    content = content + separator + entry + '\n';
+    changed = true;
+  }
+
+  if (changed) {
+    fs.writeFileSync(filePath, content);
+  }
+}
+
+/**
+ * Remove managed Kangentic entries from a gitignore-style file.
+ * When `deleteIfEmpty` is true (default), deletes the file if only whitespace remains.
+ * Pass `false` for shared files like the global git excludes to avoid deleting user content.
+ */
+export function removeGitignoreEntries(filePath: string, deleteIfEmpty = true): void {
+  try {
+    if (!fs.existsSync(filePath)) return;
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const filtered = content.split('\n').filter(
+      (line) => !MANAGED_GITIGNORE_ENTRIES.includes(line.trim()) && line.trim() !== '.kangentic',
+    );
+    const newContent = filtered.join('\n');
+    if (deleteIfEmpty && newContent.replace(/\s/g, '').length === 0) {
+      fs.unlinkSync(filePath);
+    } else {
+      fs.writeFileSync(filePath, newContent);
+    }
+  } catch {
+    // Non-fatal
+  }
+}
+
+/**
+ * Ensure Kangentic entries are present in the appropriate ignore file.
+ * When scope is 'project', writes to the project's `.gitignore`.
+ * When scope is 'user', writes to the global git excludes file.
+ */
+export function ensureGitignore(projectPath: string, scope: 'project' | 'user' = 'project'): void {
   if (!isGitRepo(projectPath)) return;
   try {
-    const gitignorePath = path.join(projectPath, '.gitignore');
-    let content = '';
-    try {
-      content = fs.readFileSync(gitignorePath, 'utf-8');
-    } catch {
-      // No .gitignore yet -- we'll create one
-    }
-
-    // 1. Ensure .kangentic/ is ignored
-    const lines = content.split('\n');
-    const kangenticIgnored = lines.some(
-      (l) => l.trim() === '.kangentic' || l.trim() === '.kangentic/',
-    );
-    if (!kangenticIgnored) {
-      const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
-      content = content + separator + '.kangentic/\n';
-      fs.writeFileSync(gitignorePath, content);
-    }
-
-    // 2. Ensure .claude/settings.local.json is ignored -- but only if the project
-    //    hasn't intentionally committed it (e.g. to accumulate permission allowlists).
-    const linesAfter = content.split('\n');
-    const settingsIgnored = linesAfter.some(
-      (l) => l.trim() === '.claude/settings.local.json',
-    );
-    if (!settingsIgnored) {
-      const settingsTracked = isFileTracked(projectPath, '.claude/settings.local.json');
-      if (!settingsTracked) {
-        const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
-        content = content + separator + '.claude/settings.local.json\n';
-        fs.writeFileSync(gitignorePath, content);
-      }
-    }
-
-    // 3. Ensure kangentic.local.json is ignored (personal board overrides)
-    const linesAfterLocal = content.split('\n');
-    const localConfigIgnored = linesAfterLocal.some(
-      (l) => l.trim() === 'kangentic.local.json',
-    );
-    if (!localConfigIgnored) {
-      const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
-      fs.writeFileSync(gitignorePath, content + separator + 'kangentic.local.json\n');
+    if (scope === 'user') {
+      const globalExcludesPath = getGlobalGitExcludesPath();
+      // Global excludes are user-scoped, so no isFileTracked guard needed
+      addEntriesToIgnoreFile(globalExcludesPath, MANAGED_GITIGNORE_ENTRIES);
+    } else {
+      const gitignorePath = path.join(projectPath, '.gitignore');
+      addEntriesToIgnoreFile(gitignorePath, MANAGED_GITIGNORE_ENTRIES, projectPath);
     }
   } catch (err) {
     // Non-fatal: log and continue. Project may be read-only or on a network drive.
-    console.warn(`[PROJECT_OPEN] Could not update .gitignore at ${projectPath}:`, err);
+    console.warn(`[PROJECT_OPEN] Could not update gitignore for ${projectPath} (scope=${scope}):`, err);
+  }
+}
+
+/**
+ * Switch gitignore scope for a project: move entries between project `.gitignore`
+ * and the global git excludes file.
+ *
+ * @param otherProjectsUseUserScope - true if other projects still use 'user' scope.
+ *   When switching away from 'user', global excludes entries are only removed if no
+ *   other project depends on them.
+ */
+export function switchGitignoreScope(
+  projectPath: string,
+  newScope: 'project' | 'user',
+  otherProjectsUseUserScope: boolean,
+): void {
+  if (!isGitRepo(projectPath)) return;
+  try {
+    if (newScope === 'user') {
+      // Remove from project .gitignore, add to global excludes
+      removeGitignoreEntries(path.join(projectPath, '.gitignore'));
+      const globalExcludesPath = getGlobalGitExcludesPath();
+      addEntriesToIgnoreFile(globalExcludesPath, MANAGED_GITIGNORE_ENTRIES);
+    } else {
+      // Add to project .gitignore, remove from global excludes if safe
+      const gitignorePath = path.join(projectPath, '.gitignore');
+      addEntriesToIgnoreFile(gitignorePath, MANAGED_GITIGNORE_ENTRIES, projectPath);
+      if (!otherProjectsUseUserScope) {
+        removeGitignoreEntries(getGlobalGitExcludesPath(), false);
+      }
+    }
+  } catch (err) {
+    console.warn(`[GITIGNORE] Failed to switch scope for ${projectPath}:`, err);
   }
 }
 

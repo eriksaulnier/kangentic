@@ -5,8 +5,25 @@ import { app, ipcMain, Notification, dialog, shell } from 'electron';
 import { IPC } from '../../../shared/ipc-channels';
 import { WorktreeManager, isGitRepo } from '../../git/worktree-manager';
 import { deepMergeConfig } from '../../../shared/object-utils';
-import type { NotificationInput, ClaudeCommand } from '../../../shared/types';
+import { switchGitignoreScope } from '../helpers';
+import type { AppConfig, NotificationInput, ClaudeCommand } from '../../../shared/types';
 import type { IpcContext } from '../ipc-context';
+
+/** Trigger gitignore scope switchover if the scope changed between config saves. */
+function applyGitignoreScopeChange(
+  context: IpcContext,
+  projectPath: string,
+  previousConfig: AppConfig,
+  newConfig: AppConfig,
+): void {
+  if (previousConfig.git.gitignoreScope === newConfig.git.gitignoreScope) return;
+  const otherProjects = context.projectRepo.list().filter((p) => p.path !== projectPath);
+  const otherUsesUserScope = otherProjects.some((p) => {
+    const projectOverrides = context.configManager.loadProjectOverrides(p.path);
+    return projectOverrides?.git?.gitignoreScope === 'user';
+  });
+  switchGitignoreScope(projectPath, newConfig.git.gitignoreScope, otherUsesUserScope);
+}
 
 export function registerSystemHandlers(context: IpcContext): void {
   // === App ===
@@ -41,7 +58,10 @@ export function registerSystemHandlers(context: IpcContext): void {
 
   ipcMain.handle(IPC.CONFIG_SET_PROJECT, (_, overrides) => {
     if (!context.currentProjectPath) throw new Error('No project open');
+    const previousConfig = context.configManager.getEffectiveConfig(context.currentProjectPath);
     context.configManager.saveProjectOverrides(context.currentProjectPath, overrides);
+    const newConfig = context.configManager.getEffectiveConfig(context.currentProjectPath);
+    applyGitignoreScopeChange(context, context.currentProjectPath, previousConfig, newConfig);
   });
 
   ipcMain.handle(IPC.CONFIG_GET_PROJECT_BY_PATH, (_, projectPath: string) => {
@@ -53,7 +73,10 @@ export function registerSystemHandlers(context: IpcContext): void {
   ipcMain.handle(IPC.CONFIG_SET_PROJECT_BY_PATH, (_, projectPath: string, overrides) => {
     const known = context.projectRepo.list().some((p) => p.path === projectPath);
     if (!known) throw new Error('Unknown project path');
+    const previousConfig = context.configManager.getEffectiveConfig(projectPath);
     context.configManager.saveProjectOverrides(projectPath, overrides);
+    const newConfig = context.configManager.getEffectiveConfig(projectPath);
+    applyGitignoreScopeChange(context, projectPath, previousConfig, newConfig);
   });
 
   ipcMain.handle(IPC.CONFIG_SYNC_DEFAULT_TO_PROJECTS, (_, partial) => {
