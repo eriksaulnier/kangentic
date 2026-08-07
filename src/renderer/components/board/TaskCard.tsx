@@ -54,6 +54,13 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
     ),
   );
   const displayState = useSessionDisplayState(sessionId);
+  const phase = useSessionStore(
+    useCallback(
+      (s: ReturnType<typeof useSessionStore.getState>) =>
+        sessionId ? s.sessionPhase[sessionId] : undefined,
+      [sessionId],
+    ),
+  );
 
   // Derive contextual label for the initializing state (mirrors TerminalTab logic)
   const pendingCommandLabel = useSessionStore((s) => s.pendingCommandLabel[task.id] ?? null);
@@ -173,11 +180,18 @@ const TaskCardInner = function TaskCard({ task, isDragOverlay, compact, onDelete
           <div className="text-sm text-fg font-medium truncate">{task.title}</div>
         </div>
 
-        {task.pr_url && (
+        {(task.pr_url || phase) && (
           <div className="flex items-center gap-2 mt-1.5">
-            <span className="text-xs text-accent-fg">
-              PR #{task.pr_number}
-            </span>
+            {task.pr_url && (
+              <span className="text-xs text-accent-fg">
+                PR #{task.pr_number}
+              </span>
+            )}
+            {phase && (
+              <span className="text-xs text-fg-muted truncate" data-testid="phase-badge">
+                {phase.detail ? `${phase.phase} · ${phase.detail}` : phase.phase}
+              </span>
+            )}
           </div>
         )}
 

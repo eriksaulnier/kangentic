@@ -50,6 +50,7 @@ export function registerSystemHandlers(context: IpcContext): void {
     context.sessionManager.setMaxConcurrent(effective.claude.maxConcurrentSessions);
     context.sessionManager.setShell(effective.terminal.shell);
     context.sessionManager.setIdleTimeout(effective.claude.idleTimeoutMinutes);
+    context.sessionManager.setPhaseMap(effective.claude.phaseMap);
   });
 
   ipcMain.handle(IPC.CONFIG_GET_PROJECT, () => {

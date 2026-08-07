@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Session, SessionUsage, ActivityState, SessionEvent, SpawnSessionInput } from '../../shared/types';
+import type { Session, SessionUsage, ActivityState, SessionEvent, SessionPhase, SpawnSessionInput } from '../../shared/types';
 import { useProjectStore } from './project-store';
 
 const MAX_EVENTS_PER_SESSION = 500;
@@ -24,6 +24,7 @@ interface SessionStore {
   sessionUsage: Record<string, SessionUsage>;
   sessionActivity: Record<string, ActivityState>;
   sessionEvents: Record<string, SessionEvent[]>;
+  sessionPhase: Record<string, SessionPhase>;
   seenIdleSessions: Record<string, boolean>;
   /** Command label to show in the terminal overlay (e.g. "/code-review") keyed by task ID */
   pendingCommandLabel: Record<string, string>;
@@ -45,6 +46,7 @@ interface SessionStore {
   updateActivity: (sessionId: string, state: ActivityState) => void;
   addEvent: (sessionId: string, event: SessionEvent) => void;
   clearEvents: (sessionId: string) => void;
+  updatePhase: (sessionId: string, phase: SessionPhase | null) => void;
   setPendingCommandLabel: (taskId: string, label: string) => void;
   clearPendingCommandLabel: (taskId: string) => void;
   markIdleSessionsSeen: (projectId: string) => void;
@@ -63,6 +65,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   sessionUsage: {},
   sessionActivity: {},
   sessionEvents: {},
+  sessionPhase: {},
   seenIdleSessions: {},
   pendingCommandLabel: {},
   _pendingOpenTaskId: null,
@@ -226,6 +229,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const { [sessionId]: _, ...rest } = s.sessionEvents;
       return { sessionEvents: rest };
+    });
+  },
+
+  updatePhase: (sessionId, phase) => {
+    set((s) => {
+      if (!phase) {
+        const { [sessionId]: _, ...rest } = s.sessionPhase;
+        return { sessionPhase: rest };
+      }
+      return { sessionPhase: { ...s.sessionPhase, [sessionId]: phase } };
     });
   },
 

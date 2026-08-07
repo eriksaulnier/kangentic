@@ -256,6 +256,7 @@ export async function openProjectByPath(context: IpcContext, projectPath: string
 
   context.sessionManager.setMaxConcurrent(effectiveConfig.claude.maxConcurrentSessions);
   context.sessionManager.setShell(effectiveConfig.terminal.shell);
+  context.sessionManager.setPhaseMap(effectiveConfig.claude.phaseMap);
 
   if (!isReopen) {
     // Prune tasks whose worktrees have been deleted externally
@@ -363,6 +364,7 @@ export function registerProjectHandlers(context: IpcContext): void {
     // Apply project config overrides (always -- config may have changed)
     context.sessionManager.setMaxConcurrent(config.claude.maxConcurrentSessions);
     context.sessionManager.setShell(config.terminal.shell);
+    context.sessionManager.setPhaseMap(config.claude.phaseMap);
 
     if (!isReopen) {
       // Prune tasks whose worktrees have been deleted externally

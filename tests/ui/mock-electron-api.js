@@ -18,6 +18,7 @@
   let summaryCache = {};
   let currentProjectId = null;
   let projectConfigs = {};
+  let phaseListeners = [];
 
   let config = Object.assign({
     theme: 'dark',
@@ -39,6 +40,7 @@
       permissionMode: 'default',
       cliPath: null,
       configDir: null,
+      phaseMap: {},
       maxConcurrentSessions: 8,
       queueOverflow: 'queue',
       idleTimeoutMinutes: 0,
@@ -145,6 +147,7 @@
       claude: {
         permissionMode: config.claude.permissionMode,
         configDir: config.claude.configDir,
+        phaseMap: config.claude.phaseMap,
       },
       git: {
         gitignoreScope: config.git.gitignoreScope,
@@ -733,6 +736,12 @@
       onEvent: function () {
         return noop;
       },
+      onPhase: function (callback) {
+        phaseListeners.push(callback);
+        return function () {
+          phaseListeners = phaseListeners.filter(function (fn) { return fn !== callback; });
+        };
+      },
       onIdleTimeout: function () {
         return noop;
       },
@@ -884,6 +893,13 @@
    * Called from addInitScript before React mounts to set up complex scenarios
    * (e.g. tasks with sessions, activity state, usage data).
    */
+  /** Push a session:phase event to subscribed listeners, as the main process would. */
+  window.__mockEmitPhase = function (sessionId, phase, projectId) {
+    phaseListeners.forEach(function (fn) {
+      fn(sessionId, phase, projectId === undefined ? currentProjectId : projectId);
+    });
+  };
+
   window.__mockPreConfigure = function (fn) {
     var result = fn({
       projects: projects,

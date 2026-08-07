@@ -289,6 +289,20 @@ export interface SessionEvent {
   detail?: string;  // file path, command, etc.
 }
 
+// === Session Phase (agent-reported progress) ===
+
+/**
+ * Where a session is in whatever loop its skill is running.
+ *
+ * Written by the agent to `$KANGENTIC_PHASE_FILE`, or derived from the
+ * running subagent's type via `claude.phaseMap` when the skill knows
+ * nothing about Kangentic.
+ */
+export interface SessionPhase {
+  phase: string;
+  detail?: string;
+}
+
 // === Session Usage (Claude Code Status Line) ===
 
 export interface SessionUsage {
@@ -393,6 +407,7 @@ export interface AppConfig {
     permissionMode: PermissionMode;
     cliPath: string | null; // null = auto-detect on PATH
     configDir: string | null; // null = inherit the primary account (CLAUDE_CONFIG_DIR unset)
+    phaseMap: Record<string, string>; // subagent agent_type → phase label shown on the card
     maxConcurrentSessions: number;
     queueOverflow: 'queue' | 'reject';
     idleTimeoutMinutes: number; // 0 = disabled
@@ -451,6 +466,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     permissionMode: 'default',
     cliPath: null,
     configDir: null,
+    phaseMap: {},
     maxConcurrentSessions: 8,
     queueOverflow: 'queue',
     idleTimeoutMinutes: 0,
@@ -770,6 +786,7 @@ export interface ElectronAPI {
     getEvents: (sessionId: string) => Promise<SessionEvent[]>;
     getEventsCache: (projectId?: string) => Promise<Record<string, SessionEvent[]>>;
     onEvent: (callback: (sessionId: string, event: SessionEvent, projectId?: string) => void) => () => void;
+    onPhase: (callback: (sessionId: string, phase: SessionPhase | null, projectId?: string) => void) => () => void;
     onIdleTimeout: (callback: (sessionId: string, taskId: string, timeoutMinutes: number, projectId?: string) => void) => () => void;
     getSummary: (taskId: string) => Promise<SessionSummary | null>;
     listSummaries: () => Promise<Record<string, SessionSummary>>;

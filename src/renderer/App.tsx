@@ -20,6 +20,7 @@ export function App() {
   const updateUsage = useSessionStore((s) => s.updateUsage);
   const updateActivity = useSessionStore((s) => s.updateActivity);
   const addEvent = useSessionStore((s) => s.addEvent);
+  const updatePhase = useSessionStore((s) => s.updatePhase);
 
   const debouncedSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -314,6 +315,17 @@ export function App() {
       }));
     }
 
+    // Session phase (agent-reported loop progress -- card badge)
+    // Only track phases for current project sessions
+    if (sessions.onPhase) {
+      cleanups.push(sessions.onPhase((sessionId, phase, projectId) => {
+        const activeProjectId = useProjectStore.getState().currentProject?.id;
+        if (!projectId || !activeProjectId || projectId === activeProjectId) {
+          updatePhase(sessionId, phase);
+        }
+      }));
+    }
+
     // Notification clicked -- switch project and open task detail
     const notifications = window.electronAPI?.notifications;
     if (notifications?.onClicked) {
@@ -378,7 +390,7 @@ export function App() {
       cleanups.forEach((fn) => fn());
       if (debouncedSyncRef.current) clearTimeout(debouncedSyncRef.current);
     };
-  }, [updateSessionStatus, updateUsage, updateActivity, addEvent]);
+  }, [updateSessionStatus, updateUsage, updateActivity, addEvent, updatePhase]);
 
   return <AppLayout />;
 }

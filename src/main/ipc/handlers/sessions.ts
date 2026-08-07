@@ -155,6 +155,13 @@ export function registerSessionHandlers(context: IpcContext): void {
     }
   });
 
+  context.sessionManager.on('phase', (sessionId: string, phase: unknown) => {
+    if (!context.mainWindow.isDestroyed()) {
+      const projectId = context.sessionManager.getSessionProjectId(sessionId);
+      context.mainWindow.webContents.send(IPC.SESSION_PHASE, sessionId, phase, projectId);
+    }
+  });
+
   context.sessionManager.on('status', (sessionId: string, status: string) => {
     if (status === 'running') {
       sessionStartTimes.set(sessionId, Date.now());

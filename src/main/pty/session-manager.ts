@@ -12,7 +12,7 @@ import { adaptCommandForShell } from '../../shared/paths';
 import { EventType, EventTypeActivity, ClaudeTool } from '../../shared/types';
 import { trackEvent, sanitizeErrorMessage } from '../analytics/analytics';
 import { findSafeStartIndex } from './scrollback-utils';
-import type { Session, SessionStatus, SessionUsage, ActivityState, SessionEvent, SpawnSessionInput } from '../../shared/types';
+import type { Session, SessionStatus, SessionUsage, ActivityState, SessionEvent, SessionPhase, SpawnSessionInput } from '../../shared/types';
 
 // On macOS, node-pty uses a spawn-helper binary via posix_spawn.
 // npm sometimes strips the execute bit from prebuilt binaries during install,
@@ -67,10 +67,12 @@ interface ManagedSession {
   scrollback: string;
   statusOutputPath: string | null;
   eventsOutputPath: string | null;
+  phaseOutputPath: string | null;
   eventsFileOffset: number;
   mergedSettingsPath: string | null;
   statusFileWatcher: FileWatcher | null;
   eventsFileWatcher: FileWatcher | null;
+  phaseFileWatcher: FileWatcher | null;
   resuming: boolean;
 }
 
@@ -87,6 +89,10 @@ export class SessionManager extends EventEmitter {
   private permissionIdle = new Map<string, boolean>();
   private idleTimestamp = new Map<string, number>();
   private lastThinkingSignal = new Map<string, number>();
+  private sessionPhase = new Map<string, SessionPhase>();
+  /** Sessions that have written phase.json -- their derived phase is ignored from then on. */
+  private explicitPhaseSessions = new Set<string>();
+  private phaseMap: Record<string, string> = {};
 
   private eventCache = new Map<string, SessionEvent[]>();
   private idleTimeoutMinutes = 0;
@@ -109,6 +115,11 @@ export class SessionManager extends EventEmitter {
 
   setMaxConcurrent(max: number): void {
     this.sessionQueue.setMaxConcurrent(max);
+  }
+
+  /** Map subagent agent_type → phase label, used when no skill writes phase.json. */
+  setPhaseMap(map: Record<string, string>): void {
+    this.phaseMap = map;
   }
 
   setIdleTimeout(minutes: number): void {
@@ -240,10 +251,12 @@ export class SessionManager extends EventEmitter {
         scrollback: '',
         statusOutputPath: input.statusOutputPath || null,
         eventsOutputPath: input.eventsOutputPath || null,
+        phaseOutputPath: input.phaseOutputPath || null,
         eventsFileOffset: 0,
         mergedSettingsPath: null,
         statusFileWatcher: null,
         eventsFileWatcher: null,
+        phaseFileWatcher: null,
         resuming: false,
       };
       this.sessions.set(id, session);
@@ -278,6 +291,8 @@ export class SessionManager extends EventEmitter {
       existing.statusFileWatcher = null;
       existing.eventsFileWatcher?.close();
       existing.eventsFileWatcher = null;
+      existing.phaseFileWatcher?.close();
+      existing.phaseFileWatcher = null;
     }
 
     // Null out file paths on the old session object to prevent its
@@ -290,6 +305,7 @@ export class SessionManager extends EventEmitter {
       existing.mergedSettingsPath = null;
       existing.statusOutputPath = null;
       existing.eventsOutputPath = null;
+      existing.phaseOutputPath = null;
     }
 
     // Remove old session from map and caches so findByTaskId returns
@@ -303,6 +319,8 @@ export class SessionManager extends EventEmitter {
       this.pendingIdleWhileSubagent.delete(existing.id);
       this.permissionIdle.delete(existing.id);
       this.idleTimestamp.delete(existing.id);
+      this.sessionPhase.delete(existing.id);
+      this.explicitPhaseSessions.delete(existing.id);
     }
 
     // Carry over previous scrollback so scroll history is preserved across
@@ -407,10 +425,12 @@ export class SessionManager extends EventEmitter {
         scrollback: previousScrollback,
         statusOutputPath: input.statusOutputPath || null,
         eventsOutputPath: input.eventsOutputPath || null,
+        phaseOutputPath: input.phaseOutputPath || null,
         eventsFileOffset: 0,
         mergedSettingsPath: null,
         statusFileWatcher: null,
         eventsFileWatcher: null,
+        phaseFileWatcher: null,
         resuming: input.resuming ?? false,
       };
       this.sessions.set(id, failedSession);
@@ -442,10 +462,12 @@ export class SessionManager extends EventEmitter {
       scrollback: previousScrollback,
       statusOutputPath: input.statusOutputPath || null,
       eventsOutputPath: input.eventsOutputPath || null,
+      phaseOutputPath: input.phaseOutputPath || null,
       eventsFileOffset: 0,
       mergedSettingsPath,
       statusFileWatcher: null,
       eventsFileWatcher: null,
+      phaseFileWatcher: null,
       resuming: input.resuming ?? false,
     };
 
@@ -468,6 +490,13 @@ export class SessionManager extends EventEmitter {
       this.startEventWatcher(session);
     }
 
+    // Delete any phase.json left by the previous run so a stale phase from
+    // the last conversation doesn't outlive it on the card.
+    if (input.phaseOutputPath) {
+      try { fs.unlinkSync(input.phaseOutputPath); } catch { /* may not exist yet */ }
+      this.startPhaseWatcher(session);
+    }
+
     // Default activity to 'idle'. The 'thinking' state is only set when
     // a Claude Code hook (UserPromptSubmit) explicitly fires. This avoids
     // perpetual spinners when hooks don't work in a given environment.
@@ -480,6 +509,8 @@ export class SessionManager extends EventEmitter {
     this.permissionIdle.delete(id);
     this.idleTimestamp.set(id, Date.now());
     this.lastThinkingSignal.delete(id);
+    this.sessionPhase.delete(id);
+    this.explicitPhaseSessions.delete(id);
 
     this.emit('activity', id, 'idle', false);
 
@@ -526,6 +557,8 @@ export class SessionManager extends EventEmitter {
       session.statusFileWatcher = null;
       session.eventsFileWatcher?.close();
       session.eventsFileWatcher = null;
+      session.phaseFileWatcher?.close();
+      session.phaseFileWatcher = null;
 
       this.emit('exit', id, exitCode);
       this.sessionQueue.notifySlotFreed();
@@ -578,6 +611,8 @@ export class SessionManager extends EventEmitter {
     this.permissionIdle.delete(sessionId);
     this.idleTimestamp.delete(sessionId);
     this.lastThinkingSignal.delete(sessionId);
+    this.sessionPhase.delete(sessionId);
+    this.explicitPhaseSessions.delete(sessionId);
 
     this.eventCache.delete(sessionId);
   }
@@ -614,11 +649,14 @@ export class SessionManager extends EventEmitter {
     session.statusFileWatcher = null;
     session.eventsFileWatcher?.close();
     session.eventsFileWatcher = null;
+    session.phaseFileWatcher?.close();
+    session.phaseFileWatcher = null;
 
     // Null out file paths BEFORE killing so the onExit handler's
     // cleanupSessionFiles() skips file deletion -- files persist for resume
     session.statusOutputPath = null;
     session.eventsOutputPath = null;
+    session.phaseOutputPath = null;
     session.mergedSettingsPath = null;
 
     // Synthetic session_end before we kill -- Claude Code's hook won't fire
@@ -631,7 +669,7 @@ export class SessionManager extends EventEmitter {
     this.permissionIdle.delete(sessionId);
     this.idleTimestamp.delete(sessionId);
     this.lastThinkingSignal.delete(sessionId);
-
+    this.clearPhase(sessionId);
 
     // Mark suspended BEFORE killing so the async onExit handler preserves it
     session.status = 'suspended';
@@ -847,6 +885,63 @@ export class SessionManager extends EventEmitter {
     this.readAndEmitUsage(session);
   }
 
+  // ---------------------------------------------------------------------------
+  // Phase beacon (agent-reported progress)
+  // ---------------------------------------------------------------------------
+
+  /** Publish a phase for a session, skipping no-op repeats. */
+  private setPhase(sessionId: string, phase: SessionPhase): void {
+    const current = this.sessionPhase.get(sessionId);
+    if (current && current.phase === phase.phase && current.detail === phase.detail) return;
+    this.sessionPhase.set(sessionId, phase);
+    this.emit('phase', sessionId, phase);
+  }
+
+  /** Drop a session's phase and tell the renderer to clear its badge. */
+  private clearPhase(sessionId: string): void {
+    this.explicitPhaseSessions.delete(sessionId);
+    if (!this.sessionPhase.delete(sessionId)) return;
+    this.emit('phase', sessionId, null);
+  }
+
+  /**
+   * Read the phase beacon a skill wrote to `$KANGENTIC_PHASE_FILE`.
+   *
+   * The first successful read marks the session as reporting explicitly, after
+   * which derived phases are ignored for it -- a skill that knows about
+   * Kangentic is a better source than the agent type we happen to observe.
+   */
+  private readAndEmitPhase(session: ManagedSession): void {
+    if (!session.phaseOutputPath) return;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(fs.readFileSync(session.phaseOutputPath, 'utf-8'));
+    } catch {
+      // File may not exist yet, or be caught mid-write -- the watcher re-fires
+      return;
+    }
+    if (!parsed || typeof parsed !== 'object') return;
+    const { phase, detail } = parsed as { phase?: unknown; detail?: unknown };
+    if (typeof phase !== 'string' || !phase) return;
+
+    this.explicitPhaseSessions.add(session.id);
+    this.setPhase(session.id, {
+      phase,
+      ...(typeof detail === 'string' && detail ? { detail } : {}),
+    });
+  }
+
+  private startPhaseWatcher(session: ManagedSession): void {
+    if (!session.phaseOutputPath) return;
+    session.phaseFileWatcher = new FileWatcher({
+      filePath: session.phaseOutputPath,
+      onChange: () => this.readAndEmitPhase(session),
+      label: `Phase:${session.id.slice(0, 8)}`,
+      debounceMs: 100,
+      initialGracePeriodMs: 15_000,
+    });
+  }
+
   /**
    * Read new lines from a session's events JSONL file and process them.
    * Shared by both the fs.watch callback and polling fallback.
@@ -907,6 +1002,13 @@ export class SessionManager extends EventEmitter {
           if (event.type === EventType.SubagentStart) {
             const currentDepth = this.subagentDepth.get(session.id) || 0;
             this.subagentDepth.set(session.id, currentDepth + 1);
+
+            // Derived phase: map the subagent's type to a label. Skipped once
+            // the session has written phase.json -- explicit always wins.
+            const derived = event.detail ? this.phaseMap[event.detail] : undefined;
+            if (derived && !this.explicitPhaseSessions.has(session.id)) {
+              this.setPhase(session.id, { phase: derived });
+            }
           } else if (event.type === EventType.SubagentStop) {
             const currentDepth = this.subagentDepth.get(session.id) || 0;
             const newDepth = Math.max(0, currentDepth - 1);
@@ -921,7 +1023,11 @@ export class SessionManager extends EventEmitter {
               }
             }
 
-
+            // A derived phase only describes a running subagent, so it expires
+            // when the last one finishes. An explicit phase outlives them.
+            if (newDepth === 0 && !this.explicitPhaseSessions.has(session.id)) {
+              this.clearPhase(session.id);
+            }
           }
 
           // Derive activity state from events via declarative lookup.
@@ -1049,6 +1155,8 @@ export class SessionManager extends EventEmitter {
     session.statusFileWatcher = null;
     session.eventsFileWatcher?.close();
     session.eventsFileWatcher = null;
+    session.phaseFileWatcher?.close();
+    session.phaseFileWatcher = null;
     // Clean up status JSON file
     if (session.statusOutputPath) {
       try { fs.unlinkSync(session.statusOutputPath); } catch { /* may not exist */ }
@@ -1057,6 +1165,11 @@ export class SessionManager extends EventEmitter {
     // Clean up events JSONL file
     if (session.eventsOutputPath) {
       try { fs.unlinkSync(session.eventsOutputPath); } catch { /* may not exist */ }
+    }
+
+    // Clean up phase beacon file
+    if (session.phaseOutputPath) {
+      try { fs.unlinkSync(session.phaseOutputPath); } catch { /* may not exist */ }
     }
 
     // Clean up merged settings file
@@ -1135,6 +1248,8 @@ export class SessionManager extends EventEmitter {
       session.statusFileWatcher = null;
       session.eventsFileWatcher?.close();
       session.eventsFileWatcher = null;
+      session.phaseFileWatcher?.close();
+      session.phaseFileWatcher = null;
 
       if (session.pty) {
         const ptyRef = session.pty;
@@ -1142,6 +1257,7 @@ export class SessionManager extends EventEmitter {
         // Null file paths before kill so onExit doesn't clean them up
         session.statusOutputPath = null;
         session.eventsOutputPath = null;
+        session.phaseOutputPath = null;
         session.mergedSettingsPath = null;
         try { ptyRef.kill(); } catch { /* already dead */ }
       }
