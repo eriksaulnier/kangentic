@@ -14,6 +14,7 @@ import { TaskBranchRow } from './TaskBranchRow';
 import { PriorityLabelsRow } from './PriorityLabelsRow';
 import { DialogFooterActions } from './DialogFooterActions';
 import { AdvancedOverridesSection } from './AdvancedOverridesSection';
+import { Field, FIELD_CONTROL_CLASS } from '../Field';
 import { fetchGitBranches } from '../../utils/git-branches';
 import { isValidGitBranchName } from '../../../shared/git-utils';
 import { slugify, computeAutoBranchName } from '../../../shared/slugify';
@@ -119,6 +120,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
   const [effortOverride, setEffortOverride] = useState('');
   const [permissionOverride, setPermissionOverride] = useState('');
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [configDir, setConfigDir] = useState('');
   // Which run-mode branch is selected. Persisted as `Task.run_mode`, so it is
   // real form state here rather than local state inside AdvancedOverridesSection
   // - which is also what lets `isDirty` below see it.
@@ -127,7 +129,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
   // Every field the user can touch, including the two that pin nothing on their
   // own: selecting Agent Override with all four inherited, or picking a Board
   // Profile, is still work to lose, so Escape must prompt.
-  const isDirty = title.trim() !== '' || description.trim() !== '' || customBranchName.trim() !== '' || attachments.length > 0 || labels.length > 0 || priority !== 0 || agentOverride !== '' || modelOverride !== '' || effortOverride !== '' || permissionOverride !== '' || profileId !== null || runMode !== 'column_settings';
+  const isDirty = title.trim() !== '' || description.trim() !== '' || customBranchName.trim() !== '' || attachments.length > 0 || labels.length > 0 || priority !== 0 || agentOverride !== '' || modelOverride !== '' || effortOverride !== '' || permissionOverride !== '' || profileId !== null || configDir.trim() !== '' || runMode !== 'column_settings';
 
   // Guard close gestures (X, Escape, backdrop, Ctrl+Shift+W) so unsaved work is
   // not lost: when the form is dirty, ask before discarding. Returns true to let
@@ -314,6 +316,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
         ...(effortOverride ? { effort_override: effortOverride } : {}),
         ...(permissionOverride ? { permission_mode: permissionOverride as PermissionMode } : {}),
         ...(profileId ? { profile_id: profileId } : {}),
+        ...(configDir.trim() ? { config_dir: configDir.trim() } : {}),
         // Always sent, never a conditional spread: 'column_settings' is a real
         // choice, not an absent one, and it is the half of the pair that carries
         // no pins to imply it.
@@ -445,6 +448,25 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
               profileId={profileId}
               setProfileId={setProfileId}
             />
+
+            {/* Outside AdvancedOverridesSection on purpose: that section toggles
+                between a Board Profile and the four mutually-exclusive pins,
+                while an account is orthogonal to both - a task riding a profile
+                still has to run as somebody. Gating it behind that toggle would
+                make it unreachable for exactly the profile tasks that need it. */}
+            <Field
+              label="Account"
+              hint="Config directory to run this task's agent as. Blank inherits the project's."
+            >
+              <input
+                type="text"
+                value={configDir}
+                onChange={(event) => setConfigDir(event.target.value)}
+                placeholder="Project default"
+                className={`${FIELD_CONTROL_CLASS} placeholder-fg-faint`}
+                data-testid="task-config-dir-input"
+              />
+            </Field>
 
             {/* Drag overlay */}
             {isDragOver && (
