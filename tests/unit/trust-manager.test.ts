@@ -175,9 +175,8 @@ describe('ensureWorktreeTrust', () => {
     expect(entry.allowedTools).toEqual(['Bash', 'Read']);
   });
 
-  it('writes to <configDir>/.claude.json when a config dir is given', () => {
+  it('writes to <configDir>/.claude.json when a config dir is given, creating it if absent', () => {
     const profileDir = path.join(tmpHome, '.claude3');
-    fs.mkdirSync(profileDir, { recursive: true });
     const wtPath = '/projects/myrepo/.kangentic/worktrees/fix-bug-abcd1234';
 
     ensureWorktreeTrust(wtPath, profileDir);

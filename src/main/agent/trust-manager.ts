@@ -45,6 +45,11 @@ export function ensureWorktreeTrust(worktreePath: string, configDir?: string | n
     }
   }
 
+  // A profile dir the user configured may not exist yet -- writeFileSync
+  // would throw ENOENT into a caller that swallows it, leaving spawns to
+  // block on the trust dialog with no visible cause.
+  fs.mkdirSync(path.dirname(claudeJsonPath), { recursive: true });
+
   projects[resolvedPath] = {
     allowedTools: [],
     enabledMcpjsonServers: parentMcpServers,

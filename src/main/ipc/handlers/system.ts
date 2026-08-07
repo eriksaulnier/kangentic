@@ -102,26 +102,34 @@ export function registerSystemHandlers(context: IpcContext): void {
     const projectPath = context.currentProjectPath;
     if (!projectPath) return [];
 
+    const homeDir = app.getPath('home');
+    const startDir = path.resolve(cwd || projectPath);
+
     // Collect candidate Claude config roots from cwd upward, similar to how
     // Claude Code discovers commands. Closest dirs first so nearer entries
-    // win on dedup.
-    const searchRoots: string[] = [];
-    const startDir = cwd || projectPath;
-    let current = path.resolve(startDir);
-    const root = path.parse(current).root;
-    while (current !== root) {
-      searchRoots.push(path.join(current, '.claude'));
+    // win on dedup. The walk stops below the home directory: user-level
+    // entries come from the active config dir, which is not ~/.claude under
+    // a profile, and reaching ~/.claude here would shadow it.
+    const commandRoots: string[] = [];
+    let current = startDir;
+    const filesystemRoot = path.parse(current).root;
+    while (current !== filesystemRoot && current !== homeDir) {
+      commandRoots.push(path.join(current, '.claude'));
       const parent = path.dirname(current);
       if (parent === current) break;
       current = parent;
     }
+
     // User-level entries live under the active Claude config dir, which is
     // ~/.claude only when no profile is configured.
     const effectiveConfig = context.configManager.getEffectiveConfig(projectPath);
-    searchRoots.push(
-      resolveClaudeConfigDir(effectiveConfig.claude.configDir)
-        ?? path.join(app.getPath('home'), '.claude'),
-    );
+    const userRoot = resolveClaudeConfigDir(effectiveConfig.claude.configDir)
+      ?? path.join(homeDir, '.claude');
+    commandRoots.push(userRoot);
+
+    // Skills, unlike commands, are not discovered by walking up the tree --
+    // Claude Code reads them from the project root and the user config dir only.
+    const skillRoots = [path.join(startDir, '.claude'), userRoot];
 
     const seen = new Set<string>(); // command names already collected (closest wins)
     const commands: ClaudeCommand[] = [];
@@ -195,8 +203,10 @@ export function registerSystemHandlers(context: IpcContext): void {
       }
     }
 
-    for (const claudeRoot of searchRoots) {
+    for (const claudeRoot of commandRoots) {
       walkCommands(path.join(claudeRoot, 'commands'), '');
+    }
+    for (const claudeRoot of skillRoots) {
       walkSkills(path.join(claudeRoot, 'skills'));
     }
 
