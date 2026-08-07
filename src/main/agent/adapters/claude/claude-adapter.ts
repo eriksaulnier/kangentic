@@ -110,9 +110,9 @@ export class ClaudeAdapter implements AgentAdapter {
       : staticCapabilities;
   }
 
-  async ensureTrust(workingDirectory: string): Promise<void> {
-    await ensureWorktreeTrust(workingDirectory);
-    await ensureMcpServerTrust(workingDirectory);
+  async ensureTrust(workingDirectory: string, configDir?: string | null): Promise<void> {
+    await ensureWorktreeTrust(workingDirectory, configDir);
+    await ensureMcpServerTrust(workingDirectory, configDir);
   }
 
   buildCommand(options: SpawnCommandOptions): string {
@@ -170,6 +170,22 @@ export class ClaudeAdapter implements AgentAdapter {
       reportTerminatedShells: (options) => reportTerminatedBackgroundShells(options),
     },
   };
+
+  /**
+   * Point the CLI at the config directory this spawn resolved to, which is what
+   * selects the ACCOUNT it authenticates as.
+   *
+   * The variable is always present in the returned record, `null` when no
+   * directory was chosen. It cannot simply be omitted: the spawn env is built on
+   * top of `process.env`, so a `CLAUDE_CONFIG_DIR` exported by the shell that
+   * launched Kangentic would otherwise be inherited by a spawn that resolved to
+   * "use the default", quietly running the task on the wrong account. `null`
+   * deletes it (see `buildSpawnEnv`); setting it to `''` would not - Claude Code
+   * reads an empty value as a real path and resolves it to the filesystem root.
+   */
+  buildEnv(options: SpawnCommandOptions): Record<string, string | null> | null {
+    return { CLAUDE_CONFIG_DIR: options.configDir || null };
+  }
 
   removeHooks(directory: string): void {
     removeClaudeHooks(directory);

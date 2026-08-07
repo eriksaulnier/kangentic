@@ -59,6 +59,13 @@ export function resolveShellArgs(shell: string): ShellInvocation {
  * for non-Claude agents, which ignore these vars, and it deliberately leaves
  * `ANTHROPIC_*` keys (BYOK / API auth) untouched.
  *
+ * A `null` value in `inputEnv` means DELETE the variable rather than set it,
+ * which setting it to `''` does not achieve: the base of the merge is
+ * `process.env`, so a variable exported by the shell that launched Kangentic is
+ * inherited unless something actively removes it. An adapter that selects a
+ * config directory needs "use the default" to mean the variable is absent, not
+ * empty (`CLAUDE_CONFIG_DIR=''` resolves to the filesystem root, not `~`).
+ *
  * `platform` is injectable for tests (cross-platform parity); production
  * callers omit it.
  */
@@ -83,13 +90,14 @@ export function resolveShellArgs(shell: string): ShellInvocation {
 export const FULL_REPAINT_ENV_KEY = 'CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT';
 
 export function buildSpawnEnv(
-  inputEnv: Record<string, string> | undefined,
+  inputEnv: Record<string, string | null> | undefined,
   platform: NodeJS.Platform = process.platform,
 ): Record<string, string> {
   const merged = { ...process.env, ...inputEnv };
   const result: Record<string, string> = {};
   for (const [key, value] of Object.entries(merged)) {
-    if (value === undefined) continue;
+    // null is the caller's explicit delete; it shadows whatever process.env had.
+    if (value === undefined || value === null) continue;
     if (key === 'CLAUDECODE' || (key.startsWith('CLAUDE_CODE_') && key !== FULL_REPAINT_ENV_KEY)) continue;
     result[key] = value;
   }

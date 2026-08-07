@@ -55,6 +55,12 @@ interface TransitionEngineConfig {
 export interface SpawnOverrides {
   model?: string | null;
   effort?: string | null;
+  /**
+   * Agent config directory (which ACCOUNT to authenticate as), already resolved
+   * task -> project -> global by `resolveSpawnOverrides`. Null selects the CLI's
+   * own default location, delivered by UNSETTING the variable at spawn.
+   */
+  configDir?: string | null;
   /** Isolated swimlane to resume/persist. Defaults to null (main session). */
   isolatedSwimlaneId?: string | null;
   /**
@@ -196,7 +202,9 @@ export class TransitionEngine {
     // Pre-populate trust so the agent doesn't block on the trust dialog.
     // This covers both worktree paths and the main project path (important
     // for demo mode where the project has never been opened in Claude Code).
-    await adapter.ensureTrust(cwd);
+    // Trust lives in the ACCOUNT's own config directory, so it has to be written
+    // to the one this spawn will actually run under, not the default.
+    await adapter.ensureTrust(cwd, spawnOverrides?.configDir ?? null);
     console.log(`[spawnAgent] Trust ensured for ${cwd}`);
 
     // Which session this spawn belongs to: null = the task's main session, the
@@ -309,6 +317,7 @@ export class TransitionEngine {
       mcpServerToken: appConfig.mcpServerToken,
       model: spawnOverrides?.model ?? undefined,
       effort: spawnOverrides?.effort ?? undefined,
+      configDir: spawnOverrides?.configDir ?? null,
       executionTarget,
       launchOptions,
     };

@@ -39,7 +39,7 @@ export interface PreparedSpawn {
    * (OpenCode `OPENCODE_CONFIG_CONTENT`). Null for adapters that wire MCP
    * via CLI flag or settings file.
    */
-  extraEnv: Record<string, string> | null;
+  extraEnv: Record<string, string | null> | null;
   /**
    * The model/effort this command actually applies via `--model` / `--effort`
    * (null = agent default, no flag). The caller persists these to the session
@@ -153,7 +153,15 @@ export async function prepareAgentSpawn(input: {
   const detection = await adapter.detect(cliPathOverride);
   if (!detection.found || !detection.path) return { ok: false, reason: 'cli-not-found' };
 
-  await adapter.ensureTrust(cwd);
+  // Which ACCOUNT this spawn runs as, task -> project -> global. `config` is
+  // already the project-merged effective config, so it carries the lower two
+  // rungs. Mirrors `resolveSpawnOverrides` on the board path - startup recovery
+  // has to bring a task back on the same account it was running on.
+  const configDir = task.config_dir ?? config.agent.configDir ?? null;
+
+  // Trust lives in the account's own config directory, so it has to be written
+  // to the one this spawn will actually run under, not the default.
+  await adapter.ensureTrust(cwd, configDir);
 
   // "Plan always wins, else task -> lane -> global" - the rule lives in
   // resolveEffectivePermissionMode (spawn-preamble.ts).
@@ -210,6 +218,7 @@ export async function prepareAgentSpawn(input: {
     // column moves until they clear it.
     model: task.model_override ?? swimlane?.model_override ?? input.projectDefaultModel ?? undefined,
     effort: task.effort_override ?? swimlane?.effort_override ?? input.projectDefaultEffort ?? undefined,
+    configDir,
     executionTarget: resolveExecutionTarget(agent, config.agent.executionServers, config.agent.execution) ?? undefined,
     launchOptions: resolveLaunchOptions(adapter, config.agent.launchOptions),
   };

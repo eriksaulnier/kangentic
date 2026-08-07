@@ -151,7 +151,7 @@ export async function performSpawn(
   // inline in the agent process (OpenCode plugins) need the path on
   // process.env. Setting it universally is harmless: hook-bridge-based
   // adapters ignore the env var.
-  const spawnEnv: Record<string, string> = { ...(input.env ?? {}) };
+  const spawnEnv: Record<string, string | null> = { ...(input.env ?? {}) };
   if (input.eventsOutputPath) {
     spawnEnv.KANGENTIC_EVENTS_PATH = input.eventsOutputPath;
   }

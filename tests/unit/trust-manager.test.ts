@@ -352,3 +352,82 @@ describe('Concurrent trust writes', () => {
     expect(dataAfter).toEqual(dataBefore);
   });
 });
+
+/**
+ * Trust under a non-default config directory (a second account).
+ *
+ * Claude Code reads `<configDir>/.claude.json`, so a trust entry written to
+ * `~/.claude.json` is invisible to an agent running under a config directory -
+ * every worktree spawn on that account would sit on the trust dialog. These
+ * pin the file SELECTION, which is the part that fails silently.
+ */
+describe('trust under a config directory', () => {
+  let configDir: string;
+
+  beforeEach(() => {
+    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trust-cfg-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(configDir, { recursive: true, force: true });
+  });
+
+  function readAt(directory: string): Record<string, unknown> {
+    return JSON.parse(fs.readFileSync(path.join(directory, '.claude.json'), 'utf-8'));
+  }
+
+  it('writes the worktree trust entry inside the config dir, not the home dir', async () => {
+    const worktreePath = '/projects/myrepo/.kangentic/worktrees/task-1';
+
+    await ensureWorktreeTrust(worktreePath, configDir);
+
+    const projects = readAt(configDir).projects as Record<string, Record<string, unknown>>;
+    expect(projects[worktreePath].hasTrustDialogAccepted).toBe(true);
+    expect(fs.existsSync(claudeJsonPath())).toBe(false);
+  });
+
+  it('writes the MCP approval inside the config dir, not the home dir', async () => {
+    const projectPath = '/projects/myrepo';
+
+    await ensureMcpServerTrust(projectPath, configDir);
+
+    const projects = readAt(configDir).projects as Record<string, Record<string, unknown>>;
+    expect(projects[projectPath].enabledMcpjsonServers).toContain('kangentic');
+    expect(fs.existsSync(claudeJsonPath())).toBe(false);
+  });
+
+  it('expands a leading ~ so a stored `~/dir` value is not taken literally', async () => {
+    const worktreePath = '/projects/myrepo/.kangentic/worktrees/task-2';
+    const nested = path.join(tmpHome, 'accounts', 'work');
+    fs.mkdirSync(nested, { recursive: true });
+
+    await ensureWorktreeTrust(worktreePath, '~/accounts/work');
+
+    const projects = readAt(nested).projects as Record<string, Record<string, unknown>>;
+    expect(projects[worktreePath].hasTrustDialogAccepted).toBe(true);
+  });
+
+  it('keeps two accounts in separate trust files', async () => {
+    const otherConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trust-cfg2-'));
+    try {
+      await ensureWorktreeTrust('/projects/a/.kangentic/worktrees/1', configDir);
+      await ensureWorktreeTrust('/projects/b/.kangentic/worktrees/2', otherConfigDir);
+
+      const first = readAt(configDir).projects as Record<string, unknown>;
+      const second = readAt(otherConfigDir).projects as Record<string, unknown>;
+      expect(Object.keys(first)).toEqual(['/projects/a/.kangentic/worktrees/1']);
+      expect(Object.keys(second)).toEqual(['/projects/b/.kangentic/worktrees/2']);
+    } finally {
+      fs.rmSync(otherConfigDir, { recursive: true, force: true });
+    }
+  });
+
+  it('null config dir still resolves to the home file (the default account)', async () => {
+    const worktreePath = '/projects/myrepo/.kangentic/worktrees/task-3';
+
+    await ensureWorktreeTrust(worktreePath, null);
+
+    const projects = readClaudeJson().projects as Record<string, Record<string, unknown>>;
+    expect(projects[worktreePath].hasTrustDialogAccepted).toBe(true);
+  });
+});

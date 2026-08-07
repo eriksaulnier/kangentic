@@ -142,7 +142,10 @@ export async function restartSessionForSettingsChange(
         undefined, // signal
         undefined, // targetAgent - resolved internally from the task/session
         undefined, // handoffPromptPrefix
-        resolveSpawnOverrides(updatedTask, updatedLane, project),
+        resolveSpawnOverrides(
+          updatedTask, updatedLane, project,
+          context.configManager.getEffectiveConfig(projectPath || undefined).agent.configDir,
+        ),
       );
       // This restart resumes IDLE by contract (no prompt, no auto_command), but
       // `--resume` still runs the CLI's resume-picker context reload: a turn

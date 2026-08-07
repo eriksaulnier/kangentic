@@ -37,6 +37,11 @@ import { runWithProjectLogContext } from '../../diagnostics/project-log-context'
  * `undefined` rather than `null` and downstream `?? undefined` coalescing
  * stays a no-op.
  *
+ * configDir: which ACCOUNT the agent authenticates as, task -> project -> global,
+ * where the caller passes the project-merged global value. There is deliberately
+ * no swimlane rung - an account belongs to whoever is running the work, not to
+ * the column it sits in.
+ *
  * isolatedSwimlaneId / forceFresh: derived from the destination column's session
  * target + spawn strategy. This is the single resolution site for the spawn path,
  * so every spawn through spawnAgent (normal move, session switch, Phase 3 deferred
@@ -44,13 +49,21 @@ import { runWithProjectLogContext } from '../../diagnostics/project-log-context'
  * threading them as separate parameters.
  */
 export function resolveSpawnOverrides(
-  task: Pick<Task, 'model_override' | 'effort_override'>,
+  task: Pick<Task, 'model_override' | 'effort_override' | 'config_dir'>,
   lane: Pick<Swimlane, 'id' | 'model_override' | 'effort_override' | 'session_target' | 'session_spawn_strategy'> | null | undefined,
   project?: Pick<Project, 'default_model' | 'default_effort'> | null,
-): { model: string | null | undefined; effort: string | null | undefined; isolatedSwimlaneId: string | null; forceFresh: boolean } {
+  effectiveConfigDir?: string | null,
+): { model: string | null | undefined; effort: string | null | undefined; configDir: string | null; isolatedSwimlaneId: string | null; forceFresh: boolean } {
   return {
     model: task.model_override ?? lane?.model_override ?? project?.default_model,
     effort: task.effort_override ?? lane?.effort_override ?? project?.default_effort,
+    // Two rungs here, not three: `effectiveConfigDir` is already the global
+    // `agent.configDir` with this project's `.kangentic/config.json` override
+    // merged in (see `ConfigManager.getEffectiveConfig`), so the project rung
+    // arrives resolved. Coalesced to null (not undefined) because null is the
+    // meaningful value downstream - it is what DELETES the config-dir variable
+    // at spawn, which is how the CLI's default account is selected.
+    configDir: task.config_dir ?? effectiveConfigDir ?? null,
     isolatedSwimlaneId: resolveIsolatedSwimlaneId(lane),
     forceFresh: resolveForceFresh(lane),
   };
@@ -185,6 +198,11 @@ export async function spawnAgent(options: AgentSpawnOptions): Promise<void> {
   // without establishing a new context, inheriting any ambient tag (e.g. from
   // an enclosing task-move).
   const project = options.projectId ? context.projectRepo.getById(options.projectId) : null;
+  // Global `agent.configDir` with this project's `.kangentic/config.json`
+  // override already merged in - the lower two rungs of the account ladder,
+  // resolved once per spawn.
+  const effectiveConfigDir = context.configManager
+    .getEffectiveConfig(options.projectPath || undefined).agent.configDir;
 
   // Auto_command template vars for the current task snapshot. defaultBaseBranch
   // is resolved once per spawn (board config -> project/global config ->
@@ -302,7 +320,7 @@ export async function spawnAgent(options: AgentSpawnOptions): Promise<void> {
         task, toLane.permission_mode, skipPromptTemplate, undefined, signal,
         targetAgent,
         handoffPromptPrefix,
-        resolveSpawnOverrides(task, toLane, project),
+        resolveSpawnOverrides(task, toLane, project, effectiveConfigDir),
       );
     } catch (error) {
       if (isAbortError(error)) throw error;
@@ -341,7 +359,7 @@ export async function spawnAgent(options: AgentSpawnOptions): Promise<void> {
   try {
     await engine.executeTransition(
       task, fromSwimlaneId, toLane.id, toLane.permission_mode, skipPromptTemplate, signal, targetAgent,
-      resolveSpawnOverrides(task, toLane, project),
+      resolveSpawnOverrides(task, toLane, project, effectiveConfigDir),
       // A create_worktree action runs inside the transition; give it the same
       // progress labels as the default task-move worktree path so its
       // "Creating worktree..." / "Running setup script..." phases reach the card.
@@ -419,7 +437,7 @@ export async function spawnAgent(options: AgentSpawnOptions): Promise<void> {
       currentTask, toLane.permission_mode, skipPromptTemplate, resumePrompt, signal,
       targetAgent,
       undefined,
-      resolveSpawnOverrides(currentTask, toLane, project),
+      resolveSpawnOverrides(currentTask, toLane, project, effectiveConfigDir),
     );
   } catch (error) {
     if (isAbortError(error)) throw error;

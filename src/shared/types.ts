@@ -331,6 +331,20 @@ export interface Task {
   model_override: string | null;
   /** Per-task effort override set via the ContextBar popover or locked at first spawn (see `lockAdvancedOverridesOnFirstSpawn`). Takes precedence over the swimlane's `effort_override`; null inherits the swimlane (or agent default). */
   effort_override: string | null;
+  /**
+   * Per-task agent config directory - which ACCOUNT this task's agent
+   * authenticates as. Wins over the project's `default_config_dir` and then the
+   * global `agent.configDir`; null inherits.
+   *
+   * This is what lets concurrent tasks run on different accounts, so one
+   * account's rate limit does not stall the whole board.
+   *
+   * Deliberately NOT part of the profile/direct-override exclusivity set (like
+   * `auto_command`, and unlike the four Advanced pins): an account is orthogonal
+   * to a strategy ladder, and a task riding a Board Profile still has to run on
+   * some account. A task may therefore carry both this and `profile_id`.
+   */
+  config_dir: string | null;
   /** Per-task agent override set at task creation. When non-null, wins over the swimlane's `agent_override` and the project default for the task's entire lifetime - column moves cannot change the agent. Set via the New Task dialog's Advanced section or locked at first spawn (`lockAdvancedOverridesOnFirstSpawn`); the ContextBar popover does not edit this. */
   agent_override: string | null;
   /** Per-task permission mode override. Takes precedence over the swimlane's `permission_mode` and the project's default permission mode, same as `model_override`/`effort_override` - EXCEPT when the destination swimlane forces `permission_mode: 'plan'`, which always wins regardless of this field: plan mode is a genuine safety guarantee (never let a task's Auto-Classifier/Accept-Edits pin bypass a deliberate read-only phase), not just an ordinary column default like every other permission mode. Null inherits. Set via the New Task dialog's Advanced section / the task-detail edit form, or locked at first spawn alongside agent/model/effort (`lockAdvancedOverridesOnFirstSpawn`) so a task with ANY Advanced override runs under the permission the dialog displayed, not the destination column's. */
@@ -2338,6 +2352,19 @@ export interface AppConfig {
      *  Machine-scoped, mirrors cliPaths - not project-overridable. An absent entry falls back
      *  to the adapter's declared `AgentLaunchOptionInfo.default`. */
     launchOptions: Record<string, Record<string, boolean>>;
+    /**
+     * Machine-wide default agent config directory - the bottom rung of the
+     * task -> project -> global ladder that selects which ACCOUNT a spawn
+     * authenticates as (see `CommandOptions.configDir`). A leading `~` is
+     * expanded at spawn time, so the stored value stays portable.
+     *
+     * Null means the CLI's own default location, which is delivered by
+     * UNSETTING the agent's config-dir variable. Never set this to the default
+     * account's own path as a way of saying "use the default": pointing
+     * `CLAUDE_CONFIG_DIR` at `~/.claude` sends the macOS credential store to a
+     * second, empty Keychain item and logs that account out.
+     */
+    configDir: string | null;
   };
 
   sidebar: {
@@ -2797,6 +2824,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     executionServers: {},
     execution: {},
     launchOptions: {},
+    configDir: null,
   },
   sidebar: {
     width: 400,
@@ -3238,6 +3266,8 @@ export interface TaskCreateInput {
   permission_mode?: PermissionMode | null;
   /** MCP-only initial command, injected once the agent spawns for this task. Not surfaced in the New Task dialog. */
   auto_command?: string | null;
+  /** Which agent config directory (ACCOUNT) this task spawns on (see `Task.config_dir`). Null/omitted inherits project then global. Outside the profile/pin exclusivity set. */
+  config_dir?: string | null;
   /** Board Profile to ride (see `Task.profile_id`). Setting this clears the four Advanced pins; they are mutually exclusive. */
   profile_id?: string | null;
   /** Which run mode the task was authored in (see `Task.run_mode`). Omitted defaults to `'column_settings'`, except that pinning any of the four Advanced fields implies `'agent_override'`. */
@@ -3277,6 +3307,8 @@ export interface TaskUpdateInput {
   effort_override?: string | null;
   agent_override?: string | null;
   permission_mode?: PermissionMode | null;
+  /** Which agent config directory (ACCOUNT) this task spawns on (see `Task.config_dir`). Null clears back to inheriting. Outside the profile/pin exclusivity set, so setting it neither clears nor is cleared by `profile_id`. */
+  config_dir?: string | null;
   /** Board Profile to ride (see `Task.profile_id`). Setting this clears the four Advanced pins, and setting any of those four clears this. */
   profile_id?: string | null;
   /** Which run mode the task runs in (see `Task.run_mode`). `'agent_override'` clears `profile_id`; `'column_settings'` clears the four pins. Omitted leaves the stored mode alone, unless a pin or profile in the same write implies one. */
@@ -3929,7 +3961,8 @@ export interface SpawnSessionInput {
   projectId: string;
   command: string;
   cwd: string;
-  env?: Record<string, string>;
+  /** Extra environment for the PTY. A `null` value DELETES the variable rather than setting it empty (see `buildSpawnEnv`). */
+  env?: Record<string, string | null>;
   statusOutputPath?: string; // path for the status bridge JSON file
   eventsOutputPath?: string; // path for the event bridge JSONL file (activity log)
   /** True when this session is resuming a previous Claude conversation. */

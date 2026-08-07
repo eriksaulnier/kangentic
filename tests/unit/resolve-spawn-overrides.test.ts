@@ -36,7 +36,7 @@ import type { SessionTarget, SessionSpawnStrategy } from '../../src/shared/types
 // session_spawn_strategy in addition to model/effort overrides.
 // ---------------------------------------------------------------------------
 
-type TaskOverrideFields = { model_override: string | null; effort_override: string | null };
+type TaskOverrideFields = { model_override: string | null; effort_override: string | null; config_dir: string | null };
 
 type LaneFields = {
   id: string;
@@ -48,8 +48,8 @@ type LaneFields = {
 
 type ProjectFields = { default_model: string | null; default_effort: string | null };
 
-function makeTask(model: string | null, effort: string | null): TaskOverrideFields {
-  return { model_override: model, effort_override: effort };
+function makeTask(model: string | null, effort: string | null, configDir: string | null = null): TaskOverrideFields {
+  return { model_override: model, effort_override: effort, config_dir: configDir };
 }
 
 /**
@@ -321,5 +321,54 @@ describe('resolveSpawnOverrides', () => {
       const result = resolveSpawnOverrides(makeTask(null, null), undefined);
       expect(result.forceFresh).toBe(false);
     });
+  });
+});
+
+/**
+ * The account ladder: task -> (project-merged) global.
+ *
+ * Only two rungs reach this helper - the caller passes `agent.configDir` already
+ * merged with the project's `.kangentic/config.json` override, so the project
+ * rung arrives resolved. There is deliberately no LANE rung: an account belongs
+ * to whoever is running the work, not to the column it sits in.
+ */
+describe('resolveSpawnOverrides - config dir (account) ladder', () => {
+  it("uses the task's pin when set", () => {
+    const result = resolveSpawnOverrides(makeTask(null, null, '~/.claude-work'), makeLane(null, null), null, '~/.claude-global');
+    expect(result.configDir).toBe('~/.claude-work');
+  });
+
+  it('falls through to the effective (project-merged) value when the task has none', () => {
+    const result = resolveSpawnOverrides(makeTask(null, null, null), makeLane(null, null), null, '~/.claude-project');
+    expect(result.configDir).toBe('~/.claude-project');
+  });
+
+  it('is null when nothing is configured, which is what unsets the variable at spawn', () => {
+    const result = resolveSpawnOverrides(makeTask(null, null, null), makeLane(null, null), null, null);
+    expect(result.configDir).toBeNull();
+  });
+
+  it('is null (never undefined) when the argument is omitted entirely', () => {
+    const result = resolveSpawnOverrides(makeTask(null, null, null), makeLane(null, null));
+    expect(result.configDir).toBeNull();
+  });
+
+  it('ignores the lane - a column cannot change which account a task runs on', () => {
+    const lane = makeLane('opus', 'high') as LaneFields & { config_dir?: string };
+    lane.config_dir = '~/.claude-lane';
+    const result = resolveSpawnOverrides(makeTask(null, null, null), lane, null, '~/.claude-global');
+    expect(result.configDir).toBe('~/.claude-global');
+  });
+
+  it('is independent of the model/effort chain', () => {
+    const result = resolveSpawnOverrides(
+      makeTask('sonnet', null, '~/.claude-work'),
+      makeLane('opus', 'high'),
+      makeProject('haiku', 'low'),
+      '~/.claude-global',
+    );
+    expect(result.model).toBe('sonnet');
+    expect(result.effort).toBe('high');
+    expect(result.configDir).toBe('~/.claude-work');
   });
 });

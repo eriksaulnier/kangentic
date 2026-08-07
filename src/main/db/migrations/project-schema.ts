@@ -657,6 +657,20 @@ export function runProjectMigrations(db: Database.Database): void {
     db.exec('ALTER TABLE tasks ADD COLUMN agent_override TEXT DEFAULT NULL');
   }
 
+  // Migration: add per-task config_dir - which ACCOUNT this task's agent
+  // authenticates as. Top rung of the task -> project -> global ladder, so
+  // concurrent tasks can run on different accounts and one account's rate limit
+  // does not stall the board. NULL inherits.
+  //
+  // Unlike the four Advanced pins this is NOT part of the profile-exclusivity
+  // set (see `applyProfileExclusivity`): an account is orthogonal to a strategy
+  // ladder, so a profile task still needs one.
+  const hasTaskConfigDir = (db.pragma('table_info(tasks)') as Array<{ name: string }>)
+    .some((col) => col.name === 'config_dir');
+  if (!hasTaskConfigDir) {
+    db.exec('ALTER TABLE tasks ADD COLUMN config_dir TEXT DEFAULT NULL');
+  }
+
   // Migration: session_transcripts table for agent-agnostic PTY output capture.
   // No FK on session_id - the transcript row may be created before the sessions
   // row exists (PTY data arrives during spawn, before executeSpawnAgent inserts
