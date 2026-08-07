@@ -560,6 +560,11 @@ export class SessionManager extends EventEmitter {
       session.phaseFileWatcher?.close();
       session.phaseFileWatcher = null;
 
+      // The phase described a run that is over. Without this the badge would
+      // outlive the session -- nothing else ever contradicts it, and a derived
+      // phase killed mid-subagent never reaches depth 0 to expire on its own.
+      this.resetPhase(id);
+
       this.emit('exit', id, exitCode);
       this.sessionQueue.notifySlotFreed();
     });
@@ -669,7 +674,7 @@ export class SessionManager extends EventEmitter {
     this.permissionIdle.delete(sessionId);
     this.idleTimestamp.delete(sessionId);
     this.lastThinkingSignal.delete(sessionId);
-    this.clearPhase(sessionId);
+    this.resetPhase(sessionId);
 
     // Mark suspended BEFORE killing so the async onExit handler preserves it
     session.status = 'suspended';
@@ -899,9 +904,14 @@ export class SessionManager extends EventEmitter {
 
   /** Drop a session's phase and tell the renderer to clear its badge. */
   private clearPhase(sessionId: string): void {
-    this.explicitPhaseSessions.delete(sessionId);
     if (!this.sessionPhase.delete(sessionId)) return;
     this.emit('phase', sessionId, null);
+  }
+
+  /** Forget a session's phase entirely, including that it ever reported one. */
+  private resetPhase(sessionId: string): void {
+    this.explicitPhaseSessions.delete(sessionId);
+    this.clearPhase(sessionId);
   }
 
   /**
@@ -910,21 +920,42 @@ export class SessionManager extends EventEmitter {
    * The first successful read marks the session as reporting explicitly, after
    * which derived phases are ignored for it -- a skill that knows about
    * Kangentic is a better source than the agent type we happen to observe.
+   * An empty `phase` is how such a skill takes its own badge back down.
    */
   private readAndEmitPhase(session: ManagedSession): void {
     if (!session.phaseOutputPath) return;
-    let parsed: unknown;
+
+    let raw: string;
     try {
-      parsed = JSON.parse(fs.readFileSync(session.phaseOutputPath, 'utf-8'));
+      raw = fs.readFileSync(session.phaseOutputPath, 'utf-8');
     } catch {
-      // File may not exist yet, or be caught mid-write -- the watcher re-fires
+      // File may not exist yet -- the watcher fires again when it appears
       return;
     }
-    if (!parsed || typeof parsed !== 'object') return;
-    const { phase, detail } = parsed as { phase?: unknown; detail?: unknown };
-    if (typeof phase !== 'string' || !phase) return;
 
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      // Likely caught mid-write -- the completing write re-fires the watcher
+      return;
+    }
+
+    const { phase, detail } = (parsed ?? {}) as { phase?: unknown; detail?: unknown };
+    if (typeof phase !== 'string') {
+      console.warn(`[PHASE] ${session.phaseOutputPath} has no string "phase" field -- ignoring`);
+      return;
+    }
+
+    // Claim the session for the explicit tier even when clearing, so the
+    // derived tier cannot take the badge back over.
     this.explicitPhaseSessions.add(session.id);
+
+    if (!phase) {
+      this.clearPhase(session.id);
+      return;
+    }
+
     this.setPhase(session.id, {
       phase,
       ...(typeof detail === 'string' && detail ? { detail } : {}),
@@ -1005,8 +1036,10 @@ export class SessionManager extends EventEmitter {
 
             // Derived phase: map the subagent's type to a label. Skipped once
             // the session has written phase.json -- explicit always wins.
+            // Only the outermost subagent names the phase: a nested one would
+            // otherwise overwrite it with no way back when it stops.
             const derived = event.detail ? this.phaseMap[event.detail] : undefined;
-            if (derived && !this.explicitPhaseSessions.has(session.id)) {
+            if (derived && currentDepth === 0 && !this.explicitPhaseSessions.has(session.id)) {
               this.setPhase(session.id, { phase: derived });
             }
           } else if (event.type === EventType.SubagentStop) {

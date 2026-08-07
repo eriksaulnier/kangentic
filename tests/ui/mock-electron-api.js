@@ -888,11 +888,6 @@
     platform: 'win32',
   };
 
-  /**
-   * Expose mock internals for test state pre-configuration.
-   * Called from addInitScript before React mounts to set up complex scenarios
-   * (e.g. tasks with sessions, activity state, usage data).
-   */
   /** Push a session:phase event to subscribed listeners, as the main process would. */
   window.__mockEmitPhase = function (sessionId, phase, projectId) {
     phaseListeners.forEach(function (fn) {
@@ -900,6 +895,11 @@
     });
   };
 
+  /**
+   * Expose mock internals for test state pre-configuration.
+   * Called from addInitScript before React mounts to set up complex scenarios
+   * (e.g. tasks with sessions, activity state, usage data).
+   */
   window.__mockPreConfigure = function (fn) {
     var result = fn({
       projects: projects,
