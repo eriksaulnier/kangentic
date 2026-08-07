@@ -11,6 +11,7 @@ import {
 import { resolveBackgroundTaskOutputFile } from './background-task-output';
 import { reportTerminatedBackgroundShells } from './background-shell-transcript';
 import { ensureWorktreeTrust, ensureMcpServerTrust } from './trust-manager';
+import { resolveClaudeConfigDir } from './config-dir';
 import { migrateClaudeProjectData } from './project-relocation';
 import { removeHooks as removeClaudeHooks } from './hook-manager';
 import { runCliPrintSummarize, buildSummarizePrompt } from '../../shared/auto-name';
@@ -182,9 +183,15 @@ export class ClaudeAdapter implements AgentAdapter {
    * "use the default", quietly running the task on the wrong account. `null`
    * deletes it (see `buildSpawnEnv`); setting it to `''` would not - Claude Code
    * reads an empty value as a real path and resolves it to the filesystem root.
+   *
+   * The stored value is expanded here because an environment variable is not
+   * shell-expanded on the way into the child: a `~/.claude2` handed over
+   * verbatim is read by the CLI as a directory literally named `~`, relative to
+   * the worktree, so the spawn would quietly run on a brand-new empty profile
+   * instead of the account the user picked.
    */
   buildEnv(options: SpawnCommandOptions): Record<string, string | null> | null {
-    return { CLAUDE_CONFIG_DIR: options.configDir || null };
+    return { CLAUDE_CONFIG_DIR: resolveClaudeConfigDir(options.configDir) };
   }
 
   removeHooks(directory: string): void {
