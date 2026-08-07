@@ -106,6 +106,9 @@ export const IPC = {
   GIT_DETECT: 'git:detect',
   GIT_LIST_BRANCHES: 'git:listBranches',
 
+  // GitHub
+  GITHUB_FETCH_PR: 'github:fetchPr',
+
   // Dialog
   DIALOG_SELECT_FOLDER: 'dialog:selectFolder',
 

@@ -353,3 +353,64 @@ test.describe('Backlog Edit Branch Config', () => {
     await page.keyboard.press('Escape');
   });
 });
+
+test.describe('Pull Request Intake', () => {
+  test('fetching a PR prefills title, base branch, and disables worktree', async () => {
+    await openNewTaskDialog();
+
+    await page.locator('[data-testid="pr-ref-input"]').fill('123');
+    await page.locator('[data-testid="pr-fetch-button"]').click();
+
+    const summary = page.locator('[data-testid="pr-summary"]');
+    await expect(summary).toBeVisible();
+    await expect(summary).toContainText('#123 by octocat');
+
+    await expect(page.locator('input[placeholder="Task title"]')).toHaveValue('Mock PR 123');
+    await expect(page.locator('[data-testid="branch-picker-chip"]')).toContainText('develop');
+
+    // /review-pr makes its own worktree -- Kangentic must not nest one
+    const worktreeSpan = page.locator('[data-testid="worktree-toggle"] span');
+    await expect(worktreeSpan).toHaveClass(/line-through/);
+
+    // Escape is suppressed while the form is dirty -- use the Cancel button
+    await page.locator('button:has-text("Cancel")').click();
+    await page.locator('input[placeholder="Task title"]').waitFor({ state: 'hidden', timeout: 3000 });
+  });
+
+  test('created task carries pr_number, pr_url and use_worktree: 0', async () => {
+    await openNewTaskDialog();
+
+    await page.locator('[data-testid="pr-ref-input"]').fill('https://github.com/acme/repo/pull/456');
+    await page.locator('[data-testid="pr-fetch-button"]').click();
+    await expect(page.locator('[data-testid="pr-summary"]')).toContainText('#456');
+
+    await page.locator('input[placeholder="Task title"]').fill('Review PR 456');
+    await page.locator('button:has-text("Create")').click();
+    await page.locator('input[placeholder="Task title"]').waitFor({ state: 'hidden', timeout: 3000 });
+
+    const taskData = await page.evaluate(() => window.electronAPI.tasks.list());
+    const task = taskData.find((t: { title: string }) => t.title === 'Review PR 456');
+    expect(task).toBeDefined();
+    expect(task.pr_number).toBe(456);
+    expect(task.pr_url).toBe('https://github.com/acme/repo/pull/456');
+    expect(task.base_branch).toBe('develop');
+    expect(task.use_worktree).toBe(0);
+  });
+
+  test('a failed fetch shows the reason and creates no PR fields', async () => {
+    await openNewTaskDialog();
+
+    await page.evaluate(() => { (window as unknown as Record<string, unknown>).__mockPrError = 'gh: To get started with GitHub CLI, please run: gh auth login'; });
+    await page.locator('[data-testid="pr-ref-input"]').fill('789');
+    await page.locator('[data-testid="pr-fetch-button"]').click();
+
+    const error = page.locator('[data-testid="pr-error"]');
+    await expect(error).toBeVisible();
+    await expect(error).toContainText('gh auth login');
+    await expect(page.locator('[data-testid="pr-summary"]')).not.toBeVisible();
+
+    await page.evaluate(() => { (window as unknown as Record<string, unknown>).__mockPrError = null; });
+    await page.locator('button:has-text("Cancel")').click();
+    await page.locator('input[placeholder="Task title"]').waitFor({ state: 'hidden', timeout: 3000 });
+  });
+});

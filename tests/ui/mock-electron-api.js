@@ -377,8 +377,8 @@
           session_id: null,
           worktree_path: null,
           branch_name: input.customBranchName || null,
-          pr_number: null,
-          pr_url: null,
+          pr_number: input.prNumber == null ? null : input.prNumber,
+          pr_url: input.prUrl == null ? null : input.prUrl,
           base_branch: input.baseBranch || null,
           use_worktree: input.useWorktree != null ? (input.useWorktree ? 1 : 0) : null,
           attachment_count: 0,
@@ -839,6 +839,24 @@
       },
       listBranches: async function () {
         return ['main', 'develop', 'feature/auth', 'feature/dashboard', 'fix/login-bug'];
+      },
+    },
+
+    github: {
+      fetchPullRequest: async function (ref) {
+        if (window.__mockPrError) throw new Error(window.__mockPrError);
+        var number = parseInt(String(ref).replace(/^#/, '').replace(/^.*\//, ''), 10);
+        if (!number) throw new Error('could not find pull request');
+        return {
+          number: number,
+          title: 'Mock PR ' + number,
+          url: 'https://github.com/acme/repo/pull/' + number,
+          author: 'octocat',
+          headRefName: 'feature/pr-' + number,
+          baseRefName: 'develop',
+          additions: 42,
+          deletions: 7,
+        };
       },
     },
 

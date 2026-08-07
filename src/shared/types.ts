@@ -525,6 +525,20 @@ export interface ClaudeCommand {
   argumentHint: string; // from frontmatter, or empty (e.g. "[all|audit|write]")
 }
 
+// === GitHub ===
+
+/** Pull request metadata, as returned by `gh pr view --json`. */
+export interface PullRequestInfo {
+  number: number;
+  title: string;
+  url: string;
+  author: string;
+  headRefName: string;
+  baseRefName: string;
+  additions: number;
+  deletions: number;
+}
+
 // === Updater ===
 
 export interface UpdateDownloadedInfo {
@@ -540,6 +554,8 @@ export interface TaskCreateInput {
   baseBranch?: string;
   useWorktree?: boolean | null;
   customBranchName?: string;
+  prNumber?: number | null;
+  prUrl?: string | null;
   pendingAttachments?: Array<{
     filename: string;
     data: string; // base64
@@ -823,6 +839,11 @@ export interface ElectronAPI {
   git: {
     detect: () => Promise<{ found: boolean; path: string | null; version: string | null; meetsMinimum: boolean }>;
     listBranches: () => Promise<string[]>;
+  };
+
+  // GitHub
+  github: {
+    fetchPullRequest: (ref: string) => Promise<PullRequestInfo>;
   };
 
   // Dialog

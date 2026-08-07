@@ -45,6 +45,7 @@ export class TransitionEngine {
       taskId: task.id,
       worktreePath: task.worktree_path || '',
       branchName: task.branch_name || '',
+      prNumber: task.pr_number != null ? String(task.pr_number) : '',
       attachments: attachmentPaths.length > 0
         ? `\n${attachmentPaths.join('\n')}`
         : '',
@@ -80,6 +81,7 @@ export class TransitionEngine {
       taskId: task.id,
       worktreePath: task.worktree_path || '',
       branchName: task.branch_name || '',
+      prNumber: task.pr_number != null ? String(task.pr_number) : '',
       attachments: attachmentPaths.length > 0
         ? `\n${attachmentPaths.join('\n')}`
         : '',

@@ -161,6 +161,10 @@ const api: ElectronAPI = {
     listBranches: () => ipcRenderer.invoke(IPC.GIT_LIST_BRANCHES),
   },
 
+  github: {
+    fetchPullRequest: (ref: string) => ipcRenderer.invoke(IPC.GITHUB_FETCH_PR, ref),
+  },
+
   dialog: {
     selectFolder: () => ipcRenderer.invoke(IPC.DIALOG_SELECT_FOLDER),
   },

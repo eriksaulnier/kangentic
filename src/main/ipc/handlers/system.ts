@@ -5,6 +5,7 @@ import { app, ipcMain, Notification, dialog, shell } from 'electron';
 import { IPC } from '../../../shared/ipc-channels';
 import { WorktreeManager, isGitRepo } from '../../git/worktree-manager';
 import { resolveClaudeConfigDir } from '../../agent/claude-env';
+import { fetchPullRequest } from '../../github/pr-fetcher';
 import { deepMergeConfig } from '../../../shared/object-utils';
 import { switchGitignoreScope } from '../helpers';
 import type { AppConfig, NotificationInput, ClaudeCommand } from '../../../shared/types';
@@ -249,6 +250,12 @@ export function registerSystemHandlers(context: IpcContext): void {
       const worktreeManager = new WorktreeManager(context.currentProjectPath);
       return await worktreeManager.listRemoteBranches();
     } catch { return []; }
+  });
+
+  // === GitHub ===
+  ipcMain.handle(IPC.GITHUB_FETCH_PR, (_, ref: string) => {
+    if (!context.currentProjectPath) throw new Error('No project is currently open');
+    return fetchPullRequest(context.ghDetector, context.currentProjectPath, ref);
   });
 
   // === Dialog ===

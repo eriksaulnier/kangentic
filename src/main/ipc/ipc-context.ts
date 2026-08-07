@@ -6,6 +6,7 @@ import type { ConfigManager } from '../config/config-manager';
 import type { BoardConfigManager } from '../config/board-config-manager';
 import type { ClaudeDetector } from '../agent/claude-detector';
 import type { GitDetector } from '../agent/git-detector';
+import type { GhDetector } from '../agent/gh-detector';
 import type { ShellResolver } from '../pty/shell-resolver';
 import type { CommandBuilder } from '../agent/command-builder';
 import type { CommandInjector } from '../engine/command-injector';
@@ -19,6 +20,7 @@ export interface IpcContext {
   boardConfigManager: BoardConfigManager;
   claudeDetector: ClaudeDetector;
   gitDetector: GitDetector;
+  ghDetector: GhDetector;
   shellResolver: ShellResolver;
   commandBuilder: CommandBuilder;
   commandInjector: CommandInjector;

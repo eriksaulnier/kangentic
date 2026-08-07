@@ -8,6 +8,7 @@ import { BranchPicker } from './BranchPicker';
 import { WorktreeChip } from './WorktreeChip';
 import { isValidGitBranchName } from '../../../shared/git-utils';
 import { slugify } from '../../../shared/slugify';
+import type { PullRequestInfo } from '../../../shared/types';
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10MB
 
@@ -84,6 +85,44 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
     }
     return <>Agent will work directly on {pill(effectiveBaseBranch)}</>;
   }, [customBranchName, branchExists, effectiveWorktree, effectiveBaseBranch]);
+  const [prRef, setPrRef] = useState('');
+  const [pullRequest, setPullRequest] = useState<PullRequestInfo | null>(null);
+  const [prError, setPrError] = useState('');
+  const [prLoading, setPrLoading] = useState(false);
+
+  /**
+   * Resolve the typed PR reference and seed the form from it.
+   *
+   * Worktrees are turned off for review tasks: /review-pr fetches the PR head
+   * into a worktree of its own, and nesting one inside a Kangentic worktree
+   * leaves an orphan that worktree pruning does not understand.
+   */
+  const fetchPr = useCallback(async () => {
+    const ref = prRef.trim();
+    if (!ref) {
+      setPullRequest(null);
+      setPrError('');
+      return;
+    }
+    if (pullRequest && ref === String(pullRequest.number)) return;
+
+    setPrLoading(true);
+    setPrError('');
+    try {
+      const info = await window.electronAPI.github.fetchPullRequest(ref);
+      setPullRequest(info);
+      setPrRef(String(info.number));
+      setTitle((current) => (current.trim() ? current : info.title));
+      setBaseBranch(info.baseRefName);
+      setUseWorktree(false);
+    } catch (error) {
+      setPullRequest(null);
+      setPrError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPrLoading(false);
+    }
+  }, [prRef, pullRequest]);
+
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [previewAttachment, setPreviewAttachment] = useState<PendingAttachment | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -92,7 +131,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const nextIdRef = useRef(0);
 
-  const isDirty = title.trim() !== '' || description.trim() !== '' || customBranchName.trim() !== '' || attachments.length > 0;
+  const isDirty = title.trim() !== '' || description.trim() !== '' || customBranchName.trim() !== '' || prRef.trim() !== '' || attachments.length > 0;
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -222,6 +261,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
       ...(baseBranch.trim() ? { baseBranch: baseBranch.trim() } : {}),
       ...(useWorktree !== null ? { useWorktree } : {}),
       ...(customBranchName.trim() ? { customBranchName: customBranchName.trim() } : {}),
+      ...(pullRequest ? { prNumber: pullRequest.number, prUrl: pullRequest.url } : {}),
       ...(attachments.length > 0 ? {
         pendingAttachments: attachments.map((a) => ({
           filename: a.filename,
@@ -281,6 +321,45 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
               onChange={(e) => setTitle(e.target.value)}
               className="w-full bg-surface border border-edge-input rounded px-3 py-2 text-sm text-fg placeholder-fg-faint focus:outline-none focus:border-accent"
             />
+
+            <div>
+              <label className="text-[10px] text-fg-muted mb-1 block">Pull request</label>
+              <div className="flex items-center gap-2">
+                <input
+                  data-testid="pr-ref-input"
+                  type="text"
+                  placeholder="Number or URL (optional)"
+                  value={prRef}
+                  onChange={(e) => setPrRef(e.target.value)}
+                  onBlur={fetchPr}
+                  onKeyDown={(e) => {
+                    // Enter resolves the PR rather than submitting a half-filled form
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      fetchPr();
+                    }
+                  }}
+                  className="flex-1 min-w-0 bg-surface border border-edge-input rounded px-3 py-1.5 text-xs text-fg placeholder-fg-faint focus:outline-none focus:border-accent"
+                />
+                <button
+                  type="button"
+                  data-testid="pr-fetch-button"
+                  onClick={fetchPr}
+                  disabled={prLoading || !prRef.trim()}
+                  className="px-3 py-1.5 text-xs text-fg-muted hover:text-fg-secondary border border-edge-input hover:border-fg-faint rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                >
+                  {prLoading ? 'Fetching...' : 'Fetch'}
+                </button>
+              </div>
+              {prError ? (
+                <p className="text-xs text-red-500 mt-0.5" data-testid="pr-error">{prError}</p>
+              ) : pullRequest ? (
+                <span className="text-xs text-fg-disabled mt-1 flex items-center gap-1" data-testid="pr-summary">
+                  <Info size={12} className="shrink-0" />
+                  #{pullRequest.number} by {pullRequest.author} into <span className="font-mono text-fg-faint">{pullRequest.baseRefName}</span> (+{pullRequest.additions}/-{pullRequest.deletions})
+                </span>
+              ) : null}
+            </div>
             <div className="relative">
               <textarea
                 ref={textareaRef}
