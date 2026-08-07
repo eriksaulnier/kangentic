@@ -441,6 +441,19 @@ describe('WorktreeManager -- fetch and base branch', () => {
 
   it('fetches from origin and uses origin/<baseBranch> as start point when fetch succeeds', async () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
+    // The task's own branch is not on the remote, which is the ordinary case for
+    // a freshly auto-named branch. Real `git fetch origin <branch>` exits 128
+    // ("couldn't find remote ref") there, so it has to be failed explicitly:
+    // mockSpawn defaults every fetch to success, and the execFile mock above
+    // resolves `origin/<branch>` for any branch a fetch was recorded for. Left
+    // at the default, this fixture would claim a remote branch exists for every
+    // name ever fetched, and createWorktree would cut the worktree from it
+    // rather than from the base. See the real-git coverage of that path in
+    // worktree-base-branch.test.ts.
+    spawnOverrides.push({
+      match: (args) => args[0] === 'fetch' && args[1] === 'origin' && args[2] !== 'develop',
+      behavior: { exitCode: 128, stderr: "fatal: couldn't find remote ref" },
+    });
     mockProjectGit.raw.mockImplementation((args: string[]) => {
       if (args[0] === 'rev-parse' && args[1] === '--verify') {
         return Promise.reject(new Error('not found'));
