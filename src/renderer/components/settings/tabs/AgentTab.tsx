@@ -96,7 +96,7 @@ export function AgentTab({ config, globalConfig, agentList }: {
     <>
       <SectionHeader
         label="Project Defaults"
-        searchIds={['project.defaultAgent', 'project.defaultModel', 'project.defaultEffort', 'agent.permissionMode']}
+        searchIds={['project.defaultAgent', 'project.defaultModel', 'project.defaultEffort', 'agent.permissionMode', 'agent.configDir']}
       />
       <SettingRow {...settingProps('project.defaultAgent')}>
         <Combobox
@@ -146,6 +146,16 @@ export function AgentTab({ config, globalConfig, agentList }: {
           options={agentPermissions.map((entry) => ({ value: entry.mode, label: entry.label }))}
           allowClear={false}
           testId="agent-permission-mode"
+        />
+      </SettingRow>
+      <SettingRow {...settingProps('agent.configDir')}>
+        <input
+          type="text"
+          value={config.agent.configDir ?? ''}
+          onChange={(event) => updateProject({ agent: { configDir: event.target.value.trim() || null } })}
+          placeholder="Agent default"
+          className={`${INPUT_CLASS} placeholder-fg-muted`}
+          data-testid="agent-config-dir"
         />
       </SettingRow>
       <SectionHeader

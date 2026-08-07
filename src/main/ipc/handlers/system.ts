@@ -14,6 +14,7 @@ import { syncProjectMcpConfig } from './projects';
 import { applyRuntimeConfig } from '../../config/apply-runtime-config';
 import { listAgents, invalidateAgentListCache } from '../../agent/agent-list';
 import { agentRegistry } from '../../agent/agent-registry';
+import { resolveClaudeConfigDir } from '../../agent/adapters/claude/config-dir';
 import { broadcast } from '../../pop-out/window-broadcast';
 import { resolveRelayUrl } from '../../../shared/relay';
 import { EXTERNAL_OPEN_SCHEMES, isAllowedExternalUrl } from '../../../shared/external-url';
@@ -382,7 +383,14 @@ export function registerSystemHandlers(context: IpcContext): void {
     if (!projectPath) return [];
 
     const startDir = cwd || projectPath;
-    const homeDir = app.getPath('home');
+    // The user-level root follows the ACCOUNT this project spawns under, since
+    // each config directory carries its own commands and skills. Falls back to
+    // `~/.claude` when no directory is configured, which is where the CLI looks
+    // by default. Project-level roots below are unaffected - they hang off the
+    // working directory, not the account.
+    const userRoot = resolveClaudeConfigDir(
+      context.configManager.getEffectiveConfig(projectPath).agent.configDir,
+    ) ?? path.join(app.getPath('home'), '.claude');
 
     // Walk from startDir upward to filesystem root, collecting .claude/<subdirectory>
     // paths. Closest directories come first so nearer entries win on dedup.
@@ -396,7 +404,7 @@ export function registerSystemHandlers(context: IpcContext): void {
         if (parentDirectory === directory) break;
         directory = parentDirectory;
       }
-      roots.push(path.join(homeDir, '.claude', subdirectory));
+      roots.push(path.join(userRoot, subdirectory));
       return roots;
     }
 

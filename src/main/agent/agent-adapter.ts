@@ -85,6 +85,17 @@ export interface CommandOptions {
    */
   launchOptions?: Record<string, boolean>;
   /**
+   * The agent config directory this spawn runs under, resolved by the spawn
+   * chokepoints as task -> project -> global. Null/undefined means the agent's
+   * own default location, which an adapter delivers by DELETING its config-dir
+   * variable rather than setting it empty (see `buildEnv`).
+   *
+   * Selecting a directory selects the ACCOUNT the agent authenticates as, which
+   * is the point: concurrent tasks pinned to different directories run on
+   * different accounts and do not share one account's rate limit.
+   */
+  configDir?: string | null;
+  /**
    * Present only when this project's execution mode for this agent is
    * 'remote' (resolved by the spawn chokepoint from `agent.executionServers`
    * + `agent.execution`). Adapters that declare `remoteExecution` read this
@@ -147,7 +158,7 @@ export interface AgentAdapter {
   discoverCapabilities?(cliPath: string, forceRefresh?: boolean): Promise<AgentCapabilities>;
 
   /** Pre-approve a working directory so the agent does not prompt for trust. */
-  ensureTrust(workingDirectory: string): Promise<void>;
+  ensureTrust(workingDirectory: string, configDir?: string | null): Promise<void>;
 
   /**
    * Probe whether the agent is authenticated/logged in. Returns null
@@ -197,8 +208,15 @@ export interface AgentAdapter {
    * (e.g. OpenCode's `OPENCODE_CONFIG_CONTENT`). Adapters that wire MCP
    * via a CLI flag (Claude `--mcp-config`) or settings file (Codex hooks)
    * do not implement this.
+   *
+   * A `null` VALUE deletes that variable from the spawn environment instead of
+   * setting it (see `buildSpawnEnv`). An adapter selecting a config directory
+   * needs this: the spawn env is built on top of `process.env`, so "use the
+   * default" has to remove a variable the launching shell may have exported,
+   * and setting it empty is a different thing entirely. Distinct from returning
+   * `null` for the whole call, which means "no env changes at all".
    */
-  buildEnv?(options: SpawnCommandOptions): Record<string, string> | null;
+  buildEnv?(options: SpawnCommandOptions): Record<string, string | null> | null;
 
   /** Interpolate {{key}} placeholders in a template string. */
   interpolateTemplate(template: string, variables: Record<string, string>): string;

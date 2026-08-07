@@ -91,6 +91,53 @@ describe('buildSpawnEnv', () => {
   });
 });
 
+/**
+ * `null` means DELETE, which is what selects an agent's DEFAULT account.
+ *
+ * The distinction is load-bearing and fails silently in both directions: an
+ * inherited `CLAUDE_CONFIG_DIR` runs a task on the wrong account, and an empty
+ * string is read by the CLI as a real path (the filesystem root) rather than
+ * "unset".
+ */
+describe('buildSpawnEnv null-means-delete', () => {
+  const KEY = 'KANGENTIC_TEST_CONFIG_DIR';
+
+  afterEach(() => {
+    delete process.env[KEY];
+  });
+
+  it('removes a variable the launching shell exported', () => {
+    process.env[KEY] = '/inherited/from/shell';
+    const env = buildSpawnEnv({ [KEY]: null });
+    expect(env[KEY]).toBeUndefined();
+  });
+
+  it('is not the same as setting the variable empty', () => {
+    process.env[KEY] = '/inherited/from/shell';
+    expect(buildSpawnEnv({ [KEY]: '' })[KEY]).toBe('');
+    expect(buildSpawnEnv({ [KEY]: null })[KEY]).toBeUndefined();
+  });
+
+  it('deleting an unset variable is a no-op, not an empty entry', () => {
+    const env = buildSpawnEnv({ [KEY]: null });
+    expect(KEY in env).toBe(false);
+  });
+
+  it('a non-null value still overrides the inherited one', () => {
+    process.env[KEY] = '/inherited/from/shell';
+    const env = buildSpawnEnv({ [KEY]: '/chosen/account' });
+    expect(env[KEY]).toBe('/chosen/account');
+  });
+
+  it('deletes only the named key, leaving the rest of the environment intact', () => {
+    process.env[KEY] = '/inherited/from/shell';
+    const env = buildSpawnEnv({ [KEY]: null, KEPT: 'yes' });
+    expect(env[KEY]).toBeUndefined();
+    expect(env.KEPT).toBe('yes');
+    expect(env.PATH).toBe(process.env.PATH);
+  });
+});
+
 // Claude Code's fullscreen TUI intermittently omits history entries from its
 // incremental scrolled-view updates (anthropics/claude-code#83714). The
 // full-repaint flag removes the incremental path; Kangentic defaults it on

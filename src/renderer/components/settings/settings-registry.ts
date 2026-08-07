@@ -79,6 +79,7 @@ export const SETTINGS_REGISTRY: SettingDefinition[] = [
   { id: 'project.defaultModel', tabId: 'agent', label: 'Model', description: 'Model used for new sessions when no column or task override is set', scope: 'project', section: 'Project Defaults', keywords: ['model', 'opus', 'sonnet', 'default'] },
   { id: 'project.defaultEffort', tabId: 'agent', label: 'Effort', description: 'Reasoning effort used for new sessions when no column or task override is set', scope: 'project', section: 'Project Defaults', keywords: ['effort', 'reasoning', 'xhigh', 'default'] },
   { id: 'agent.permissionMode', tabId: 'agent', label: 'Permissions', description: 'How the agent handles tool approvals', scope: 'project', section: 'Project Defaults', keywords: ['allowlist', 'bypass', 'approve'] },
+  { id: 'agent.configDir', tabId: 'agent', label: 'Config Directory', description: 'Which signed-in account the agent runs as. Leave blank to use its usual one; point it at another config directory to run this board on a second account', scope: 'project', section: 'Project Defaults', keywords: ['account', 'profile', 'config', 'directory', 'login', 'rate limit', 'optional'] },
 
   // ── Agent > Agent CLI ──
   { id: 'agent.cliPaths', tabId: 'agent', label: 'CLI Paths', description: 'Paths to agent CLI binaries (auto-detected if empty)', scope: 'global', section: 'Agent CLI', keywords: ['binary', 'executable'] },
