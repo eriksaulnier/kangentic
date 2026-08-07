@@ -109,7 +109,8 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
   const fetchPr = useCallback(async () => {
     const ref = prRef.trim();
     if (!ref) {
-      prFetchSequence.current++; // discard anything still in flight
+      // Discard anything still in flight
+      prFetchSequence.current++;
       setPullRequest(null);
       setPrError('');
       setPrLoading(false);
@@ -128,7 +129,8 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
     setPrError('');
     try {
       const info = await window.electronAPI.github.fetchPullRequest(ref);
-      if (sequence !== prFetchSequence.current) return; // a newer fetch owns the form
+      // A newer fetch owns the form
+      if (sequence !== prFetchSequence.current) return;
       if (!preFetchBranchState.current) {
         preFetchBranchState.current = { baseBranch, useWorktree };
       }

@@ -176,7 +176,6 @@ export class WorktreeManager {
       // No remote, branch not on remote, or network unavailable -- use local branch
     }
 
-    // Check if the branch already exists (relevant for custom branch names).
     // A branch that lives only on origin -- the normal case for someone else's
     // PR -- gets a local tracking branch first. Without it, `worktree add -b`
     // would silently create an empty branch off the base instead.

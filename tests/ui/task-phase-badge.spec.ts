@@ -125,11 +125,9 @@ test.describe('Task phase badge', () => {
     await expect(badge).toBeVisible();
     await expect(badge).toHaveText('review · round 2 of 3');
 
-    // A phase without a detail renders the label alone
     await page.evaluate(`window.__mockEmitPhase('${SESSION_ID}', { phase: 'implement' })`);
     await expect(badge).toHaveText('implement');
 
-    // A null phase clears the badge
     await page.evaluate(`window.__mockEmitPhase('${SESSION_ID}', null)`);
     await expect(badge).not.toBeVisible();
   });

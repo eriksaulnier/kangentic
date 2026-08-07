@@ -316,7 +316,6 @@ export function App() {
     }
 
     // Session phase (agent-reported loop progress -- card badge)
-    // Only track phases for current project sessions
     if (sessions.onPhase) {
       cleanups.push(sessions.onPhase((sessionId, phase, projectId) => {
         const activeProjectId = useProjectStore.getState().currentProject?.id;

@@ -209,10 +209,8 @@ export async function ensureTaskBranchCheckout(
     const location = await locateBranch(git, task.branch_name);
 
     if (location.remote) {
-      // Create local branch tracking the remote
       await git.raw(['branch', task.branch_name, `origin/${task.branch_name}`]);
     } else if (!location.local) {
-      // Branch doesn't exist anywhere. Create from base_branch.
       await git.raw(['branch', task.branch_name, task.base_branch || 'main']);
     }
 

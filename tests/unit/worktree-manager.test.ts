@@ -211,7 +211,6 @@ describe('WorktreeManager -- fetch and base branch', () => {
     const mgr = new WorktreeManager('/project');
     await mgr.createWorktree('abcd1234-0000', 'Review PR', 'main', [], 'pr-head');
 
-    // A local tracking branch is created from the remote ref
     expect(mockProjectGit.raw).toHaveBeenCalledWith(['branch', 'pr-head', 'origin/pr-head']);
 
     // worktree add attaches to the existing branch -- never `-b` off the base

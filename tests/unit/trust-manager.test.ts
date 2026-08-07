@@ -181,7 +181,6 @@ describe('ensureWorktreeTrust', () => {
 
     ensureWorktreeTrust(wtPath, profileDir);
 
-    // Home file untouched, profile file written
     expect(fs.existsSync(claudeJsonPath())).toBe(false);
     const data = JSON.parse(fs.readFileSync(path.join(profileDir, '.claude.json'), 'utf-8'));
     const projects = data.projects as Record<string, Record<string, unknown>>;
