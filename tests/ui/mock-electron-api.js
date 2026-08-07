@@ -844,7 +844,16 @@
 
     github: {
       fetchPullRequest: async function (ref) {
-        if (window.__mockPrError) throw new Error(window.__mockPrError);
+        if (window.__mockPrDelayMs) {
+          await new Promise(function (resolve) { setTimeout(resolve, window.__mockPrDelayMs); });
+        }
+        // One-shot, like __mockFolderPath -- a failed assertion must not
+        // poison later tests sharing the page.
+        if (window.__mockPrError) {
+          var message = window.__mockPrError;
+          window.__mockPrError = null;
+          throw new Error(message);
+        }
         var number = parseInt(String(ref).replace(/^#/, '').replace(/^.*\//, ''), 10);
         if (!number) throw new Error('could not find pull request');
         return {

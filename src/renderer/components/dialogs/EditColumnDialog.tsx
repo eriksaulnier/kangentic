@@ -386,7 +386,7 @@ export function EditColumnDialog({ swimlane, onClose }: EditColumnDialogProps) {
               <p className="text-[11px] text-fg-faint mt-1 flex items-center gap-1">
                 Runs automatically when a task moves into this column
                 <span
-                  title="Supports variables: {{title}}, {{description}}, {{branchName}}"
+                  title="Supports variables: {{title}}, {{description}}, {{branchName}}, {{prNumber}}"
                   className="inline-flex cursor-help text-fg-faint hover:text-fg-muted"
                 >
                   <Info size={12} />

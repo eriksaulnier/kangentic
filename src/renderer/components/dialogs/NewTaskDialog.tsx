@@ -12,6 +12,12 @@ import type { PullRequestInfo } from '../../../shared/types';
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10MB
 
+/** Electron wraps handler rejections; show the reason, not the plumbing. */
+function stripIpcErrorPrefix(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '');
+}
+
 const MEDIA_TYPE_EXT: Record<string, string> = {
   'image/png': '.png',
   'image/jpeg': '.jpg',
@@ -89,6 +95,9 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
   const [pullRequest, setPullRequest] = useState<PullRequestInfo | null>(null);
   const [prError, setPrError] = useState('');
   const [prLoading, setPrLoading] = useState(false);
+  const prFetchSequence = useRef(0);
+  /** Branch settings as they were before a PR first overwrote them. */
+  const preFetchBranchState = useRef<{ baseBranch: string; useWorktree: boolean | null } | null>(null);
 
   /**
    * Resolve the typed PR reference and seed the form from it.
@@ -100,28 +109,46 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
   const fetchPr = useCallback(async () => {
     const ref = prRef.trim();
     if (!ref) {
+      prFetchSequence.current++; // discard anything still in flight
       setPullRequest(null);
       setPrError('');
+      setPrLoading(false);
+      // Undo what a previous fetch imposed on the branch settings
+      if (preFetchBranchState.current) {
+        setBaseBranch(preFetchBranchState.current.baseBranch);
+        setUseWorktree(preFetchBranchState.current.useWorktree);
+        preFetchBranchState.current = null;
+      }
       return;
     }
     if (pullRequest && ref === String(pullRequest.number)) return;
 
+    const sequence = ++prFetchSequence.current;
     setPrLoading(true);
     setPrError('');
     try {
       const info = await window.electronAPI.github.fetchPullRequest(ref);
+      if (sequence !== prFetchSequence.current) return; // a newer fetch owns the form
+      if (!preFetchBranchState.current) {
+        preFetchBranchState.current = { baseBranch, useWorktree };
+      }
       setPullRequest(info);
       setPrRef(String(info.number));
       setTitle((current) => (current.trim() ? current : info.title));
       setBaseBranch(info.baseRefName);
       setUseWorktree(false);
     } catch (error) {
+      if (sequence !== prFetchSequence.current) return;
       setPullRequest(null);
-      setPrError(error instanceof Error ? error.message : String(error));
+      setPrError(stripIpcErrorPrefix(error));
     } finally {
-      setPrLoading(false);
+      if (sequence === prFetchSequence.current) setPrLoading(false);
     }
-  }, [prRef, pullRequest]);
+  }, [prRef, pullRequest, baseBranch, useWorktree]);
+
+  // A typed but unresolved reference must not create a task: it would land
+  // with no PR fields and a worktree the review skill does not expect.
+  const prUnresolved = prRef.trim() !== '' && !pullRequest && !prError;
 
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [previewAttachment, setPreviewAttachment] = useState<PendingAttachment | null>(null);
@@ -253,13 +280,17 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
     e.preventDefault();
     if (!title.trim()) return;
     if (branchNameError) return;
+    if (prLoading || prUnresolved) {
+      setPrError('Resolve the pull request first, or clear the field');
+      return;
+    }
     const taskTitle = title.trim();
     await createTask({
       title: taskTitle,
       description: description.trim(),
       swimlane_id: swimlaneId,
       ...(baseBranch.trim() ? { baseBranch: baseBranch.trim() } : {}),
-      ...(useWorktree !== null ? { useWorktree } : {}),
+      ...(pullRequest ? { useWorktree: false } : useWorktree !== null ? { useWorktree } : {}),
       ...(customBranchName.trim() ? { customBranchName: customBranchName.trim() } : {}),
       ...(pullRequest ? { prNumber: pullRequest.number, prUrl: pullRequest.url } : {}),
       ...(attachments.length > 0 ? {
@@ -299,7 +330,7 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
               </button>
               <button
                 type="submit"
-                disabled={!!branchNameError}
+                disabled={!!branchNameError || prLoading}
                 className="px-4 py-1.5 text-xs bg-accent-emphasis hover:bg-accent text-accent-on rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Create
@@ -437,7 +468,11 @@ export function NewTaskDialog({ swimlaneId, onClose }: NewTaskDialogProps) {
                 <span className="text-xs text-fg-disabled shrink-0">from</span>
                 <BranchPicker value={baseBranch} defaultBranch={defaultBaseBranch || 'main'} onChange={setBaseBranch} />
                 <div className="w-px h-5 bg-edge-input shrink-0" />
-                <WorktreeChip enabled={effectiveWorktree} onToggle={() => setUseWorktree(effectiveWorktree ? false : true)} />
+                <WorktreeChip
+                  enabled={effectiveWorktree}
+                  onToggle={() => setUseWorktree(effectiveWorktree ? false : true)}
+                  lockedReason={pullRequest ? 'Off for pull requests -- /review-pr checks out the PR head in its own worktree' : undefined}
+                />
               </div>
               {branchNameError ? (
                 <p className="text-xs text-red-500 mt-0.5">{branchNameError}</p>

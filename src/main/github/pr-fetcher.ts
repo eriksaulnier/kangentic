@@ -32,7 +32,9 @@ export async function fetchPullRequest(
 
   let stdout: string;
   try {
-    ({ stdout } = await execFileAsync(gh.path, ['pr', 'view', trimmedRef, '--json', PR_FIELDS], {
+    // The ref goes after `--` so gh reads it as positional. A pasted value
+    // starting with `-` would otherwise parse as a flag (`-R` becomes --repo).
+    ({ stdout } = await execFileAsync(gh.path, ['pr', 'view', '--json', PR_FIELDS, '--', trimmedRef], {
       cwd: projectPath,
       timeout: 20_000,
     }));

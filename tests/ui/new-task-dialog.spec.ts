@@ -397,19 +397,80 @@ test.describe('Pull Request Intake', () => {
     expect(task.use_worktree).toBe(0);
   });
 
+  test('Create is refused while a PR fetch is still in flight', async () => {
+    await openNewTaskDialog();
+
+    // Clicking Create blurs the PR field, which starts the fetch. Submitting
+    // before it lands would create a task with no PR fields and a worktree
+    // /review-pr does not want.
+    await page.evaluate(() => { (window as unknown as Record<string, unknown>).__mockPrDelayMs = 1500; });
+    await page.locator('input[placeholder="Task title"]').fill('In Flight PR Task');
+    await page.locator('[data-testid="pr-ref-input"]').fill('999');
+
+    const createButton = page.locator('button:has-text("Create")');
+    await createButton.click();
+    await expect(createButton).toBeDisabled();
+
+    const taskData = await page.evaluate(() => window.electronAPI.tasks.list());
+    expect(taskData.find((t: { title: string }) => t.title === 'In Flight PR Task')).toBeUndefined();
+
+    // Once it lands the form is complete and Create works again
+    await expect(page.locator('[data-testid="pr-summary"]')).toContainText('#999');
+    await expect(createButton).toBeEnabled();
+
+    await page.evaluate(() => { (window as unknown as Record<string, unknown>).__mockPrDelayMs = 0; });
+    await page.locator('button:has-text("Cancel")').click();
+    await page.locator('input[placeholder="Task title"]').waitFor({ state: 'hidden', timeout: 3000 });
+  });
+
+  test('worktree toggle is locked once a PR resolves', async () => {
+    await openNewTaskDialog();
+
+    await page.locator('[data-testid="pr-ref-input"]').fill('321');
+    await page.locator('[data-testid="pr-fetch-button"]').click();
+    await expect(page.locator('[data-testid="pr-summary"]')).toContainText('#321');
+
+    const toggle = page.locator('[data-testid="worktree-toggle"]');
+    await expect(toggle).toHaveAttribute('title', /Off for pull requests/);
+    await toggle.click({ force: true });
+    await expect(toggle.locator('span')).toHaveClass(/line-through/);
+
+    await page.locator('button:has-text("Cancel")').click();
+    await page.locator('input[placeholder="Task title"]').waitFor({ state: 'hidden', timeout: 3000 });
+  });
+
+  test('clearing the PR field restores the branch settings it changed', async () => {
+    await openNewTaskDialog();
+
+    await page.locator('[data-testid="pr-ref-input"]').fill('654');
+    await page.locator('[data-testid="pr-fetch-button"]').click();
+    await expect(page.locator('[data-testid="branch-picker-chip"]')).toContainText('develop');
+
+    await page.locator('[data-testid="pr-ref-input"]').fill('');
+    await page.locator('[data-testid="pr-fetch-button"]').click({ force: true });
+
+    await expect(page.locator('[data-testid="pr-summary"]')).not.toBeVisible();
+    await expect(page.locator('[data-testid="branch-picker-chip"]')).toContainText('main');
+    await expect(page.locator('[data-testid="worktree-toggle"] span')).not.toHaveClass(/line-through/);
+
+    await page.locator('button:has-text("Cancel")').click();
+    await page.locator('input[placeholder="Task title"]').waitFor({ state: 'hidden', timeout: 3000 });
+  });
+
   test('a failed fetch shows the reason and creates no PR fields', async () => {
     await openNewTaskDialog();
 
     await page.evaluate(() => { (window as unknown as Record<string, unknown>).__mockPrError = 'gh: To get started with GitHub CLI, please run: gh auth login'; });
+    // Enter resolves in place -- the Fetch button would blur the field first
+    // and consume the one-shot error before the click landed
     await page.locator('[data-testid="pr-ref-input"]').fill('789');
-    await page.locator('[data-testid="pr-fetch-button"]').click();
+    await page.locator('[data-testid="pr-ref-input"]').press('Enter');
 
     const error = page.locator('[data-testid="pr-error"]');
     await expect(error).toBeVisible();
     await expect(error).toContainText('gh auth login');
     await expect(page.locator('[data-testid="pr-summary"]')).not.toBeVisible();
 
-    await page.evaluate(() => { (window as unknown as Record<string, unknown>).__mockPrError = null; });
     await page.locator('button:has-text("Cancel")').click();
     await page.locator('input[placeholder="Task title"]').waitFor({ state: 'hidden', timeout: 3000 });
   });
