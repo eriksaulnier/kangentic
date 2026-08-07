@@ -530,6 +530,100 @@ describe('WorktreeManager createWorktree seam - narrowed refspec (fetch succeeds
   });
 });
 
+/**
+ * A clone whose origin grows `<branchName>` AFTER the clone, so the branch is
+ * real on the remote but has no `refs/remotes/origin/<branchName>` in the clone
+ * until something fetches it. This is the shape that used to silently produce an
+ * empty branch: `rev-parse --verify <bare name>` misses it, and the fallback arm
+ * cut a brand-new branch off the base instead.
+ */
+function buildRemoteOnlyBranchFixture(label: string, branchName: string): { origin: string; clone: string } {
+  const origin = tempRepoPath(`${label}-origin`);
+  initRepo(origin, 'main');
+  commit(origin, 'init'); // f1.txt
+
+  const clonePath = tempRepoPath(`${label}-clone`);
+  execFileSync('git', ['clone', origin, clonePath], { windowsHide: true });
+
+  run(origin, ['checkout', '-b', branchName]);
+  commit(origin, 'work pushed from elsewhere'); // f2.txt
+  run(origin, ['checkout', 'main']);
+
+  return { origin, clone: clonePath };
+}
+
+describe('WorktreeManager createWorktree - branch that exists only on origin', () => {
+  it('checks the remote branch out instead of cutting an empty branch off the base', async () => {
+    const { clone } = buildRemoteOnlyBranchFixture('remote-only-fetch', 'colleague-branch');
+
+    const worktreeManager = new WorktreeManager(clone);
+    const task = makeTask({ id: 'task-mmmmmmmm', branch_name: 'colleague-branch' });
+    const result = await worktreeManager.ensureWorktree(task, baseGitConfig({ defaultBaseBranch: 'main' }));
+
+    expect(result).not.toBeNull();
+    // f2.txt exists ONLY on the remote branch, so its presence is what
+    // distinguishes a worktree cut from origin/colleague-branch from one cut
+    // off main.
+    expect(fs.existsSync(path.join(result!.worktreePath, 'f2.txt'))).toBe(true);
+    expect(run(result!.worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('colleague-branch');
+  }, 20_000);
+
+  it('sets upstream tracking so the task can push back to the branch it came from', async () => {
+    const { clone } = buildRemoteOnlyBranchFixture('remote-only-tracking', 'tracked-branch');
+
+    const worktreeManager = new WorktreeManager(clone);
+    const task = makeTask({ id: 'task-nnnnnnnn', branch_name: 'tracked-branch' });
+    const result = await worktreeManager.ensureWorktree(task, baseGitConfig({ defaultBaseBranch: 'main' }));
+
+    expect(result).not.toBeNull();
+    const upstream = run(result!.worktreePath, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']).trim();
+    expect(upstream).toBe('origin/tracked-branch');
+  }, 20_000);
+
+  it('uses an already-fetched origin/<branch> without needing the network fetch', async () => {
+    const { clone } = buildRemoteOnlyBranchFixture('remote-only-prefetched', 'prefetched-branch');
+    // Land the remote-tracking ref up front, then break the remote so any network
+    // fetch would fail. The worktree must still come from origin/prefetched-branch,
+    // which only holds if the free local check runs before the fetch.
+    run(clone, ['fetch', 'origin']);
+    run(clone, ['remote', 'set-url', 'origin', path.join(workspace, 'does-not-exist')]);
+
+    const worktreeManager = new WorktreeManager(clone);
+    const task = makeTask({ id: 'task-oooooooo', branch_name: 'prefetched-branch' });
+    const result = await worktreeManager.ensureWorktree(task, baseGitConfig({ defaultBaseBranch: 'main' }));
+
+    expect(result).not.toBeNull();
+    expect(fs.existsSync(path.join(result!.worktreePath, 'f2.txt'))).toBe(true);
+  }, 20_000);
+
+  it('prefers a LOCAL branch of the same name over the remote one (unchanged precedence)', async () => {
+    const { clone } = buildRemoteOnlyBranchFixture('remote-only-local-wins', 'shadowed-branch');
+    // A local branch at main's commit: same name, none of the remote's work.
+    run(clone, ['fetch', 'origin']);
+    run(clone, ['branch', 'shadowed-branch', 'main']);
+
+    const worktreeManager = new WorktreeManager(clone);
+    const task = makeTask({ id: 'task-pppppppp', branch_name: 'shadowed-branch' });
+    const result = await worktreeManager.ensureWorktree(task, baseGitConfig({ defaultBaseBranch: 'main' }));
+
+    expect(result).not.toBeNull();
+    expect(fs.existsSync(path.join(result!.worktreePath, 'f2.txt'))).toBe(false);
+  }, 20_000);
+
+  it('still cuts a new branch off the base when the name exists nowhere (the additive-only invariant)', async () => {
+    const { clone } = buildRemoteOnlyBranchFixture('remote-only-absent', 'unrelated-branch');
+
+    const worktreeManager = new WorktreeManager(clone);
+    const task = makeTask({ id: 'task-qqqqqqqq', branch_name: 'brand-new-branch' });
+    const result = await worktreeManager.ensureWorktree(task, baseGitConfig({ defaultBaseBranch: 'main' }));
+
+    expect(result).not.toBeNull();
+    expect(run(result!.worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('brand-new-branch');
+    expect(fs.existsSync(path.join(result!.worktreePath, 'f1.txt'))).toBe(true);
+    expect(fs.existsSync(path.join(result!.worktreePath, 'f2.txt'))).toBe(false);
+  }, 20_000);
+});
+
 describe('describeUnresolvableBase - message formatting', () => {
   it('names the branch and offers the fix for an explicit per-task base', () => {
     const message = describeUnresolvableBase({

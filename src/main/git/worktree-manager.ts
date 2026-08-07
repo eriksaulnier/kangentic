@@ -626,9 +626,46 @@ export class WorktreeManager {
       await this.git.raw(['rev-parse', '--verify', branchName]);
       branchExists = true;
     } catch {
-      // Branch does not exist -- will create it
+      // Branch does not exist LOCALLY -- it may still exist on origin.
     }
     options?.signal?.throwIfAborted();
+
+    // A branch that exists only as `origin/<branchName>` has to be checked out
+    // FROM that ref. The verify above resolves local refs only, so without this
+    // the `-b branchName ... startPoint` arm below silently creates a new empty
+    // branch off the BASE and the remote branch's commits are never in the
+    // worktree - the user sees an empty branch where their pushed work should be.
+    //
+    // Two ways to land here, both real:
+    //   - an explicit `task.branch_name` naming a colleague's pushed branch;
+    //   - a task's own auto-generated branch after a Done move, where
+    //     `removeBranch` deleted the local ref while the pushed `origin/` one
+    //     survived. Moving the task back out recomputes the SAME name (it is
+    //     derived from the title slug and task id), so the empty-branch failure
+    //     would land on already-pushed work.
+    //
+    // Local check first because it is free and usually enough (a clone or any
+    // ordinary `git fetch` already landed the ref); the network fetch is the
+    // fallback for a branch pushed since. `fetchIfStale` swallows every failure
+    // (no remote, offline, branch genuinely absent) and is capped at
+    // FETCH_TIMEOUT_MS, so the miss path degrades to exactly the old behavior.
+    let remoteOnlyStartPoint: string | null = null;
+    if (!branchExists) {
+      const remoteRef = `origin/${branchName}`;
+      if (await refResolvesLocally(this.projectPath, remoteRef)) {
+        remoteOnlyStartPoint = remoteRef;
+      } else {
+        const fetched = await fetchIfStale(this.git, this.projectPath, branchName, { signal: options?.signal });
+        // Re-verify for the same reason the base-branch seam above does: a
+        // successful fetch PROCESS does not prove the ref landed in
+        // refs/remotes/origin/ (a narrowed remote.origin.fetch refspec, or a
+        // fetch that only wrote FETCH_HEAD, both exit 0).
+        if (fetched === remoteRef && await refResolvesLocally(this.projectPath, fetched)) {
+          remoteOnlyStartPoint = fetched;
+        }
+      }
+      options?.signal?.throwIfAborted();
+    }
 
     // Create worktree: attach to existing branch or create a new one.
     // Callers must wrap with withLock() to serialize concurrent operations.
@@ -681,6 +718,11 @@ export class WorktreeManager {
       if (branchExists) {
         await this.git.raw([...longPathsConfig, 'worktree', 'add', ...forceFlag, worktreePath, branchName]);
         console.log(`[WORKTREE] Created worktree (existing branch): ${branchName}`);
+      } else if (remoteOnlyStartPoint) {
+        // --track is explicit rather than left to git's DWIM: `branch.autoSetupMerge`
+        // is user-configurable and `push` must go back to the branch this came from.
+        await this.git.raw([...longPathsConfig, 'worktree', 'add', ...forceFlag, '--track', '-b', branchName, worktreePath, remoteOnlyStartPoint]);
+        console.log(`[WORKTREE] Created worktree (remote-only branch): ${branchName} from ${remoteOnlyStartPoint}`);
       } else {
         await this.git.raw([...longPathsConfig, 'worktree', 'add', ...forceFlag, '-b', branchName, worktreePath, startPoint]);
         console.log(`[WORKTREE] Created worktree (new branch): ${branchName} from ${startPoint}`);
