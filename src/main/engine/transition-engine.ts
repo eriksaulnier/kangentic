@@ -8,6 +8,7 @@ import { CommandBuilder } from '../agent/command-builder';
 import { ClaudeDetector } from '../agent/claude-detector';
 import { WorktreeManager } from '../git/worktree-manager';
 import { ensureWorktreeTrust } from '../agent/trust-manager';
+import { claudeSessionEnv, resolveClaudeConfigDir } from '../agent/claude-env';
 import { sessionOutputPaths } from './session-paths';
 import type { ActionRepository } from '../db/repositories/action-repository';
 import type { TaskRepository } from '../db/repositories/task-repository';
@@ -21,7 +22,7 @@ export class TransitionEngine {
     private taskRepo: TaskRepository,
     private claudeDetector: ClaudeDetector,
     private commandBuilder: CommandBuilder,
-    private getConfig: () => { permissionMode: string; claudePath: string | null; projectPath: string | null; projectId: string; gitConfig: AppConfig['git'] },
+    private getConfig: () => { permissionMode: string; claudePath: string | null; claudeConfigDir: string | null; projectPath: string | null; projectId: string; gitConfig: AppConfig['git'] },
     private sessionRepo?: SessionRepository,
     private attachmentRepo?: AttachmentRepository,
   ) {}
@@ -128,11 +129,12 @@ export class TransitionEngine {
     // Resolution order: swimlane override → global setting
     const permissionMode = permissionOverride ?? appConfig.permissionMode;
     const cwd = task.worktree_path || appConfig.projectPath || process.cwd();
+    const claudeConfigDir = resolveClaudeConfigDir(appConfig.claudeConfigDir);
 
     // Pre-populate trust so the agent doesn't block on the trust dialog.
     // This covers both worktree paths and the main project path (important
     // for demo mode where the project has never been opened in Claude Code).
-    ensureWorktreeTrust(cwd);
+    ensureWorktreeTrust(cwd, claudeConfigDir);
 
     // Check for a previous session to resume (only explicitly suspended sessions)
     const previousSession = this.sessionRepo?.getLatestForTask(task.id);
@@ -172,7 +174,7 @@ export class TransitionEngine {
       console.error(`[spawn_agent] Failed to create session directory: ${sessionDir}`, err);
       throw new Error(`Cannot create session directory at ${sessionDir}: ${(err as Error).message}`);
     }
-    const { statusOutputPath, eventsOutputPath } = sessionOutputPaths(sessionDir);
+    const { statusOutputPath, eventsOutputPath, phaseOutputPath } = sessionOutputPaths(sessionDir);
 
     const shell = await this.sessionManager.getShell();
     const command = this.commandBuilder.buildClaudeCommand({
@@ -195,8 +197,10 @@ export class TransitionEngine {
       projectId: appConfig.projectId,
       command,
       cwd,
+      env: claudeSessionEnv(appConfig.claudeConfigDir, phaseOutputPath),
       statusOutputPath,
       eventsOutputPath,
+      phaseOutputPath,
       resuming: !!canResume,
     });
 

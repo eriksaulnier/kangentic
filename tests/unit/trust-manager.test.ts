@@ -175,6 +175,31 @@ describe('ensureWorktreeTrust', () => {
     expect(entry.allowedTools).toEqual(['Bash', 'Read']);
   });
 
+  it('writes to <configDir>/.claude.json when a config dir is given', () => {
+    const profileDir = path.join(tmpHome, '.claude3');
+    fs.mkdirSync(profileDir, { recursive: true });
+    const wtPath = '/projects/myrepo/.kangentic/worktrees/fix-bug-abcd1234';
+
+    ensureWorktreeTrust(wtPath, profileDir);
+
+    // Home file untouched, profile file written
+    expect(fs.existsSync(claudeJsonPath())).toBe(false);
+    const data = JSON.parse(fs.readFileSync(path.join(profileDir, '.claude.json'), 'utf-8'));
+    const projects = data.projects as Record<string, Record<string, unknown>>;
+    const entries = Object.values(projects);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].hasTrustDialogAccepted).toBe(true);
+  });
+
+  it('falls back to the home directory when config dir is null', () => {
+    const wtPath = '/projects/myrepo/.kangentic/worktrees/fix-bug-abcd1234';
+
+    ensureWorktreeTrust(wtPath, null);
+
+    const projects = readClaudeJson().projects as Record<string, Record<string, unknown>>;
+    expect(Object.values(projects)[0].hasTrustDialogAccepted).toBe(true);
+  });
+
   it('handles malformed JSON (treats as empty)', () => {
     fs.writeFileSync(claudeJsonPath(), '{ this is not valid JSON !!!');
 

@@ -332,7 +332,15 @@ export class SessionManager extends EventEmitter {
 
     // Strip CLAUDECODE so spawned Claude CLI sessions don't refuse to start
     // when Kangentic itself was launched from inside a Claude Code session.
-    const { CLAUDECODE: _, ...cleanEnv } = { ...process.env, ...input.env };
+    const { CLAUDECODE: _, ...cleanEnv } = { ...process.env, ...input.env } as Record<string, string | null | undefined>;
+
+    // A null override deletes the variable rather than setting it empty.
+    // CLAUDE_CONFIG_DIR must be absent for the primary account -- an empty or
+    // self-referential value sends the macOS credential store to the wrong
+    // Keychain item and logs that account out.
+    for (const [key, value] of Object.entries(cleanEnv)) {
+      if (value === null) delete cleanEnv[key];
+    }
 
     // Validate CWD exists before spawning. If the project directory was
     // deleted or moved, fall back to home directory (a session in ~ is

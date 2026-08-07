@@ -85,6 +85,7 @@ export class ConfigManager {
       },
       claude: {
         permissionMode: global.claude.permissionMode,
+        configDir: global.claude.configDir,
       },
       git: {
         gitignoreScope: global.git.gitignoreScope,

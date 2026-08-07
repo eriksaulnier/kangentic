@@ -7,11 +7,13 @@ import { toForwardSlash } from '../../shared/paths';
  * Pre-populate Claude Code's trust entry for a worktree path so the
  * "Is this a project you trust?" prompt is skipped when spawning an agent.
  *
- * Claude Code stores per-directory trust in ~/.claude.json under
- * `projects[<resolved-path>].hasTrustDialogAccepted`.
+ * Claude Code stores per-directory trust in `<configDir>/.claude.json` under
+ * `projects[<resolved-path>].hasTrustDialogAccepted`. Under a profile the
+ * config dir is not the home directory, so writing to `~/.claude.json` would
+ * leave the profile's agent blocked on the trust dialog.
  */
-export function ensureWorktreeTrust(worktreePath: string): void {
-  const claudeJsonPath = path.join(os.homedir(), '.claude.json');
+export function ensureWorktreeTrust(worktreePath: string, configDir?: string | null): void {
+  const claudeJsonPath = path.join(configDir || os.homedir(), '.claude.json');
   const resolvedPath = toForwardSlash(path.resolve(worktreePath));
 
   let data: Record<string, unknown>;

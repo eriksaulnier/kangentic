@@ -38,6 +38,7 @@
     claude: {
       permissionMode: 'default',
       cliPath: null,
+      configDir: null,
       maxConcurrentSessions: 8,
       queueOverflow: 'queue',
       idleTimeoutMinutes: 0,
@@ -143,6 +144,7 @@
       },
       claude: {
         permissionMode: config.claude.permissionMode,
+        configDir: config.claude.configDir,
       },
       git: {
         gitignoreScope: config.git.gitignoreScope,

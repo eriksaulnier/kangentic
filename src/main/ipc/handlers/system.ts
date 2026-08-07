@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { app, ipcMain, Notification, dialog, shell } from 'electron';
 import { IPC } from '../../../shared/ipc-channels';
 import { WorktreeManager, isGitRepo } from '../../git/worktree-manager';
+import { resolveClaudeConfigDir } from '../../agent/claude-env';
 import { deepMergeConfig } from '../../../shared/object-utils';
 import { switchGitignoreScope } from '../helpers';
 import type { AppConfig, NotificationInput, ClaudeCommand } from '../../../shared/types';
@@ -101,27 +102,56 @@ export function registerSystemHandlers(context: IpcContext): void {
     const projectPath = context.currentProjectPath;
     if (!projectPath) return [];
 
-    // Collect candidate .claude/commands/ directories from cwd upward,
-    // similar to how Claude Code discovers commands. Closest dirs first
-    // so nearer commands win on dedup.
+    // Collect candidate Claude config roots from cwd upward, similar to how
+    // Claude Code discovers commands. Closest dirs first so nearer entries
+    // win on dedup.
     const searchRoots: string[] = [];
     const startDir = cwd || projectPath;
     let current = path.resolve(startDir);
     const root = path.parse(current).root;
     while (current !== root) {
-      searchRoots.push(path.join(current, '.claude', 'commands'));
+      searchRoots.push(path.join(current, '.claude'));
       const parent = path.dirname(current);
       if (parent === current) break;
       current = parent;
     }
-    // Also include ~/.claude/commands/ (user-level commands)
-    const homeDir = app.getPath('home');
-    searchRoots.push(path.join(homeDir, '.claude', 'commands'));
+    // User-level entries live under the active Claude config dir, which is
+    // ~/.claude only when no profile is configured.
+    const effectiveConfig = context.configManager.getEffectiveConfig(projectPath);
+    searchRoots.push(
+      resolveClaudeConfigDir(effectiveConfig.claude.configDir)
+        ?? path.join(app.getPath('home'), '.claude'),
+    );
 
     const seen = new Set<string>(); // command names already collected (closest wins)
     const commands: ClaudeCommand[] = [];
 
-    function walkDirectory(directory: string, prefix: string): void {
+    function readFrontmatter(filePath: string): { description: string; argumentHint: string } {
+      let description = '';
+      let argumentHint = '';
+      try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        if (content.startsWith('---')) {
+          const endIndex = content.indexOf('---', 3);
+          if (endIndex !== -1) {
+            const frontmatter = content.slice(3, endIndex);
+            for (const line of frontmatter.split('\n')) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('description:')) {
+                description = trimmed.slice('description:'.length).trim().replace(/^['"]|['"]$/g, '');
+              } else if (trimmed.startsWith('argument-hint:')) {
+                argumentHint = trimmed.slice('argument-hint:'.length).trim().replace(/^['"]|['"]$/g, '');
+              }
+            }
+          }
+        }
+      } catch {
+        // Skip files that can't be read
+      }
+      return { description, argumentHint };
+    }
+
+    function walkCommands(directory: string, prefix: string): void {
       let entries: fs.Dirent[];
       try {
         entries = fs.readdirSync(directory, { withFileTypes: true });
@@ -131,44 +161,43 @@ export function registerSystemHandlers(context: IpcContext): void {
       for (const entry of entries) {
         const fullPath = path.join(directory, entry.name);
         if (entry.isDirectory()) {
-          walkDirectory(fullPath, prefix ? `${prefix}${entry.name}:` : `${entry.name}:`);
+          walkCommands(fullPath, prefix ? `${prefix}${entry.name}:` : `${entry.name}:`);
         } else if (entry.isFile() && entry.name.endsWith('.md')) {
           const baseName = entry.name.slice(0, -3);
           const commandName = prefix + baseName;
           if (seen.has(commandName)) continue; // closer directory already provided this command
           seen.add(commandName);
 
-          const displayName = `/${commandName}`;
-          let description = '';
-          let argumentHint = '';
-
-          try {
-            const content = fs.readFileSync(fullPath, 'utf-8');
-            if (content.startsWith('---')) {
-              const endIndex = content.indexOf('---', 3);
-              if (endIndex !== -1) {
-                const frontmatter = content.slice(3, endIndex);
-                for (const line of frontmatter.split('\n')) {
-                  const trimmed = line.trim();
-                  if (trimmed.startsWith('description:')) {
-                    description = trimmed.slice('description:'.length).trim().replace(/^['"]|['"]$/g, '');
-                  } else if (trimmed.startsWith('argument-hint:')) {
-                    argumentHint = trimmed.slice('argument-hint:'.length).trim().replace(/^['"]|['"]$/g, '');
-                  }
-                }
-              }
-            }
-          } catch {
-            // Skip files that can't be read
-          }
-
-          commands.push({ name: commandName, displayName, description, argumentHint });
+          const { description, argumentHint } = readFrontmatter(fullPath);
+          commands.push({ name: commandName, displayName: `/${commandName}`, description, argumentHint });
         }
       }
     }
 
-    for (const commandsDir of searchRoots) {
-      walkDirectory(commandsDir, '');
+    /** Collect `skills/<name>/SKILL.md` entries -- the directory name is the command name. */
+    function walkSkills(directory: string): void {
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(directory, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        // Skill directories are commonly symlinks, for which isDirectory() is
+        // false -- probing SKILL.md covers both real dirs and symlinks.
+        const skillFile = path.join(directory, entry.name, 'SKILL.md');
+        if (!fs.existsSync(skillFile)) continue;
+        if (seen.has(entry.name)) continue;
+        seen.add(entry.name);
+
+        const { description, argumentHint } = readFrontmatter(skillFile);
+        commands.push({ name: entry.name, displayName: `/${entry.name}`, description, argumentHint });
+      }
+    }
+
+    for (const claudeRoot of searchRoots) {
+      walkCommands(path.join(claudeRoot, 'commands'), '');
+      walkSkills(path.join(claudeRoot, 'skills'));
     }
 
     commands.sort((a, b) => a.name.localeCompare(b.name));

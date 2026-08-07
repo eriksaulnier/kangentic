@@ -12,6 +12,7 @@ import { CommandBuilder } from '../agent/command-builder';
 import { ConfigManager } from '../config/config-manager';
 import type { SessionRecord, ActionConfig, Task, PermissionMode } from '../../shared/types';
 import { ensureWorktreeTrust } from '../agent/trust-manager';
+import { claudeSessionEnv, resolveClaudeConfigDir } from '../agent/claude-env';
 import { sessionOutputPaths } from './session-paths';
 import { app } from 'electron';
 
@@ -327,9 +328,11 @@ export async function recoverSessions(
     permissionMode: string;
     statusOutputPath: string;
     eventsOutputPath: string;
+    phaseOutputPath: string;
   }
 
   const spawnInputs: SpawnInput[] = [];
+  const claudeConfigDir = resolveClaudeConfigDir(config.claude.configDir);
 
   for (const { record, task } of toProcess) {
     try {
@@ -348,7 +351,7 @@ export async function recoverSessions(
       }
 
       // Pre-populate trust so the agent doesn't block on the trust dialog
-      ensureWorktreeTrust(record.cwd);
+      ensureWorktreeTrust(record.cwd, claudeConfigDir);
 
       // Resolution order: lane override → global config.
       // Use the task's current swimlane to resolve permission mode.
@@ -375,7 +378,7 @@ export async function recoverSessions(
       // Ensure the per-session directory exists
       const sessionDir = path.join(projectPath, '.kangentic', 'sessions', claudeSessionId);
       fs.mkdirSync(sessionDir, { recursive: true });
-      const { statusOutputPath, eventsOutputPath } = sessionOutputPaths(sessionDir);
+      const { statusOutputPath, eventsOutputPath, phaseOutputPath } = sessionOutputPaths(sessionDir);
 
       const command = commandBuilder.buildClaudeCommand({
         claudePath: claude.path,
@@ -394,7 +397,7 @@ export async function recoverSessions(
       spawnInputs.push({
         record, task, command, cwd: record.cwd,
         claudeSessionId, canResume, prompt, permissionMode,
-        statusOutputPath, eventsOutputPath,
+        statusOutputPath, eventsOutputPath, phaseOutputPath,
       });
     } catch (err) {
       console.error(
@@ -417,8 +420,10 @@ export async function recoverSessions(
         projectId,
         command: input.command,
         cwd: input.cwd,
+        env: claudeSessionEnv(config.claude.configDir, input.phaseOutputPath),
         statusOutputPath: input.statusOutputPath,
         eventsOutputPath: input.eventsOutputPath,
+        phaseOutputPath: input.phaseOutputPath,
       });
       return { input, newSession };
     }),
@@ -553,9 +558,11 @@ export async function reconcileSessions(
     agent: string;
     statusOutputPath: string;
     eventsOutputPath: string;
+    phaseOutputPath: string;
   }
 
   const spawnInputs: ReconcileSpawnInput[] = [];
+  const claudeConfigDir = resolveClaudeConfigDir(config.claude.configDir);
 
   for (const lane of activeLanes) {
     const tasks = taskRepo.list(lane.id);
@@ -606,7 +613,7 @@ export async function reconcileSessions(
         }
 
         // Pre-populate trust so the agent doesn't block on the trust dialog
-        ensureWorktreeTrust(cwd);
+        ensureWorktreeTrust(cwd, claudeConfigDir);
 
         // Generate a Claude session ID upfront so recovery can resume
         const claudeSessionId = randomUUID();
@@ -617,7 +624,7 @@ export async function reconcileSessions(
         // Ensure the per-session directory exists
         const sessionDir = path.join(projectPath, '.kangentic', 'sessions', claudeSessionId);
         fs.mkdirSync(sessionDir, { recursive: true });
-        const { statusOutputPath, eventsOutputPath } = sessionOutputPaths(sessionDir);
+        const { statusOutputPath, eventsOutputPath, phaseOutputPath } = sessionOutputPaths(sessionDir);
 
         const command = commandBuilder.buildClaudeCommand({
           claudePath: claude.path,
@@ -635,7 +642,7 @@ export async function reconcileSessions(
         spawnInputs.push({
           task, command, cwd, claudeSessionId, prompt, permissionMode,
           agent: actionConfig?.agent || 'claude',
-          statusOutputPath, eventsOutputPath,
+          statusOutputPath, eventsOutputPath, phaseOutputPath,
         });
       } catch (err) {
         console.error(
@@ -654,8 +661,10 @@ export async function reconcileSessions(
         projectId,
         command: input.command,
         cwd: input.cwd,
+        env: claudeSessionEnv(config.claude.configDir, input.phaseOutputPath),
         statusOutputPath: input.statusOutputPath,
         eventsOutputPath: input.eventsOutputPath,
+        phaseOutputPath: input.phaseOutputPath,
       });
       return { input, newSession };
     }),

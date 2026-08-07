@@ -392,6 +392,7 @@ export interface AppConfig {
   claude: {
     permissionMode: PermissionMode;
     cliPath: string | null; // null = auto-detect on PATH
+    configDir: string | null; // null = inherit the primary account (CLAUDE_CONFIG_DIR unset)
     maxConcurrentSessions: number;
     queueOverflow: 'queue' | 'reject';
     idleTimeoutMinutes: number; // 0 = disabled
@@ -449,6 +450,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   claude: {
     permissionMode: 'default',
     cliPath: null,
+    configDir: null,
     maxConcurrentSessions: 8,
     queueOverflow: 'queue',
     idleTimeoutMinutes: 0,
@@ -611,9 +613,11 @@ export interface SpawnSessionInput {
   projectId: string;
   command: string;
   cwd: string;
-  env?: Record<string, string>;
+  /** A null value deletes that variable from the child environment. */
+  env?: Record<string, string | null>;
   statusOutputPath?: string; // path for the status bridge JSON file
   eventsOutputPath?: string; // path for the event bridge JSONL file (activity log)
+  phaseOutputPath?: string; // path for the agent-written phase beacon JSON file
   /** True when this session is resuming a previous Claude conversation. */
   resuming?: boolean;
 }

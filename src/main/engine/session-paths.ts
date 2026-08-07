@@ -8,9 +8,11 @@ import path from 'node:path';
 export function sessionOutputPaths(sessionDir: string): {
   statusOutputPath: string;
   eventsOutputPath: string;
+  phaseOutputPath: string;
 } {
   return {
     statusOutputPath: path.join(sessionDir, 'status.json'),
     eventsOutputPath: path.join(sessionDir, 'events.jsonl'),
+    phaseOutputPath: path.join(sessionDir, 'phase.json'),
   };
 }
