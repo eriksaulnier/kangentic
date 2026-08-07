@@ -196,6 +196,58 @@ describe('WorktreeManager -- fetch and base branch', () => {
     expect(worktreeAddCall![0][worktreeAddCall![0].length - 1]).toBe('main');
   });
 
+  it('attaches to a branch that exists only on origin instead of creating a new one', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    mockWorktreeGit.raw.mockResolvedValue('');
+
+    // 'pr-head' is absent locally but present as origin/pr-head
+    mockProjectGit.raw.mockImplementation((args: string[]) => {
+      if (args[0] === 'rev-parse' && args[2] === 'pr-head') {
+        return Promise.reject(new Error('fatal: bad revision'));
+      }
+      return Promise.resolve('');
+    });
+
+    const mgr = new WorktreeManager('/project');
+    await mgr.createWorktree('abcd1234-0000', 'Review PR', 'main', [], 'pr-head');
+
+    // A local tracking branch is created from the remote ref
+    expect(mockProjectGit.raw).toHaveBeenCalledWith(['branch', 'pr-head', 'origin/pr-head']);
+
+    // worktree add attaches to the existing branch -- never `-b` off the base
+    const worktreeAddCall = mockProjectGit.raw.mock.calls.find(
+      (c: string[][]) => c[0]?.[0] === 'worktree' && c[0]?.[1] === 'add',
+    );
+    expect(worktreeAddCall![0]).not.toContain('-b');
+    expect(worktreeAddCall![0][worktreeAddCall![0].length - 1]).toBe('pr-head');
+  });
+
+  it('creates a new branch off the base when it exists neither locally nor on origin', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    mockWorktreeGit.raw.mockResolvedValue('');
+
+    mockProjectGit.raw.mockImplementation((args: string[]) => {
+      if (args[0] === 'rev-parse') {
+        return Promise.reject(new Error('fatal: bad revision'));
+      }
+      return Promise.resolve('');
+    });
+
+    const mgr = new WorktreeManager('/project');
+    await mgr.createWorktree('abcd1234-0000', 'New work', 'main', [], 'brand-new');
+
+    const branchCalls = mockProjectGit.raw.mock.calls.filter(
+      (c: string[][]) => c[0]?.[0] === 'branch',
+    );
+    expect(branchCalls).toHaveLength(0);
+
+    const worktreeAddCall = mockProjectGit.raw.mock.calls.find(
+      (c: string[][]) => c[0]?.[0] === 'worktree' && c[0]?.[1] === 'add',
+    );
+    expect(worktreeAddCall![0]).toContain('-b');
+    expect(worktreeAddCall![0][worktreeAddCall![0].length - 1]).toBe('origin/main');
+  });
+
   it('stores kangentic.baseBranch in worktree git config', async () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     mockProjectGit.raw.mockResolvedValue('');
